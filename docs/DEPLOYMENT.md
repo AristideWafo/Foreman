@@ -26,7 +26,7 @@ On déploie le **digest** de l'image (`ghcr.io/...@sha256:...`), jamais un tag m
 
 - Environnement **`env-perso`** (Settings > Environments). Pas de relecteur obligatoire : le déploiement est
   automatique au merge.
-- Variables de l'environnement : `DEPLOY_HOST`, `DEPLOY_USER`, et `DEPLOY_PROJECT` (nom du répertoire
+- Variables de l'environnement : `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT` (défaut 22) et `DEPLOY_PROJECT` (nom du répertoire
   `/opt/<projet>` ; `foreman` par défaut). Secrets : `DEPLOY_SSH_KEY` (clé privée dédiée),
   `DEPLOY_KNOWN_HOSTS` (sortie de `ssh-keyscan`, vérifiée à la main).
 - Protection de `prod` : check requis `CI OK`, relecture CODEOWNERS.
