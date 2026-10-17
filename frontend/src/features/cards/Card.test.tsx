@@ -17,9 +17,9 @@ const event: Extract<ProjectEvent, { type: "card" }> = {
     title: "Déployer l'application",
     summary: "Trois étapes pour la mise en ligne.",
     steps: [
-      { step: 0, title: "Préparer le serveur", status: "succeeded" },
-      { step: 1, title: "Copier les fichiers", status: "running" },
-      { step: 2, title: "Redémarrer le service", status: "pending" },
+      { step: 1, title: "Préparer le serveur", status: "succeeded" },
+      { step: 2, title: "Copier les fichiers", status: "running" },
+      { step: 3, title: "Redémarrer le service", status: "pending" },
     ],
   },
 };
@@ -30,6 +30,8 @@ test("la carte plan affiche titre, résumé et étapes avec leur statut", () => 
   expect(screen.getByText("Trois étapes pour la mise en ligne.")).toBeInTheDocument();
   const steps = screen.getAllByRole("listitem");
   expect(steps).toHaveLength(3);
+  // `step` est un indice qui commence à 1 (contrat v1) : on l'affiche tel quel.
+  expect(steps.map((s) => s.textContent?.match(/^\d+/)?.[0])).toEqual(["1", "2", "3"]);
   expect(steps[0]).toHaveTextContent("Préparer le serveur");
   expect(steps[0]).toHaveTextContent("Réussie");
   expect(steps[1]).toHaveTextContent("En cours");

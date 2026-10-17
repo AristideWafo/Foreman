@@ -43,7 +43,7 @@ function PlanCard({ card }: { card: PlanCardData }) {
             className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm"
           >
             <span className="min-w-0 break-words text-slate-800">
-              <span className="mr-2 font-mono text-xs text-slate-500">{step.step + 1}.</span>
+              <span className="mr-2 font-mono text-xs text-slate-500">{step.step}.</span>
               {step.title}
             </span>
             <StepStatusBadge status={step.status} />
