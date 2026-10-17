@@ -3,7 +3,7 @@ name: Sécurité
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [prod]
   schedule:
     - cron: "17 4 * * 1" # chaque lundi
 
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   codeql:
     name: CodeQL (${{ matrix.language }})
-    # Lourd : sur main et en planifié, pas sur chaque PR.
+    # Lourd : sur prod et en planifié, pas sur chaque PR.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
