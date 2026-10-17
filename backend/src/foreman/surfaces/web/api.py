@@ -1,16 +1,19 @@
 """Routes de l'API (contrat figé v1)."""
 
+import asyncio
+from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Query
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 
 from foreman.bootstrap.configure import App
+from foreman.core.events import AnyEvent
 from foreman.core.ports import CapacityExceeded
 from foreman.core.projects import Project
 from foreman.core.turn import TurnInProgress, TurnRequest
-from foreman.surfaces.web.errors import ApiError, error_response
+from foreman.surfaces.web.errors import ApiError
 from foreman.surfaces.web.schemas import (
     CreateProjectRequest,
     ErrorResponse,
@@ -43,14 +46,28 @@ _SSE_DESCRIPTION = (
 )
 
 
+RETRY_MS = 3000  # délai de reconnexion annoncé à EventSource
+
+
+def _parse_last_event_id(value: str | None) -> int:
+    """Un `Last-Event-ID` absent ou non numérique est ignoré (reprise depuis `after`)."""
+    if value is not None and value.isascii() and value.isdecimal():
+        return int(value)
+    return 0
+
+
+KEEPALIVE_SECONDS = 15.0  # commentaire de maintien (utile derrière Traefik)
+
+
 class EventStreamResponse(StreamingResponse):
-    """Réponse `text/event-stream` (documentation OpenAPI : seul ce type de contenu est déclaré)."""
+    """Réponse `text/event-stream` (OpenAPI : seul ce type de contenu est déclaré)."""
 
     media_type = "text/event-stream"
 
 
-def _not_implemented() -> JSONResponse:
-    return error_response(501, "not_implemented")
+def _frame(event: AnyEvent) -> bytes:
+    """`id:` = seq, pas de champ `event:`, `data:` = l'enveloppe JSON (une seule ligne)."""
+    return f"id: {event.seq}\nretry: {RETRY_MS}\ndata: {event.model_dump_json()}\n\n".encode()
 
 
 def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
@@ -99,6 +116,30 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             raise
         return MessageAccepted(turn_id=turn_id)
 
+    async def stream(project_id: UUID, cursor: int) -> AsyncIterator[bytes]:
+        # Inscription AVANT la lecture de l'historique : aucun trou entre le rejeu et le direct.
+        subscription = app.events.subscribe(project_id)
+        try:
+            # Écrit tout de suite : les en-têtes partent avant le premier événement métier.
+            yield f"retry: {RETRY_MS}\n\n".encode()
+            for event in await app.events.read_after(project_id, cursor):
+                cursor = event.seq
+                yield _frame(event)
+            # Un événement déjà rejoué peut aussi se trouver dans la file : on l'ignore (seq).
+            while True:
+                try:
+                    live = await asyncio.wait_for(subscription.next(), KEEPALIVE_SECONDS)
+                except TimeoutError:
+                    yield b": ping\n\n"
+                    continue
+                if live is None:
+                    return
+                if live.seq > cursor:
+                    cursor = live.seq
+                    yield _frame(live)
+        finally:
+            subscription.close()
+
     @router.get(
         "/projects/{project_id}/events",
         response_class=EventStreamResponse,
@@ -116,7 +157,13 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         project_id: UUID,
         after: Annotated[int, Query(ge=0)] = 0,
         last_event_id: Annotated[str | None, Header()] = None,
-    ) -> JSONResponse:
-        return _not_implemented()
+    ) -> EventStreamResponse:
+        if await app.projects.get(project_id) is None:
+            raise ApiError(404, "not_found")
+        cursor = max(after, _parse_last_event_id(last_event_id))
+        return EventStreamResponse(
+            stream(project_id, cursor),
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return router

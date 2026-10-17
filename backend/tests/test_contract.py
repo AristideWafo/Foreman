@@ -106,12 +106,6 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
     assert "text/event-stream" in sse["content"]
 
 
-def test_events_route_is_still_a_501_stub(client: TestClient) -> None:
-    response = client.get(f"/api/projects/{uuid4()}/events")
-    assert response.status_code == 501
-    assert response.json() == {"error": "not_implemented"}
-
-
 def test_validation_errors_are_opaque_and_never_echo_the_input(client: TestClient) -> None:
     secret = "mot-de-passe-" + "x" * 4000
     response = client.post(f"/api/projects/{uuid4()}/messages", json={"text": secret})

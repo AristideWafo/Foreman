@@ -78,6 +78,7 @@ class InMemoryEventLog:
         self._events: dict[UUID, deque[AnyEvent]] = {}
         self._last_seq: dict[UUID, int] = {}
         self._subscribers: dict[UUID, list[_Subscription]] = {}
+        self._waiters: list[tuple[UUID, int, asyncio.Future[None]]] = []
 
     async def append(self, project_id: UUID, turn_id: UUID, data: EventData) -> AnyEvent:
         seq = self._last_seq.get(project_id, 0) + 1
@@ -94,6 +95,7 @@ class InMemoryEventLog:
     def subscribe(self, project_id: UUID) -> _Subscription:
         subscription = _Subscription(self, project_id, self._queue_size)
         self._subscribers.setdefault(project_id, []).append(subscription)
+        self._notify_waiters(project_id)
         return subscription
 
     def unsubscribe(self, project_id: UUID, subscription: _Subscription) -> None:
@@ -102,6 +104,25 @@ class InMemoryEventLog:
             subscribers.remove(subscription)
         if not subscribers:
             self._subscribers.pop(project_id, None)
+        self._notify_waiters(project_id)
 
     def subscriber_count(self, project_id: UUID) -> int:
         return len(self._subscribers.get(project_id, ()))
+
+    async def wait_for_subscriber_count(self, project_id: UUID, count: int) -> None:
+        """Attend (sans interrogation) que le nombre d'abonnés atteigne `count`."""
+        if self.subscriber_count(project_id) == count:
+            return
+        waiter: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        entry = (project_id, count, waiter)
+        self._waiters.append(entry)
+        try:
+            await waiter
+        finally:
+            self._waiters.remove(entry)
+
+    def _notify_waiters(self, project_id: UUID) -> None:
+        current = self.subscriber_count(project_id)
+        for waited_project, count, waiter in self._waiters:
+            if waited_project == project_id and count == current and not waiter.done():
+                waiter.set_result(None)
