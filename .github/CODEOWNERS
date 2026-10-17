@@ -1,0 +1,8 @@
+# Les chemins sensibles exigent la relecture du propriétaire.
+*                           @AristideWafo
+/.github/workflows/         @AristideWafo
+/backend/src/foreman/gateway/   @AristideWafo
+/backend/src/foreman/policy/    @AristideWafo
+/backend/migrations/        @AristideWafo
+/deploy/                    @AristideWafo
+/SECURITY.md                @AristideWafo
