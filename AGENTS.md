@@ -12,7 +12,7 @@ Ce fichier s'adresse aux agents de code (Claude Code, etc.) et aux humains.
 | `make check-full` | `check` + tests + build front |
 | `make check-imports` | Contrats de couches (import-linter) |
 | `make fmt` | Formate le code |
-| `make test` | Tests (backend ; frontend dès la PR 03) |
+| `make test` | Tests backend et frontend |
 
 Ne contournez pas le `Makefile` : la CI appelle les mêmes cibles.
 
