@@ -18,10 +18,12 @@ from foreman.surfaces.web.schemas import (
 router = APIRouter(prefix="/api")
 
 _ERRORS: dict[int | str, dict[str, Any]] = {
-    404: {"model": ErrorResponse},
-    422: {"model": ErrorResponse},
-    501: {"model": ErrorResponse},
-    503: {"model": ErrorResponse},
+    # Descriptions explicites : la bibliothèque standard les libelle différemment selon la version
+    # de Python, ce qui ferait varier openapi.json entre le poste et la CI.
+    404: {"model": ErrorResponse, "description": "Introuvable"},
+    422: {"model": ErrorResponse, "description": "Requête invalide"},
+    501: {"model": ErrorResponse, "description": "Pas encore implémenté"},
+    503: {"model": ErrorResponse, "description": "Capacité atteinte"},
 }
 
 

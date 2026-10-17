@@ -416,7 +416,7 @@ export interface operations {
                     "application/json": components["schemas"]["Project"];
                 };
             };
-            /** @description Not Found */
+            /** @description Introuvable */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -425,7 +425,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Requête invalide */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -434,7 +434,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Not Implemented */
+            /** @description Pas encore implémenté */
             501: {
                 headers: {
                     [name: string]: unknown;
@@ -443,7 +443,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Service Unavailable */
+            /** @description Capacité atteinte */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -474,7 +474,7 @@ export interface operations {
                     "application/json": components["schemas"]["Project"];
                 };
             };
-            /** @description Not Found */
+            /** @description Introuvable */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -483,7 +483,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Requête invalide */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -492,7 +492,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Not Implemented */
+            /** @description Pas encore implémenté */
             501: {
                 headers: {
                     [name: string]: unknown;
@@ -501,7 +501,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Service Unavailable */
+            /** @description Capacité atteinte */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -535,7 +535,7 @@ export interface operations {
                     "text/event-stream": components["schemas"]["Event"];
                 };
             };
-            /** @description Not Found */
+            /** @description Introuvable */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -544,7 +544,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Requête invalide */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -553,7 +553,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Not Implemented */
+            /** @description Pas encore implémenté */
             501: {
                 headers: {
                     [name: string]: unknown;
@@ -562,7 +562,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Service Unavailable */
+            /** @description Capacité atteinte */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -597,7 +597,7 @@ export interface operations {
                     "application/json": components["schemas"]["MessageAccepted"];
                 };
             };
-            /** @description Not Found */
+            /** @description Introuvable */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -606,7 +606,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description Requête invalide */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -615,7 +615,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Not Implemented */
+            /** @description Pas encore implémenté */
             501: {
                 headers: {
                     [name: string]: unknown;
@@ -624,7 +624,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Service Unavailable */
+            /** @description Capacité atteinte */
             503: {
                 headers: {
                     [name: string]: unknown;

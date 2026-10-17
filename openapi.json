@@ -570,7 +570,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Introuvable"
           },
           "422": {
             "content": {
@@ -580,7 +580,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Requ\u00eate invalide"
           },
           "501": {
             "content": {
@@ -590,7 +590,7 @@
                 }
               }
             },
-            "description": "Not Implemented"
+            "description": "Pas encore impl\u00e9ment\u00e9"
           },
           "503": {
             "content": {
@@ -600,7 +600,7 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Capacit\u00e9 atteinte"
           }
         },
         "summary": "Create Project"
@@ -640,7 +640,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Introuvable"
           },
           "422": {
             "content": {
@@ -650,7 +650,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Requ\u00eate invalide"
           },
           "501": {
             "content": {
@@ -660,7 +660,7 @@
                 }
               }
             },
-            "description": "Not Implemented"
+            "description": "Pas encore impl\u00e9ment\u00e9"
           },
           "503": {
             "content": {
@@ -670,7 +670,7 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Capacit\u00e9 atteinte"
           }
         },
         "summary": "Get Project"
@@ -723,7 +723,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Introuvable"
           },
           "422": {
             "content": {
@@ -733,7 +733,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Requ\u00eate invalide"
           },
           "501": {
             "content": {
@@ -743,7 +743,7 @@
                 }
               }
             },
-            "description": "Not Implemented"
+            "description": "Pas encore impl\u00e9ment\u00e9"
           },
           "503": {
             "content": {
@@ -753,7 +753,7 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Capacit\u00e9 atteinte"
           }
         },
         "summary": "Stream Events"
@@ -803,7 +803,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Introuvable"
           },
           "422": {
             "content": {
@@ -813,7 +813,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Requ\u00eate invalide"
           },
           "501": {
             "content": {
@@ -823,7 +823,7 @@
                 }
               }
             },
-            "description": "Not Implemented"
+            "description": "Pas encore impl\u00e9ment\u00e9"
           },
           "503": {
             "content": {
@@ -833,7 +833,7 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Capacit\u00e9 atteinte"
           }
         },
         "summary": "Post Message"
