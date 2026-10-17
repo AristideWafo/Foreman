@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Secrets et environnement local
+.env
+.env.*
+!.env.example
+!.env.deploy.example
+*.pem
+*.key
+id_ed25519*
+
+# Divers
+.DS_Store
+.idea/
+.vscode/
