@@ -19,3 +19,10 @@ def test_import_exceptions_are_frozen() -> None:
     contracts = config["tool"]["importlinter"]["contracts"]
     ignored = sum(len(c.get("ignore_imports", [])) for c in contracts)
     assert ignored <= MAX_IMPORT_EXCEPTIONS, "nouvelle exception de couche : voir docs/DEBT.md"
+
+
+def test_the_container_bounds_graceful_shutdown() -> None:
+    """Sans borne, un flux SSE ouvert retarde l'arrêt jusqu'au SIGKILL à chaque déploiement."""
+    dockerfile = (ROOT.parent / "deploy" / "Dockerfile").read_text()
+    cmd = next(line for line in dockerfile.splitlines() if line.startswith("CMD "))
+    assert "--timeout-graceful-shutdown" in cmd

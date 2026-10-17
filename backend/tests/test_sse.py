@@ -45,8 +45,12 @@ class Server:
         return UUID((await client.post("/api/projects")).json()["id"])
 
 
-async def serve(provider: Provider, queue_size: int | None = None) -> AsyncIterator[Server]:
-    log = InMemoryEventLog() if queue_size is None else InMemoryEventLog(queue_size=queue_size)
+async def serve(
+    provider: Provider, queue_size: int | None = None, max_subscribers_per_project: int = 20
+) -> AsyncIterator[Server]:
+    log = InMemoryEventLog(
+        queue_size=queue_size or 100, max_subscribers_per_project=max_subscribers_per_project
+    )
     projects = InMemoryProjectStore()
     turns = TurnService(provider, log)
     app = create_app(App(profile=Profile.WEB, projects=projects, events=log, turns=turns))
@@ -203,7 +207,9 @@ async def test_resume_with_last_event_id_has_no_gap_and_no_duplicate(server: Ser
     assert seen == [4, 5, 6, 7, 8, 9, 10]
 
 
-async def test_last_event_id_wins_over_after_and_garbage_is_ignored(server: Server) -> None:
+async def test_resume_uses_the_larger_of_last_event_id_and_after_and_garbage_is_ignored(
+    server: Server,
+) -> None:
     async with server.client() as client:
         project_id = await server.new_project(client)
         url = f"/api/projects/{project_id}"
@@ -284,3 +290,28 @@ async def data_frames(frames: AsyncIterator[Frame]) -> AsyncIterator[Frame]:
     async for frame in frames:
         if frame.data is not None:
             yield frame
+
+
+async def test_too_many_streams_on_a_project_get_an_opaque_503() -> None:
+    async for server in serve(ScriptedProvider(), max_subscribers_per_project=2):
+        async with server.client() as client:
+            project = await server.new_project(client)
+            url = f"/api/projects/{project}/events"
+            async with client.stream("GET", url) as one, client.stream("GET", url) as two:
+                assert one.status_code == two.status_code == 200
+                await server.log.wait_for_subscriber_count(project, 2)
+                refused = await client.get(url)
+                assert refused.status_code == 503
+                assert refused.json() == {"error": "capacity_exceeded"}
+            await server.log.wait_for_subscriber_count(project, 0)
+            async with client.stream("GET", url) as again:
+                assert again.status_code == 200  # un emplacement libéré est réutilisable
+
+
+async def test_an_absurdly_long_last_event_id_is_ignored_not_a_500() -> None:
+    async for server in serve(ScriptedProvider()):
+        async with server.client() as client:
+            project = await server.new_project(client)
+            url = f"/api/projects/{project}/events"
+            async with client.stream("GET", url, headers={"Last-Event-ID": "9" * 5000}) as r:
+                assert r.status_code == 200

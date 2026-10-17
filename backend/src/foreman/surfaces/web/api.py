@@ -51,7 +51,8 @@ RETRY_MS = 3000  # délai de reconnexion annoncé à EventSource
 
 def _parse_last_event_id(value: str | None) -> int:
     """Un `Last-Event-ID` absent ou non numérique est ignoré (reprise depuis `after`)."""
-    if value is not None and value.isascii() and value.isdecimal():
+    # 19 chiffres au plus : au-delà, `int()` coûte cher et la valeur n'a aucun sens (ignorée).
+    if value is not None and value.isascii() and value.isdecimal() and len(value) <= 19:
         return int(value)
     return 0
 
@@ -118,7 +119,10 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
 
     async def stream(project_id: UUID, cursor: int) -> AsyncIterator[bytes]:
         # Inscription AVANT la lecture de l'historique : aucun trou entre le rejeu et le direct.
-        subscription = app.events.subscribe(project_id)
+        try:
+            subscription = app.events.subscribe(project_id)
+        except CapacityExceeded:
+            return  # plafond atteint entre le contrôle de la route et l'ouverture du flux
         try:
             # Écrit tout de suite : les en-têtes partent avant le premier événement métier.
             yield f"retry: {RETRY_MS}\n\n".encode()
@@ -160,6 +164,8 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
     ) -> EventStreamResponse:
         if await app.projects.get(project_id) is None:
             raise ApiError(404, "not_found")
+        if not app.events.has_subscriber_capacity(project_id):
+            raise ApiError(503, "capacity_exceeded")
         cursor = max(after, _parse_last_event_id(last_event_id))
         return EventStreamResponse(
             stream(project_id, cursor),

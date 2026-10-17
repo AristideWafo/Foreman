@@ -39,3 +39,19 @@ async def test_slow_subscriber_is_cut_and_the_others_keep_receiving() -> None:
     assert [e.seq for e in received if e] == [1, 2, 3]
     fast.close()
     assert log.subscriber_count(project) == 0
+
+
+async def test_subscriber_caps_per_project_and_in_total_and_a_close_frees_a_slot() -> None:
+    log = InMemoryEventLog(max_subscribers_per_project=2, max_subscribers_total=3)
+    a, b = uuid4(), uuid4()
+    first, second = log.subscribe(a), log.subscribe(a)
+    assert not log.has_subscriber_capacity(a)  # plafond par projet
+    with pytest.raises(CapacityExceeded):
+        log.subscribe(a)
+    third = log.subscribe(b)
+    assert not log.has_subscriber_capacity(b)  # plafond global (3 abonnés)
+    first.close()
+    assert log.has_subscriber_capacity(a)
+    for subscription in (second, third):
+        subscription.close()
+    assert log.subscriber_count(a) == log.subscriber_count(b) == 0

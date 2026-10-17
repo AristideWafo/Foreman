@@ -56,6 +56,13 @@ class EventLog(Protocol):
         """Événements conservés de `seq` strictement supérieur, dans l'ordre."""
         ...
 
+    def has_subscriber_capacity(self, project_id: UUID) -> bool:
+        """Vrai si un abonné de plus est accepté (plafond par projet et plafond global)."""
+        ...
+
     def subscribe(self, project_id: UUID) -> Subscription:
-        """Synchrone : l'inscription doit précéder la lecture de l'historique."""
+        """Synchrone : l'inscription doit précéder la lecture de l'historique.
+
+        Lève `CapacityExceeded` si un plafond d'abonnés est atteint.
+        """
         ...

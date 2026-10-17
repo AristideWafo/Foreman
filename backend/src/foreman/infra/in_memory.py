@@ -12,6 +12,8 @@ from foreman.core.projects import Project
 MAX_PROJECTS = 100
 MAX_EVENTS_PER_PROJECT = 1_000
 SUBSCRIBER_QUEUE_SIZE = 100
+MAX_SUBSCRIBERS_PER_PROJECT = 20
+MAX_SUBSCRIBERS_TOTAL = 200
 
 
 class InMemoryProjectStore:
@@ -72,9 +74,13 @@ class InMemoryEventLog:
         self,
         max_events: int = MAX_EVENTS_PER_PROJECT,
         queue_size: int = SUBSCRIBER_QUEUE_SIZE,
+        max_subscribers_per_project: int = MAX_SUBSCRIBERS_PER_PROJECT,
+        max_subscribers_total: int = MAX_SUBSCRIBERS_TOTAL,
     ) -> None:
         self._max_events = max_events
         self._queue_size = queue_size
+        self._max_subscribers_per_project = max_subscribers_per_project
+        self._max_subscribers_total = max_subscribers_total
         self._events: dict[UUID, deque[AnyEvent]] = {}
         self._last_seq: dict[UUID, int] = {}
         self._subscribers: dict[UUID, list[_Subscription]] = {}
@@ -92,7 +98,16 @@ class InMemoryEventLog:
     async def read_after(self, project_id: UUID, seq: int) -> list[AnyEvent]:
         return [e for e in self._events.get(project_id, ()) if e.seq > seq]
 
+    def has_subscriber_capacity(self, project_id: UUID) -> bool:
+        total = sum(len(subscribers) for subscribers in self._subscribers.values())
+        return (
+            self.subscriber_count(project_id) < self._max_subscribers_per_project
+            and total < self._max_subscribers_total
+        )
+
     def subscribe(self, project_id: UUID) -> _Subscription:
+        if not self.has_subscriber_capacity(project_id):
+            raise CapacityExceeded
         subscription = _Subscription(self, project_id, self._queue_size)
         self._subscribers.setdefault(project_id, []).append(subscription)
         self._notify_waiters(project_id)
@@ -110,7 +125,7 @@ class InMemoryEventLog:
         return len(self._subscribers.get(project_id, ()))
 
     async def wait_for_subscriber_count(self, project_id: UUID, count: int) -> None:
-        """Attend (sans interrogation) que le nombre d'abonnés atteigne `count`."""
+        """Tests uniquement : attend, sans interrogation, que les abonnés soient `count`."""
         if self.subscriber_count(project_id) == count:
             return
         waiter: asyncio.Future[None] = asyncio.get_running_loop().create_future()
