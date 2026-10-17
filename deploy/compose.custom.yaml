@@ -1,0 +1,104 @@
+# Compose pour un serveur qui fait déjà tourner Traefik (conteneur), Grafana, cAdvisor, etc.
+# Copié dans /opt/<projet>/compose.yaml par deploy-custom.sh. Traefik détecte l'application
+# grâce aux labels ci-dessous ; aucun port n'est publié sur l'hôte.
+#
+# Variables obligatoires (fournies par deploy-custom.sh) : PROJECT, FOREMAN_IMAGE, FOREMAN_DOMAIN.
+# Les autres ont une valeur par défaut, surchargeable dans /opt/<projet>/.env.
+
+name: ${PROJECT:?PROJECT requis}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-10m}
+    max-file: ${LOG_MAX_FILE:-3}
+
+services:
+  app:
+    image: ${FOREMAN_IMAGE:?FOREMAN_IMAGE requis (ghcr.io/...@sha256:...)}
+    restart: unless-stopped
+    env_file: .env
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: ${APP_CPUS:-1.0}
+          memory: ${APP_MEM_LIMIT:-512M}
+          pids: ${APP_PIDS_LIMIT:-200}
+        reservations:
+          memory: ${APP_MEM_RESERVATION:-128M}
+    networks: [traefik, internal]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+
+      # Routeur HTTP : redirige vers HTTPS
+      - traefik.http.routers.${PROJECT}-http.rule=Host(`${FOREMAN_DOMAIN:?FOREMAN_DOMAIN requis}`)
+      - traefik.http.routers.${PROJECT}-http.entrypoints=${TRAEFIK_ENTRYPOINT_HTTP:-web}
+      - traefik.http.routers.${PROJECT}-http.middlewares=${PROJECT}-redirect
+      - traefik.http.middlewares.${PROJECT}-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.${PROJECT}-redirect.redirectscheme.permanent=true
+
+      # Routeur HTTPS
+      - traefik.http.routers.${PROJECT}.rule=Host(`${FOREMAN_DOMAIN}`)
+      - traefik.http.routers.${PROJECT}.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}
+      - traefik.http.routers.${PROJECT}.tls=true
+      - traefik.http.routers.${PROJECT}.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.routers.${PROJECT}.middlewares=${PROJECT}-headers,${PROJECT}-compress
+      - traefik.http.routers.${PROJECT}.service=${PROJECT}
+
+      # En-têtes de sécurité (équivalents du Caddyfile)
+      - traefik.http.middlewares.${PROJECT}-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.${PROJECT}-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.${PROJECT}-headers.headers.referrerPolicy=no-referrer
+      - "traefik.http.middlewares.${PROJECT}-headers.headers.customResponseHeaders.Content-Security-Policy=default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+      - traefik.http.middlewares.${PROJECT}-compress.compress=true
+
+      # Service : l'application écoute sur 8000 dans le conteneur
+      - traefik.http.services.${PROJECT}.loadbalancer.server.port=8000
+
+  # PostgreSQL : optionnel, activé par `deploy-custom.sh --with-db` (profil « db »).
+  db:
+    profiles: [db]
+    image: ${DB_IMAGE:-postgres:16-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-foreman}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis avec --with-db}
+      POSTGRES_DB: ${POSTGRES_DB:-foreman}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: ${DB_CPUS:-1.0}
+          memory: ${DB_MEM_LIMIT:-512M}
+          pids: ${DB_PIDS_LIMIT:-200}
+        reservations:
+          memory: ${DB_MEM_RESERVATION:-128M}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+networks:
+  # Réseau de Traefik, déjà créé sur le serveur (docker network ls).
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
+  # Réseau privé du projet : la base n'est jamais exposée à Traefik.
+  internal:
+    internal: true
+
+volumes:
+  db_data:
