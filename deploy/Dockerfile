@@ -10,7 +10,7 @@ COPY frontend/ ./
 RUN pnpm build
 
 # --- Backend (dépendances) --------------------------------------------------
-FROM python:3.12-slim AS backend
+FROM python:3.14-slim AS backend
 COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
@@ -20,7 +20,7 @@ COPY backend/src ./src
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
 
 # --- Image finale -----------------------------------------------------------
-FROM python:3.12-slim
+FROM python:3.14-slim
 RUN useradd --system --uid 10001 --no-create-home foreman
 WORKDIR /app
 COPY --from=backend /app/.venv /app/.venv
