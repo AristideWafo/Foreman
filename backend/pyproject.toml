@@ -50,6 +50,7 @@ packages = ["foreman"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = ["evals: scénarios avec le vrai modèle (non déterministes, payants)"]
 
 # --- Couches (voir docs/ARCHITECTURE.md) -------------------------------------
 [tool.importlinter]

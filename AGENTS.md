@@ -59,5 +59,5 @@ Toute exception à ces règles est listée dans `docs/DEBT.md` et figée par un 
 
 ## Ajouter une intégration
 
-Ordre fixe : normalisation de la config → outils → docs → tests → `make verify-integrations`.
+Ordre fixe : normalisation de la config → outils → docs → tests.
 Détail dans `docs/adding-an-integration.md`.
