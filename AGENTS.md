@@ -11,7 +11,8 @@ Ce fichier s'adresse aux agents de code (Claude Code, etc.) et aux humains.
 | `make check` | Rapide : lint, format, typage, couches. À lancer avant chaque commit |
 | `make check-full` | `check` + tests + build front |
 | `make check-imports` | Contrats de couches (import-linter) |
-| `make test` | Tests backend et frontend |
+| `make fmt` | Formate le code |
+| `make test` | Tests (backend ; frontend dès la PR 03) |
 
 Ne contournez pas le `Makefile` : la CI appelle les mêmes cibles.
 

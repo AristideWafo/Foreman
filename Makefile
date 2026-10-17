@@ -1,20 +1,29 @@
 .DEFAULT_GOAL := help
-.PHONY: help install check check-full check-imports test
+.PHONY: help install check check-full check-imports test fmt
+
+BACKEND := cd backend && uv run
 
 help: ## Liste les cibles
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
 
 install: ## Installe les dépendances
-	@echo "Rien à installer pour l'instant (le backend arrive en PR 02, le frontend en PR 03)."
+	cd backend && uv sync
 
-check: ## Contrôles rapides
-	@echo "Aucun contrôle configuré pour l'instant."
+fmt: ## Formate le code
+	$(BACKEND) ruff format .
+	$(BACKEND) ruff check --fix .
+
+check: ## Contrôles rapides (lint, format, typage, couches)
+	$(BACKEND) ruff check .
+	$(BACKEND) ruff format --check .
+	$(BACKEND) mypy
+	$(MAKE) check-imports
 
 check-full: check ## Contrôles complets
-	@$(MAKE) test
+	$(MAKE) test
 
 check-imports: ## Contrats de couches
-	@echo "Contrats de couches ajoutés en PR 02."
+	$(BACKEND) lint-imports
 
 test: ## Tests
-	@echo "Aucun test pour l'instant."
+	$(BACKEND) pytest
