@@ -4,6 +4,80 @@
  */
 
 export interface paths {
+    "/api/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Project
+         * @description Crée un projet. Le corps est facultatif (`title` vaut alors une chaîne vide).
+         */
+        post: operations["create_project_api_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Project */
+        get: operations["get_project_api_projects__project_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream Events */
+        get: operations["stream_events_api_projects__project_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Message
+         * @description Un seul tour à la fois par projet : un second message pendant un tour renvoie 409.
+         */
+        post: operations["post_message_api_projects__project_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -24,7 +98,314 @@ export interface paths {
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: never;
+    schemas: {
+        /** CardEvent */
+        CardEvent: {
+            /**
+             * At
+             * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
+             */
+            at: string;
+            data: components["schemas"]["PlanCardData"];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /**
+             * Seq
+             * @description Strictement croissant, contigu à partir de 1, par projet
+             */
+            seq: number;
+            /**
+             * Turn Id
+             * Format: uuid
+             */
+            turn_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "card";
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
+        };
+        /** CardStep */
+        CardStep: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "succeeded" | "failed" | "compensated" | "skipped";
+            /**
+             * Step
+             * @description Indice de l'étape dans la carte
+             */
+            step: number;
+            /** Title */
+            title: string;
+        };
+        /** CreateProjectRequest */
+        CreateProjectRequest: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
+        /** ErrorData */
+        ErrorData: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "internal_error" | "unknown_tool";
+            /**
+             * Message
+             * @description Texte fixe dérivé de `code`, jamais une exception
+             */
+            message: string;
+        };
+        /** ErrorEvent */
+        ErrorEvent: {
+            /**
+             * At
+             * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
+             */
+            at: string;
+            data: components["schemas"]["ErrorData"];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /**
+             * Seq
+             * @description Strictement croissant, contigu à partir de 1, par projet
+             */
+            seq: number;
+            /**
+             * Turn Id
+             * Format: uuid
+             */
+            turn_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "error";
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
+        };
+        /**
+         * ErrorResponse
+         * @description Erreur opaque : un code, jamais le détail d'une exception ni la saisie de l'utilisateur.
+         */
+        ErrorResponse: {
+            /**
+             * Error
+             * @enum {string}
+             */
+            error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented";
+        };
+        Event: components["schemas"]["MessageEvent"] | components["schemas"]["CardEvent"] | components["schemas"]["ExecutionStepEvent"] | components["schemas"]["TurnStatusEvent"] | components["schemas"]["ErrorEvent"];
+        /** ExecutionStepData */
+        ExecutionStepData: {
+            /** Card Id */
+            card_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "succeeded" | "failed" | "compensated" | "skipped";
+            /**
+             * Step
+             * @description Indice de l'étape dans la carte
+             */
+            step: number;
+        };
+        /** ExecutionStepEvent */
+        ExecutionStepEvent: {
+            /**
+             * At
+             * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
+             */
+            at: string;
+            data: components["schemas"]["ExecutionStepData"];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /**
+             * Seq
+             * @description Strictement croissant, contigu à partir de 1, par projet
+             */
+            seq: number;
+            /**
+             * Turn Id
+             * Format: uuid
+             */
+            turn_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "execution_step";
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
+        };
+        /** MessageAccepted */
+        MessageAccepted: {
+            /**
+             * Turn Id
+             * Format: uuid
+             */
+            turn_id: string;
+        };
+        /** MessageData */
+        MessageData: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Text */
+            text: string;
+        };
+        /** MessageEvent */
+        MessageEvent: {
+            /**
+             * At
+             * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
+             */
+            at: string;
+            data: components["schemas"]["MessageData"];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /**
+             * Seq
+             * @description Strictement croissant, contigu à partir de 1, par projet
+             */
+            seq: number;
+            /**
+             * Turn Id
+             * Format: uuid
+             */
+            turn_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "message";
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
+        };
+        /** MessageRequest */
+        MessageRequest: {
+            /** Text */
+            text: string;
+        };
+        /** PlanCardData */
+        PlanCardData: {
+            /** Card Id */
+            card_id: string;
+            /**
+             * Kind
+             * @default plan
+             * @constant
+             */
+            kind: "plan";
+            /** Steps */
+            steps: components["schemas"]["CardStep"][];
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+        };
+        /** Project */
+        Project: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /** TurnStatusData */
+        TurnStatusData: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "completed" | "failed";
+        };
+        /** TurnStatusEvent */
+        TurnStatusEvent: {
+            /**
+             * At
+             * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
+             */
+            at: string;
+            data: components["schemas"]["TurnStatusData"];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /**
+             * Seq
+             * @description Strictement croissant, contigu à partir de 1, par projet
+             */
+            seq: number;
+            /**
+             * Turn Id
+             * Format: uuid
+             */
+            turn_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "turn_status";
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
+        };
+    };
     responses: never;
     parameters: never;
     requestBodies: never;
@@ -33,6 +414,257 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    create_project_api_projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description Introuvable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Pas encore implémenté */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_project_api_projects__project_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description Introuvable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Pas encore implémenté */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stream_events_api_projects__project_id__events_get: {
+        parameters: {
+            query?: {
+                after?: number;
+            };
+            header?: {
+                "last-event-id"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Flux SSE. `id:` = `seq`, pas de champ `event:`, `data:` = un `Event` JSON, commentaire `:` de maintien toutes les 15 s, `retry: 3000`. Rejoue les événements de `seq > max(Last-Event-ID, after)`, dans l'ordre, puis le direct. Un `Last-Event-ID` non numérique est ignoré. Si la reprise est plus ancienne que le plus vieil événement conservé, le serveur rejoue depuis celui-ci (le client détecte le trou par la rupture de contiguïté de `seq` et repart de l'état reçu). Un abonné trop lent voit le flux fermé par le serveur et se reconnecte. Toute réponse non 200 est invisible pour `EventSource` : sur erreur avec `readyState` à `CLOSED`, appeler `GET /projects/{id}` pour distinguer 404 et 503. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["Event"];
+                };
+            };
+            /** @description Introuvable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Pas encore implémenté */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post_message_api_projects__project_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageAccepted"];
+                };
+            };
+            /** @description Introuvable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Un tour est déjà en cours pour ce projet (`turn_in_progress`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Pas encore implémenté */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     healthz_healthz_get: {
         parameters: {
             query?: never;

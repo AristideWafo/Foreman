@@ -1,10 +1,30 @@
-import { ServerStackIcon } from "@heroicons/react/24/outline";
+import { Link, Route, Routes, useParams } from "react-router-dom";
+import { HomePage } from "./features/chat/HomePage";
+import { ProjectPage } from "./features/chat/ProjectPage";
+
+function ProjectRoute() {
+  const { projectId } = useParams();
+  // `key` : changer de projet remonte la page, donc recrée le flux et l'état local.
+  return projectId ? <ProjectPage key={projectId} projectId={projectId} /> : <NotFoundPage />;
+}
+
+function NotFoundPage() {
+  return (
+    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col items-start justify-center gap-4 px-4">
+      <h1 className="text-2xl font-semibold text-slate-900">Page introuvable</h1>
+      <Link to="/" className="font-medium text-indigo-700 underline">
+        Retour à l'accueil
+      </Link>
+    </main>
+  );
+}
 
 export function App() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl items-center gap-3 px-4 font-sans">
-      <ServerStackIcon className="size-8" aria-hidden="true" />
-      <h1 className="text-2xl font-semibold">Foreman</h1>
-    </main>
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/projects/:projectId" element={<ProjectRoute />} />
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
   );
 }

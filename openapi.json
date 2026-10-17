@@ -1,10 +1,904 @@
 {
+  "components": {
+    "schemas": {
+      "CardEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "Horodatage avec fuseau (UTC)",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PlanCardData"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "seq": {
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "turn_id": {
+            "format": "uuid",
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "card",
+            "default": "card",
+            "title": "Type",
+            "type": "string"
+          },
+          "v": {
+            "const": 1,
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "project_id",
+          "turn_id",
+          "at",
+          "data"
+        ],
+        "title": "CardEvent",
+        "type": "object"
+      },
+      "CardStep": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed",
+              "compensated",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "step": {
+            "description": "Indice de l'\u00e9tape dans la carte",
+            "minimum": 1,
+            "title": "Step",
+            "type": "integer"
+          },
+          "title": {
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "title",
+          "status"
+        ],
+        "title": "CardStep",
+        "type": "object"
+      },
+      "CreateProjectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "default": "",
+            "maxLength": 120,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "CreateProjectRequest",
+        "type": "object"
+      },
+      "ErrorData": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "internal_error",
+              "unknown_tool"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "description": "Texte fixe d\u00e9riv\u00e9 de `code`, jamais une exception",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorData",
+        "type": "object"
+      },
+      "ErrorEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "Horodatage avec fuseau (UTC)",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ErrorData"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "seq": {
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "turn_id": {
+            "format": "uuid",
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "error",
+            "default": "error",
+            "title": "Type",
+            "type": "string"
+          },
+          "v": {
+            "const": 1,
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "project_id",
+          "turn_id",
+          "at",
+          "data"
+        ],
+        "title": "ErrorEvent",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "description": "Erreur opaque : un code, jamais le d\u00e9tail d'une exception ni la saisie de l'utilisateur.",
+        "properties": {
+          "error": {
+            "enum": [
+              "not_found",
+              "invalid_request",
+              "method_not_allowed",
+              "turn_in_progress",
+              "capacity_exceeded",
+              "internal_error",
+              "not_implemented"
+            ],
+            "title": "Error",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "Event": {
+        "discriminator": {
+          "mapping": {
+            "card": "#/components/schemas/CardEvent",
+            "error": "#/components/schemas/ErrorEvent",
+            "execution_step": "#/components/schemas/ExecutionStepEvent",
+            "message": "#/components/schemas/MessageEvent",
+            "turn_status": "#/components/schemas/TurnStatusEvent"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/MessageEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CardEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ExecutionStepEvent"
+          },
+          {
+            "$ref": "#/components/schemas/TurnStatusEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ErrorEvent"
+          }
+        ]
+      },
+      "ExecutionStepData": {
+        "additionalProperties": false,
+        "properties": {
+          "card_id": {
+            "maxLength": 64,
+            "title": "Card Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed",
+              "compensated",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "step": {
+            "description": "Indice de l'\u00e9tape dans la carte",
+            "minimum": 1,
+            "title": "Step",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "card_id",
+          "step",
+          "status"
+        ],
+        "title": "ExecutionStepData",
+        "type": "object"
+      },
+      "ExecutionStepEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "Horodatage avec fuseau (UTC)",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ExecutionStepData"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "seq": {
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "turn_id": {
+            "format": "uuid",
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "execution_step",
+            "default": "execution_step",
+            "title": "Type",
+            "type": "string"
+          },
+          "v": {
+            "const": 1,
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "project_id",
+          "turn_id",
+          "at",
+          "data"
+        ],
+        "title": "ExecutionStepEvent",
+        "type": "object"
+      },
+      "MessageAccepted": {
+        "properties": {
+          "turn_id": {
+            "format": "uuid",
+            "title": "Turn Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn_id"
+        ],
+        "title": "MessageAccepted",
+        "type": "object"
+      },
+      "MessageData": {
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 8000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "text"
+        ],
+        "title": "MessageData",
+        "type": "object"
+      },
+      "MessageEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "Horodatage avec fuseau (UTC)",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/MessageData"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "seq": {
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "turn_id": {
+            "format": "uuid",
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "message",
+            "default": "message",
+            "title": "Type",
+            "type": "string"
+          },
+          "v": {
+            "const": 1,
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "project_id",
+          "turn_id",
+          "at",
+          "data"
+        ],
+        "title": "MessageEvent",
+        "type": "object"
+      },
+      "MessageRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "MessageRequest",
+        "type": "object"
+      },
+      "PlanCardData": {
+        "additionalProperties": false,
+        "properties": {
+          "card_id": {
+            "maxLength": 64,
+            "title": "Card Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "plan",
+            "default": "plan",
+            "title": "Kind",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/CardStep"
+            },
+            "maxItems": 20,
+            "title": "Steps",
+            "type": "array"
+          },
+          "summary": {
+            "maxLength": 500,
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id",
+          "title",
+          "summary",
+          "steps"
+        ],
+        "title": "PlanCardData",
+        "type": "object"
+      },
+      "Project": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 120,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "created_at"
+        ],
+        "title": "Project",
+        "type": "object"
+      },
+      "TurnStatusData": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "TurnStatusData",
+        "type": "object"
+      },
+      "TurnStatusEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "Horodatage avec fuseau (UTC)",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TurnStatusData"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "seq": {
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "turn_id": {
+            "format": "uuid",
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "turn_status",
+            "default": "turn_status",
+            "title": "Type",
+            "type": "string"
+          },
+          "v": {
+            "const": 1,
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "project_id",
+          "turn_id",
+          "at",
+          "data"
+        ],
+        "title": "TurnStatusEvent",
+        "type": "object"
+      }
+    }
+  },
   "info": {
     "title": "Foreman",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/projects": {
+      "post": {
+        "description": "Cr\u00e9e un projet. Le corps est facultatif (`title` vaut alors une cha\u00eene vide).",
+        "operationId": "create_project_api_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateProjectRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Create Project"
+      }
+    },
+    "/api/projects/{project_id}": {
+      "get": {
+        "operationId": "get_project_api_projects__project_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Get Project"
+      }
+    },
+    "/api/projects/{project_id}/events": {
+      "get": {
+        "operationId": "stream_events_api_projects__project_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/Event",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Flux SSE. `id:` = `seq`, pas de champ `event:`, `data:` = un `Event` JSON, commentaire `:` de maintien toutes les 15 s, `retry: 3000`. Rejoue les \u00e9v\u00e9nements de `seq > max(Last-Event-ID, after)`, dans l'ordre, puis le direct. Un `Last-Event-ID` non num\u00e9rique est ignor\u00e9. Si la reprise est plus ancienne que le plus vieil \u00e9v\u00e9nement conserv\u00e9, le serveur rejoue depuis celui-ci (le client d\u00e9tecte le trou par la rupture de contigu\u00eft\u00e9 de `seq` et repart de l'\u00e9tat re\u00e7u). Un abonn\u00e9 trop lent voit le flux ferm\u00e9 par le serveur et se reconnecte. Toute r\u00e9ponse non 200 est invisible pour `EventSource` : sur erreur avec `readyState` \u00e0 `CLOSED`, appeler `GET /projects/{id}` pour distinguer 404 et 503."
+          },
+          "404": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable"
+          },
+          "422": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Stream Events"
+      }
+    },
+    "/api/projects/{project_id}/messages": {
+      "post": {
+        "description": "Un seul tour \u00e0 la fois par projet : un second message pendant un tour renvoie 409.",
+        "operationId": "post_message_api_projects__project_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Un tour est d\u00e9j\u00e0 en cours pour ce projet (`turn_in_progress`)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Post Message"
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "healthz_healthz_get",
