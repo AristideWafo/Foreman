@@ -1,0 +1,10 @@
+"""Noms des variables d'environnement."""
+
+from typing import Final
+
+ENV_PROFILE: Final = "FOREMAN_PROFILE"
+ENV_LOG_LEVEL: Final = "FOREMAN_LOG_LEVEL"
+ENV_DATABASE_URL: Final = "FOREMAN_DATABASE_URL"
+
+DEFAULT_LOG_LEVEL: Final = "INFO"
+ENV_STATIC_DIR: Final = "FOREMAN_STATIC_DIR"
