@@ -8,18 +8,32 @@ vrai modèle, gateway, Skills, plan haché, approbations, audit.
 ## Contrat figé v1
 
 Erreurs HTTP opaques, toujours `{"error": "<code>"}` : `not_found` (404), `invalid_request` (422, sans écho de la
-saisie), `capacity_exceeded` (503), `internal_error` (500), `not_implemented` (501, tant que la route est un stub).
+saisie), `capacity_exceeded` (503), `internal_error` (500), `method_not_allowed` (405), `turn_in_progress` (409), `not_implemented` (501, tant que la route est un stub). Le champ `error` est un `Literal` de ces codes.
 
 | Méthode | Chemin | Corps | Réponse |
 | --- | --- | --- | --- |
 | GET | `/healthz` | – | inchangée |
-| POST | `/api/projects` | `{"title"?: str ≤ 120}` | 201 `Project{id, title, created_at}` |
+| POST | `/api/projects` | corps facultatif `{"title"?: str ≤ 120}` | 201 `Project{id, title, created_at}` |
 | GET | `/api/projects/{id}` | – | 200 `Project` ou 404 |
-| POST | `/api/projects/{id}/messages` | `{"text": str 1..4000}` | 202 `{"turn_id"}` (asynchrone dans le contrat) |
+| POST | `/api/projects/{id}/messages` | `{"text": str 1..4000}` | 202 `{"turn_id"}` (asynchrone dans le contrat) ; **409 `turn_in_progress`** si un tour est déjà en cours (un seul tour à la fois par projet) |
 | GET | `/api/projects/{id}/events?after=<seq>` | en-tête `Last-Event-ID` prioritaire | `text/event-stream` : rejoue au-delà de `after`, puis le direct |
 
 **Trame SSE.** `id: <seq>` (reprise native d'EventSource), pas de champ `event:` (un seul `onmessage`, le type est
 dans le JSON), `data:` = l'enveloppe.
+
+**Sémantique du flux (précisée après revue indépendante).**
+- `seq` : strictement croissant, **contigu à partir de 1**, par projet, livré dans l'ordre. Reprise : le serveur rejoue
+  `seq > max(Last-Event-ID, after)`. Un `Last-Event-ID` non numérique est ignoré ; `after` négatif donne 422.
+- Débordement : un abonné trop lent voit le flux fermé par le serveur et se reconnecte. Si la reprise est plus ancienne
+  que le plus vieil événement conservé, le serveur rejoue depuis celui-ci ; le client détecte le trou par la rupture
+  de contiguïté de `seq` et repart de l'état reçu.
+- Commentaire `:` de maintien toutes les 15 s (utile derrière Traefik) et `retry: 3000`.
+- `EventSource` n'expose ni statut ni corps d'une réponse non 200 : sur `onerror` avec `readyState = CLOSED`, appeler
+  `GET /projects/{id}` pour distinguer 404 et 503.
+- `card` : remplace la carte précédente de même `card_id`. Un `execution_step` dont la carte est inconnue est ignoré.
+- Dates (`at`, `created_at`) : avec fuseau obligatoire (UTC) ; une date sans fuseau est rejetée.
+- Front : une branche `default` **ignore** les types inconnus (pas d'exception), et les textes sont rendus en texte
+  React uniquement (jamais `dangerouslySetInnerHTML`).
 
 **Enveloppe `Event`** (union discriminée sur `type`, définie dans `backend/src/foreman/core/events.py`, publiée dans
 `openapi.json` sous `components.schemas.Event`) : `{v: 1, seq, project_id, turn_id, at, type, data}`.
@@ -27,10 +41,10 @@ dans le JSON), `data:` = l'enveloppe.
 | `type` | `data` | Émis en semaine 1 |
 | --- | --- | --- |
 | `message` | `{role: "user" \| "assistant", text}` | oui |
-| `card` | `{card_id, kind: "plan", title, summary, steps: [{seq, title, status}]}` | oui |
-| `execution_step` | `{card_id, seq, status}` | déclaré, émis à partir de S1 (semaine 2) |
+| `card` | `{card_id, kind: "plan", title, summary, steps: [{step, title, status}]}` | oui |
+| `execution_step` | `{card_id, step, status}` | déclaré, émis à partir de S1 (semaine 2) |
 | `turn_status` | `{status: "running" \| "completed" \| "failed"}` | oui |
-| `error` | `{code: "internal_error" \| "unknown_tool", message}` (texte générique) | en cas d'échec |
+| `error` | `{code: "internal_error" \| "unknown_tool", message}` (texte fixe dérivé du code, vérifié) | en cas d'échec |
 
 **Évolution.** Un ajout (nouveau `type`, nouveau `kind` de carte, champ optionnel) garde `v: 1` ; tout autre changement
 passe à `v: 2`. Le front ignore les types inconnus.

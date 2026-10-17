@@ -5,6 +5,7 @@
         "additionalProperties": false,
         "properties": {
           "at": {
+            "description": "Horodatage avec fuseau (UTC)",
             "format": "date-time",
             "title": "At",
             "type": "string"
@@ -18,7 +19,7 @@
             "type": "string"
           },
           "seq": {
-            "description": "Croissant, par projet",
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
             "minimum": 1,
             "title": "Seq",
             "type": "integer"
@@ -54,10 +55,6 @@
       "CardStep": {
         "additionalProperties": false,
         "properties": {
-          "seq": {
-            "title": "Seq",
-            "type": "integer"
-          },
           "status": {
             "enum": [
               "pending",
@@ -70,13 +67,20 @@
             "title": "Status",
             "type": "string"
           },
+          "step": {
+            "description": "Indice de l'\u00e9tape dans la carte",
+            "minimum": 1,
+            "title": "Step",
+            "type": "integer"
+          },
           "title": {
+            "maxLength": 200,
             "title": "Title",
             "type": "string"
           }
         },
         "required": [
-          "seq",
+          "step",
           "title",
           "status"
         ],
@@ -108,7 +112,7 @@
             "type": "string"
           },
           "message": {
-            "description": "Texte g\u00e9n\u00e9rique, jamais le d\u00e9tail d'une exception",
+            "description": "Texte fixe d\u00e9riv\u00e9 de `code`, jamais une exception",
             "title": "Message",
             "type": "string"
           }
@@ -124,6 +128,7 @@
         "additionalProperties": false,
         "properties": {
           "at": {
+            "description": "Horodatage avec fuseau (UTC)",
             "format": "date-time",
             "title": "At",
             "type": "string"
@@ -137,7 +142,7 @@
             "type": "string"
           },
           "seq": {
-            "description": "Croissant, par projet",
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
             "minimum": 1,
             "title": "Seq",
             "type": "integer"
@@ -174,6 +179,15 @@
         "description": "Erreur opaque : un code, jamais le d\u00e9tail d'une exception ni la saisie de l'utilisateur.",
         "properties": {
           "error": {
+            "enum": [
+              "not_found",
+              "invalid_request",
+              "method_not_allowed",
+              "turn_in_progress",
+              "capacity_exceeded",
+              "internal_error",
+              "not_implemented"
+            ],
             "title": "Error",
             "type": "string"
           }
@@ -217,12 +231,9 @@
         "additionalProperties": false,
         "properties": {
           "card_id": {
+            "maxLength": 64,
             "title": "Card Id",
             "type": "string"
-          },
-          "seq": {
-            "title": "Seq",
-            "type": "integer"
           },
           "status": {
             "enum": [
@@ -235,11 +246,17 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "step": {
+            "description": "Indice de l'\u00e9tape dans la carte",
+            "minimum": 1,
+            "title": "Step",
+            "type": "integer"
           }
         },
         "required": [
           "card_id",
-          "seq",
+          "step",
           "status"
         ],
         "title": "ExecutionStepData",
@@ -249,6 +266,7 @@
         "additionalProperties": false,
         "properties": {
           "at": {
+            "description": "Horodatage avec fuseau (UTC)",
             "format": "date-time",
             "title": "At",
             "type": "string"
@@ -262,7 +280,7 @@
             "type": "string"
           },
           "seq": {
-            "description": "Croissant, par projet",
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
             "minimum": 1,
             "title": "Seq",
             "type": "integer"
@@ -321,6 +339,7 @@
             "type": "string"
           },
           "text": {
+            "maxLength": 8000,
             "title": "Text",
             "type": "string"
           }
@@ -336,6 +355,7 @@
         "additionalProperties": false,
         "properties": {
           "at": {
+            "description": "Horodatage avec fuseau (UTC)",
             "format": "date-time",
             "title": "At",
             "type": "string"
@@ -349,7 +369,7 @@
             "type": "string"
           },
           "seq": {
-            "description": "Croissant, par projet",
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
             "minimum": 1,
             "title": "Seq",
             "type": "integer"
@@ -402,6 +422,7 @@
         "additionalProperties": false,
         "properties": {
           "card_id": {
+            "maxLength": 64,
             "title": "Card Id",
             "type": "string"
           },
@@ -415,14 +436,17 @@
             "items": {
               "$ref": "#/components/schemas/CardStep"
             },
+            "maxItems": 20,
             "title": "Steps",
             "type": "array"
           },
           "summary": {
+            "maxLength": 500,
             "title": "Summary",
             "type": "string"
           },
           "title": {
+            "maxLength": 200,
             "title": "Title",
             "type": "string"
           }
@@ -449,6 +473,7 @@
             "type": "string"
           },
           "title": {
+            "maxLength": 120,
             "title": "Title",
             "type": "string"
           }
@@ -484,6 +509,7 @@
         "additionalProperties": false,
         "properties": {
           "at": {
+            "description": "Horodatage avec fuseau (UTC)",
             "format": "date-time",
             "title": "At",
             "type": "string"
@@ -497,7 +523,7 @@
             "type": "string"
           },
           "seq": {
-            "description": "Croissant, par projet",
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
             "minimum": 1,
             "title": "Seq",
             "type": "integer"
@@ -540,16 +566,24 @@
   "paths": {
     "/api/projects": {
       "post": {
+        "description": "Cr\u00e9e un projet. Le corps est facultatif (`title` vaut alors une cha\u00eene vide).",
         "operationId": "create_project_api_projects_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateProjectRequest"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateProjectRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -696,28 +730,43 @@
             "required": false,
             "schema": {
               "default": 0,
+              "minimum": 0,
               "title": "After",
               "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
             }
           }
         ],
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
-              },
               "text/event-stream": {
                 "schema": {
-                  "$ref": "#/components/schemas/Event"
+                  "$ref": "#/components/schemas/Event",
+                  "type": "string"
                 }
               }
             },
-            "description": "Flux SSE. `id:` = `seq`, pas de champ `event:`, `data:` = un `Event` JSON. Reprise : en-t\u00eate `Last-Event-ID` (prioritaire) ou param\u00e8tre `after`."
+            "description": "Flux SSE. `id:` = `seq`, pas de champ `event:`, `data:` = un `Event` JSON, commentaire `:` de maintien toutes les 15 s, `retry: 3000`. Rejoue les \u00e9v\u00e9nements de `seq > max(Last-Event-ID, after)`, dans l'ordre, puis le direct. Un `Last-Event-ID` non num\u00e9rique est ignor\u00e9. Si la reprise est plus ancienne que le plus vieil \u00e9v\u00e9nement conserv\u00e9, le serveur rejoue depuis celui-ci (le client d\u00e9tecte le trou par la rupture de contigu\u00eft\u00e9 de `seq` et repart de l'\u00e9tat re\u00e7u). Un abonn\u00e9 trop lent voit le flux ferm\u00e9 par le serveur et se reconnecte. Toute r\u00e9ponse non 200 est invisible pour `EventSource` : sur erreur avec `readyState` \u00e0 `CLOSED`, appeler `GET /projects/{id}` pour distinguer 404 et 503."
           },
           "404": {
             "content": {
-              "application/json": {
+              "text/event-stream": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -727,7 +776,7 @@
           },
           "422": {
             "content": {
-              "application/json": {
+              "text/event-stream": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -737,7 +786,7 @@
           },
           "501": {
             "content": {
-              "application/json": {
+              "text/event-stream": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -747,7 +796,7 @@
           },
           "503": {
             "content": {
-              "application/json": {
+              "text/event-stream": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -761,6 +810,7 @@
     },
     "/api/projects/{project_id}/messages": {
       "post": {
+        "description": "Un seul tour \u00e0 la fois par projet : un second message pendant un tour renvoie 409.",
         "operationId": "post_message_api_projects__project_id__messages_post",
         "parameters": [
           {
@@ -804,6 +854,16 @@
               }
             },
             "description": "Introuvable"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Un tour est d\u00e9j\u00e0 en cours pour ce projet (`turn_in_progress`)"
           },
           "422": {
             "content": {

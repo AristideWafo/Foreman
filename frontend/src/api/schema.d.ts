@@ -13,7 +13,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create Project */
+        /**
+         * Create Project
+         * @description Crée un projet. Le corps est facultatif (`title` vaut alors une chaîne vide).
+         */
         post: operations["create_project_api_projects_post"];
         delete?: never;
         options?: never;
@@ -64,7 +67,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Post Message */
+        /**
+         * Post Message
+         * @description Un seul tour à la fois par projet : un second message pendant un tour renvoie 409.
+         */
         post: operations["post_message_api_projects__project_id__messages_post"];
         delete?: never;
         options?: never;
@@ -98,6 +104,7 @@ export interface components {
             /**
              * At
              * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
              */
             at: string;
             data: components["schemas"]["PlanCardData"];
@@ -108,7 +115,7 @@ export interface components {
             project_id: string;
             /**
              * Seq
-             * @description Croissant, par projet
+             * @description Strictement croissant, contigu à partir de 1, par projet
              */
             seq: number;
             /**
@@ -130,13 +137,16 @@ export interface components {
         };
         /** CardStep */
         CardStep: {
-            /** Seq */
-            seq: number;
             /**
              * Status
              * @enum {string}
              */
             status: "pending" | "running" | "succeeded" | "failed" | "compensated" | "skipped";
+            /**
+             * Step
+             * @description Indice de l'étape dans la carte
+             */
+            step: number;
             /** Title */
             title: string;
         };
@@ -157,7 +167,7 @@ export interface components {
             code: "internal_error" | "unknown_tool";
             /**
              * Message
-             * @description Texte générique, jamais le détail d'une exception
+             * @description Texte fixe dérivé de `code`, jamais une exception
              */
             message: string;
         };
@@ -166,6 +176,7 @@ export interface components {
             /**
              * At
              * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
              */
             at: string;
             data: components["schemas"]["ErrorData"];
@@ -176,7 +187,7 @@ export interface components {
             project_id: string;
             /**
              * Seq
-             * @description Croissant, par projet
+             * @description Strictement croissant, contigu à partir de 1, par projet
              */
             seq: number;
             /**
@@ -201,27 +212,34 @@ export interface components {
          * @description Erreur opaque : un code, jamais le détail d'une exception ni la saisie de l'utilisateur.
          */
         ErrorResponse: {
-            /** Error */
-            error: string;
+            /**
+             * Error
+             * @enum {string}
+             */
+            error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented";
         };
         Event: components["schemas"]["MessageEvent"] | components["schemas"]["CardEvent"] | components["schemas"]["ExecutionStepEvent"] | components["schemas"]["TurnStatusEvent"] | components["schemas"]["ErrorEvent"];
         /** ExecutionStepData */
         ExecutionStepData: {
             /** Card Id */
             card_id: string;
-            /** Seq */
-            seq: number;
             /**
              * Status
              * @enum {string}
              */
             status: "pending" | "running" | "succeeded" | "failed" | "compensated" | "skipped";
+            /**
+             * Step
+             * @description Indice de l'étape dans la carte
+             */
+            step: number;
         };
         /** ExecutionStepEvent */
         ExecutionStepEvent: {
             /**
              * At
              * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
              */
             at: string;
             data: components["schemas"]["ExecutionStepData"];
@@ -232,7 +250,7 @@ export interface components {
             project_id: string;
             /**
              * Seq
-             * @description Croissant, par projet
+             * @description Strictement croissant, contigu à partir de 1, par projet
              */
             seq: number;
             /**
@@ -275,6 +293,7 @@ export interface components {
             /**
              * At
              * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
              */
             at: string;
             data: components["schemas"]["MessageData"];
@@ -285,7 +304,7 @@ export interface components {
             project_id: string;
             /**
              * Seq
-             * @description Croissant, par projet
+             * @description Strictement croissant, contigu à partir de 1, par projet
              */
             seq: number;
             /**
@@ -355,6 +374,7 @@ export interface components {
             /**
              * At
              * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
              */
             at: string;
             data: components["schemas"]["TurnStatusData"];
@@ -365,7 +385,7 @@ export interface components {
             project_id: string;
             /**
              * Seq
-             * @description Croissant, par projet
+             * @description Strictement croissant, contigu à partir de 1, par projet
              */
             seq: number;
             /**
@@ -401,9 +421,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
-                "application/json": components["schemas"]["CreateProjectRequest"];
+                "application/json": components["schemas"]["CreateProjectRequest"] | null;
             };
         };
         responses: {
@@ -517,7 +537,9 @@ export interface operations {
             query?: {
                 after?: number;
             };
-            header?: never;
+            header?: {
+                "last-event-id"?: string | null;
+            };
             path: {
                 project_id: string;
             };
@@ -525,13 +547,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Flux SSE. `id:` = `seq`, pas de champ `event:`, `data:` = un `Event` JSON. Reprise : en-tête `Last-Event-ID` (prioritaire) ou paramètre `after`. */
+            /** @description Flux SSE. `id:` = `seq`, pas de champ `event:`, `data:` = un `Event` JSON, commentaire `:` de maintien toutes les 15 s, `retry: 3000`. Rejoue les événements de `seq > max(Last-Event-ID, after)`, dans l'ordre, puis le direct. Un `Last-Event-ID` non numérique est ignoré. Si la reprise est plus ancienne que le plus vieil événement conservé, le serveur rejoue depuis celui-ci (le client détecte le trou par la rupture de contiguïté de `seq` et repart de l'état reçu). Un abonné trop lent voit le flux fermé par le serveur et se reconnecte. Toute réponse non 200 est invisible pour `EventSource` : sur erreur avec `readyState` à `CLOSED`, appeler `GET /projects/{id}` pour distinguer 404 et 503. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
                     "text/event-stream": components["schemas"]["Event"];
                 };
             };
@@ -541,7 +562,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Requête invalide */
@@ -550,7 +571,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Pas encore implémenté */
@@ -559,7 +580,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Capacité atteinte */
@@ -568,7 +589,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -599,6 +620,15 @@ export interface operations {
             };
             /** @description Introuvable */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Un tour est déjà en cours pour ce projet (`turn_in_progress`) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -9,7 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
-from foreman.core.events import Event
+from foreman.core.events import ERROR_MESSAGES, Event
+from foreman.core.projects import Project
 from foreman.surfaces.web.app import create_app
 
 ADAPTER: TypeAdapter[Any] = TypeAdapter(Event)
@@ -36,19 +37,20 @@ EXAMPLES = {
         "kind": "plan",
         "title": "Plan de démonstration",
         "summary": "Faux agent",
-        "steps": [{"seq": 1, "title": "Créer le dépôt", "status": "pending"}],
+        "steps": [{"step": 1, "title": "Créer le dépôt", "status": "pending"}],
     },
-    "execution_step": {"card_id": "c1", "seq": 1, "status": "running"},
+    "execution_step": {"card_id": "c1", "step": 1, "status": "running"},
     "turn_status": {"status": "completed"},
-    "error": {"code": "internal_error", "message": "Une erreur est survenue."},
+    "error": {"code": "internal_error", "message": ERROR_MESSAGES["internal_error"]},
 }
 
 
 @pytest.mark.parametrize(("type_", "data"), EXAMPLES.items())
 def test_every_event_type_validates_and_roundtrips(type_: str, data: dict[str, Any]) -> None:
-    event = ADAPTER.validate_python(envelope(type_, data))
-    assert event.type == type_
-    assert json.loads(ADAPTER.dump_json(event))["data"] == data
+    source = envelope(type_, data)
+    event = ADAPTER.validate_python(source)
+    dumped = json.loads(ADAPTER.dump_json(event))
+    assert dumped == {**source, "at": "2026-10-20T09:00:00Z"}
 
 
 @pytest.mark.parametrize(
@@ -60,6 +62,13 @@ def test_every_event_type_validates_and_roundtrips(type_: str, data: dict[str, A
         envelope("message", EXAMPLES["message"], extra_field="x"),
         envelope("message", {"role": "system", "text": "x"}),
         envelope("error", {"code": "autre", "message": "x"}),
+        envelope("error", {"code": "internal_error", "message": "Traceback (most recent call"}),
+        envelope("message", EXAMPLES["message"], at="2026-10-20T09:00:00"),
+        envelope(
+            "card", {**EXAMPLES["card"], "steps": [{"step": 0, "title": "x", "status": "pending"}]}
+        ),
+        envelope("card", {**EXAMPLES["card"], "title": "x" * 201}),
+        envelope("message", {"role": "user", "text": "x" * 8001}),
     ],
 )
 def test_invalid_events_are_rejected(bad: dict[str, Any]) -> None:
@@ -121,3 +130,48 @@ def test_unknown_api_path_is_an_opaque_404(client: TestClient) -> None:
     response = client.get("/api/inexistant")
     assert response.status_code == 404
     assert response.json() == {"error": "not_found"}
+
+
+def test_naive_datetimes_are_rejected_in_projects_too() -> None:
+    with pytest.raises(ValidationError):
+        Project.model_validate(
+            {"id": str(uuid4()), "title": "x", "created_at": "2026-10-20T09:00:00"}
+        )
+
+
+def test_project_creation_accepts_an_empty_body(client: TestClient) -> None:
+    assert client.post("/api/projects").status_code == 501
+
+
+def test_negative_after_is_rejected(client: TestClient) -> None:
+    response = client.get(f"/api/projects/{uuid4()}/events?after=-1")
+    assert response.status_code == 422
+    assert response.json() == {"error": "invalid_request"}
+
+
+def test_wrong_method_is_a_405_that_keeps_the_allow_header(client: TestClient) -> None:
+    response = client.delete("/api/projects")
+    assert response.status_code == 405
+    assert response.json() == {"error": "method_not_allowed"}
+    assert "POST" in response.headers["allow"]
+
+
+def test_unexpected_exception_is_an_opaque_500() -> None:
+    app = create_app()
+
+    @app.get("/boom")
+    async def boom() -> None:
+        raise RuntimeError("secret-interne postgres://user:pass@db")
+
+    response = TestClient(app, raise_server_exceptions=False).get("/boom")
+    assert response.status_code == 500
+    assert response.json() == {"error": "internal_error"}
+    assert "secret-interne" not in response.text
+
+
+def test_event_stream_documents_only_event_stream(client: TestClient) -> None:
+    spec = client.get("/openapi.json").json()
+    ok = spec["paths"]["/api/projects/{project_id}/events"]["get"]["responses"]["200"]
+    assert list(ok["content"]) == ["text/event-stream"]
+    messages = spec["paths"]["/api/projects/{project_id}/messages"]["post"]["responses"]
+    assert "409" in messages
