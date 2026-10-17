@@ -40,6 +40,7 @@ jobs:
       SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
       DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
       DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT || 'foreman' }}
     steps:
       - name: Nom d'image en minuscules (GHCR refuse les majuscules)
@@ -77,5 +78,5 @@ jobs:
         env:
           IMAGE_REF: ${{ steps.image.outputs.ref }}
         run: |
-          ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+          ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "${DEPLOY_USER}@${DEPLOY_HOST}" "deploy ${DEPLOY_PROJECT} ${IMAGE_REF}"
