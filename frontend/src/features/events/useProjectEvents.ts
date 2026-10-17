@@ -37,7 +37,9 @@ export function useProjectEvents(projectId: string) {
         },
         (error: unknown) => {
           if (disposed) return;
-          const notFound = error instanceof ApiError && error.status === 404;
+          // 422 : identifiant mal formé, donc aucun projet ne peut correspondre.
+          const notFound =
+            error instanceof ApiError && (error.status === 404 || error.status === 422);
           setConnection({ status: "error", reason: notFound ? "not_found" : "generic" });
         },
       );

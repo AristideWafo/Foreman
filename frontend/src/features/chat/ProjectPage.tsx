@@ -148,18 +148,20 @@ export function ProjectPage({ projectId }: { projectId: string }) {
             Aucun message pour l'instant. Décrivez ce que vous voulez faire.
           </p>
         ) : null}
-        <ol role="log" aria-label="Conversation" className="space-y-3">
-          {items.map((item) => (
-            <TimelineEntry key={item.key} item={item} />
-          ))}
-          {turnRunning ? (
-            <li role="status" className="flex items-center gap-2 text-sm text-slate-600">
-              <SparklesIcon className="size-4 motion-safe:animate-pulse" aria-hidden="true" />
-              Foreman prépare une réponse…
-            </li>
-          ) : null}
-          <li ref={endRef} aria-hidden="true" />
-        </ol>
+        <div role="log" aria-label="Conversation">
+          <ol className="space-y-3">
+            {items.map((item) => (
+              <TimelineEntry key={item.key} item={item} />
+            ))}
+            {turnRunning ? (
+              <li role="status" className="flex items-center gap-2 text-sm text-slate-600">
+                <SparklesIcon className="size-4 motion-safe:animate-pulse" aria-hidden="true" />
+                Foreman prépare une réponse…
+              </li>
+            ) : null}
+            <li ref={endRef} aria-hidden="true" />
+          </ol>
+        </div>
       </main>
       <footer className="border-t border-slate-200 bg-slate-50 px-4 py-3">
         <MessageInput

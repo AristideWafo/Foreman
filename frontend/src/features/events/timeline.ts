@@ -22,6 +22,8 @@ export function parseEvent(raw: string): ProjectEvent | null {
       value !== null &&
       "seq" in value &&
       typeof value.seq === "number" &&
+      Number.isSafeInteger(value.seq) &&
+      value.seq > 0 &&
       "type" in value &&
       typeof value.type === "string" &&
       "data" in value &&
@@ -40,6 +42,13 @@ function applyContent(state: TimelineState, event: ProjectEvent): TimelineState 
   const key = `e${event.seq}`;
   switch (event.type) {
     case "message":
+      // Forme inattendue : ignorée (le `seq` est quand même consommé par `applyEvent`).
+      if (
+        (event.data.role !== "user" && event.data.role !== "assistant") ||
+        typeof event.data.text !== "string"
+      ) {
+        return state;
+      }
       return {
         ...state,
         items: [
@@ -49,6 +58,7 @@ function applyContent(state: TimelineState, event: ProjectEvent): TimelineState 
       };
     case "card": {
       const card = event.data;
+      if (typeof card.card_id !== "string") return state;
       const index = state.items.findIndex(
         (item) => item.kind === "card" && item.card.card_id === card.card_id,
       );
@@ -64,8 +74,9 @@ function applyContent(state: TimelineState, event: ProjectEvent): TimelineState 
         (item) => item.kind === "card" && item.card.card_id === card_id,
       );
       const target = state.items[index];
-      // Carte inconnue : événement ignoré.
+      // Carte inconnue, ou d'un `kind` sans étapes (évolution additive) : événement ignoré.
       if (!target || target.kind !== "card") return state;
+      if (target.card.kind !== "plan" || !Array.isArray(target.card.steps)) return state;
       const card = {
         ...target.card,
         steps: target.card.steps.map((s) => (s.step === step ? { ...s, status } : s)),
@@ -77,6 +88,7 @@ function applyContent(state: TimelineState, event: ProjectEvent): TimelineState 
     case "turn_status":
       return { ...state, turnRunning: event.data.status === "running" };
     case "error":
+      if (typeof event.data.message !== "string") return state;
       return {
         ...state,
         items: [...state.items, { key, kind: "error", message: event.data.message }],
@@ -90,10 +102,13 @@ function applyContent(state: TimelineState, event: ProjectEvent): TimelineState 
 /**
  * Applique un événement : dédoublonnage par `seq`, détection d'un trou
  * (seq > dernier + 1 : on repart de l'état reçu, la liste locale est vidée d'abord).
- * Un type inconnu consomme quand même son `seq`, pour ne pas faire croire à un trou.
+ * Un type inconnu, une version `v` inconnue ou une forme inattendue consomme quand même son `seq`,
+ * pour ne pas faire croire à un trou.
  */
 export function applyEvent(state: TimelineState, event: ProjectEvent): TimelineState {
   if (event.seq <= state.lastSeq) return state;
   const base = event.seq > state.lastSeq + 1 ? initialTimeline : state;
+  // `v` différent de 1 : format incompatible. On consomme le `seq` sans appliquer le contenu.
+  if (event.v !== 1) return { ...base, lastSeq: event.seq };
   return { ...applyContent(base, event), lastSeq: event.seq };
 }
