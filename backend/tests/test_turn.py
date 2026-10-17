@@ -126,3 +126,19 @@ async def test_only_one_turn_at_a_time_per_project_and_the_guard_is_released() -
     provider.release.set()
     await asyncio.wait_for(running, timeout=5)
     service.begin(project_id)  # libéré à la fin du tour
+
+
+async def test_silent_provider_times_out_and_frees_the_project() -> None:
+    """Sans délai, un fournisseur muet laisserait le projet en 409 pour toujours."""
+    log = InMemoryEventLog()
+    project_id = uuid4()
+    service = TurnService(GatedProvider(), log, provider_timeout_s=0.05)
+    turn = service.run(
+        TurnRequest(user_id="u", project_id=project_id, message="salut"),
+        service.begin(project_id),
+    )
+    await asyncio.wait_for(turn, timeout=2)  # échec net si le délai du fournisseur disparaît
+    events = [e.model_dump(mode="json") for e in await log.read_after(project_id, 0)]
+    assert types(events)[-2:] == ["error", "turn_status"]
+    assert events[-1]["data"]["status"] == "failed"
+    service.begin(project_id)  # la garde est libérée : pas de TurnInProgress

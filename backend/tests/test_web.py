@@ -204,3 +204,15 @@ def test_missing_static_file_is_a_404_not_the_spa(spa: TestClient) -> None:
 def test_no_spa_fallback_without_a_static_dir(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("FOREMAN_STATIC_DIR", raising=False)
     assert TestClient(create_app()).get("/projects/abc").status_code == 404
+
+
+def test_unknown_api_path_is_a_404_for_every_method_even_with_the_spa(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "index.html").write_text("<h1>spa</h1>")
+    monkeypatch.setenv("FOREMAN_STATIC_DIR", str(tmp_path))
+    client = TestClient(create_app())
+    for method in ("GET", "POST", "DELETE"):
+        response = client.request(method, "/api/inexistant")
+        assert response.status_code == 404, method
+        assert response.json() == {"error": "not_found"}, method

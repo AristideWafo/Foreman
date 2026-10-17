@@ -16,7 +16,7 @@ saisie), `capacity_exceeded` (503), `internal_error` (500), `method_not_allowed`
 | POST | `/api/projects` | corps facultatif `{"title"?: str ≤ 120}` | 201 `Project{id, title, created_at}` |
 | GET | `/api/projects/{id}` | – | 200 `Project` ou 404 |
 | POST | `/api/projects/{id}/messages` | `{"text": str 1..4000}` | 202 `{"turn_id"}` (asynchrone dans le contrat) ; **409 `turn_in_progress`** si un tour est déjà en cours (un seul tour à la fois par projet) |
-| GET | `/api/projects/{id}/events?after=<seq>` | en-tête `Last-Event-ID` prioritaire | `text/event-stream` : rejoue au-delà de `after`, puis le direct |
+| GET | `/api/projects/{id}/events?after=<seq>` | en-tête `Last-Event-ID` | `text/event-stream` : rejoue `seq > max(Last-Event-ID, after)`, puis le direct |
 
 **Trame SSE.** `id: <seq>` (reprise native d'EventSource), pas de champ `event:` (un seul `onmessage`, le type est
 dans le JSON), `data:` = l'enveloppe.

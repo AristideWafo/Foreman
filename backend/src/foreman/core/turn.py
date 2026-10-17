@@ -1,5 +1,6 @@
 """Service de tour partagé par toutes les surfaces."""
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Annotated, Literal
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 FailureCode = Literal["internal_error", "unknown_tool"]
 
 PROPOSE_PLAN = "propose_plan"
+DEFAULT_PROVIDER_TIMEOUT_S = 60.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,9 +61,15 @@ class TurnService:
     `await`), donc deux appels concurrents ne peuvent pas tous deux réussir.
     """
 
-    def __init__(self, provider: Provider, events: EventLog) -> None:
+    def __init__(
+        self,
+        provider: Provider,
+        events: EventLog,
+        provider_timeout_s: float = DEFAULT_PROVIDER_TIMEOUT_S,
+    ) -> None:
         self._provider = provider
         self._events = events
+        self._provider_timeout_s = provider_timeout_s
         self._active: dict[UUID, UUID] = {}
 
     def begin(self, project_id: UUID) -> UUID:
@@ -101,7 +109,9 @@ class TurnService:
         await self._emit(project_id, turn_id, MessageData(role="user", text=request.message))
         await self._emit(project_id, turn_id, TurnStatusData(status="running"))
         try:
-            reply = await self._provider.complete([request.message])
+            # Délai explicite : sinon un fournisseur muet bloque le projet en 409 pour toujours.
+            async with asyncio.timeout(self._provider_timeout_s):
+                reply = await self._provider.complete([request.message])
         except Exception:
             logger.exception("provider_failed project=%s turn=%s", project_id, turn_id)
             await self._fail(project_id, turn_id, "internal_error")
