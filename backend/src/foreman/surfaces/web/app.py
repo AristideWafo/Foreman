@@ -24,12 +24,14 @@ class SpaStaticFiles(StaticFiles):
     """
 
     async def get_response(self, path: str, scope: MutableMapping[str, Any]) -> Response:
+        # `/api/...` n'est jamais servi par la SPA, quelle que soit la méthode (sinon 405 sur POST).
+        if path == "api" or path.startswith("api/"):
+            raise StarletteHTTPException(status_code=404)
         try:
             return await super().get_response(path, scope)
         except StarletteHTTPException as exc:
-            is_api = path == "api" or path.startswith("api/")
             is_file = "." in Path(path).name
-            if exc.status_code != 404 or is_api or is_file:
+            if exc.status_code != 404 or is_file:
                 raise
             return await super().get_response("index.html", scope)
 
