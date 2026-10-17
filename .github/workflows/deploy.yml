@@ -43,6 +43,9 @@ jobs:
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
       DEPLOY_USER: ${{ vars.DEPLOY_USER }}
     steps:
+      - name: Nom d'image en minuscules (GHCR refuse les majuscules)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
       - name: Valide le SHA
         run: '[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "SHA invalide" >&2; exit 1; }'
 
