@@ -2,8 +2,10 @@
 
 ## Chaîne
 
-`push main` → **Build** (image construite une seule fois, tag `sha-<commit>`, scan Trivy bloquant,
-signature Cosign, SBOM, provenance) → **Deploy staging** automatique → **Deploy production** manuel.
+`merge sur prod` → **Build** (image construite une seule fois, tag `sha-<commit>`, scan Trivy bloquant,
+signature Cosign, SBOM, provenance) → **Deploy** automatique vers l'environnement GitHub **`env-perso`**
+(qui joue le rôle du staging). Un déclenchement manuel de **Deploy** (avec un SHA) redéploie ou revient en arrière.
+Un environnement `production` sera ajouté, avec relecteurs obligatoires, quand il existera.
 
 On déploie le **digest** de l'image (`ghcr.io/...@sha256:...`), jamais un tag mobile. Pas de tag `latest`.
 
@@ -22,10 +24,12 @@ On déploie le **digest** de l'image (`ghcr.io/...@sha256:...`), jamais un tag m
 
 ## GitHub (une fois)
 
-- Environnements `staging` et `production` ; `production` avec relecteurs obligatoires.
-- Variables d'environnement : `DEPLOY_HOST`, `DEPLOY_USER`. Secrets : `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`
-  (sortie de `ssh-keyscan`, vérifiée à la main).
-- Protection de `main` : check requis `CI OK`, relecture CODEOWNERS.
+- Environnement **`env-perso`** (Settings > Environments). Pas de relecteur obligatoire : le déploiement est
+  automatique au merge.
+- Variables de l'environnement : `DEPLOY_HOST`, `DEPLOY_USER`, et `DEPLOY_PROJECT` (nom du répertoire
+  `/opt/<projet>` ; `foreman` par défaut). Secrets : `DEPLOY_SSH_KEY` (clé privée dédiée),
+  `DEPLOY_KNOWN_HOSTS` (sortie de `ssh-keyscan`, vérifiée à la main).
+- Protection de `prod` : check requis `CI OK`, relecture CODEOWNERS.
 
 ## Serveur avec Traefik existant (`deploy-custom.sh`)
 
@@ -72,7 +76,26 @@ entrypoints `web` et `websecure`, résolveur de certificats `letsencrypt`, provi
 `exposedByDefault=false`. Le premier déploiement réel sur votre serveur n'a pas été exécuté depuis
 l'environnement de développement (pas de démon Docker) : seul le rendu du compose et la validation des entrées sont testés.
 
+### Brancher `deploy-custom.sh` sur `env-perso`
+
+1. Générer une clé dédiée : `ssh-keygen -t ed25519 -N "" -C "foreman-env-perso" -f ./foreman-env-perso`.
+   La clé privée va dans le secret `DEPLOY_SSH_KEY`, puis le fichier local est supprimé.
+2. Sur le serveur, dans `~<DEPLOY_USER>/.ssh/authorized_keys` (une ligne) :
+
+   ```
+   command="/opt/deploy/deploy-custom.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... foreman-env-perso
+   ```
+
+   L'utilisateur doit pouvoir lancer `docker` (groupe `docker`, donc équivalent à root sur la machine : c'est
+   pourquoi la clé ne peut exécuter que ce script, qui n'accepte qu'un digest GHCR).
+3. Le workflow envoie `deploy <projet> <image@sha256:…>` ; le script valide tout avant d'agir.
+
+**Limite connue** : `deploy-custom.sh` et `compose.custom.yaml` sont copiés sur le serveur à la main. Une modification de
+`compose.custom.yaml` dans le dépôt (labels, limites) n'est donc **pas** appliquée par le déploiement : il faut recopier
+le fichier. Une synchronisation automatique est possible plus tard ; elle donnerait à la CI le pouvoir de choisir
+le contenu du compose, ce qui est un choix de sécurité à prendre explicitement.
+
 ## Retour arrière
 
 `Deploy` en manuel avec le SHA d'un commit précédent. Le script revient aussi seul à l'image
-précédente si les trois contrôles de santé échouent.
+précédente si le health check échoue (`deploy-custom.sh`) ou si les trois contrôles de santé échouent (`deploy.sh`).
