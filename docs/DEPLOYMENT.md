@@ -26,7 +26,7 @@ On déploie le **digest** de l'image (`ghcr.io/...@sha256:...`), jamais un tag m
 
 - Environnement **`env-perso`** (Settings > Environments). Pas de relecteur obligatoire : le déploiement est
   automatique au merge.
-- Variables de l'environnement : `DEPLOY_HOST`, `DEPLOY_USER`, et `DEPLOY_PROJECT` (nom du répertoire
+- Variables de l'environnement : `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT` (défaut 22) et `DEPLOY_PROJECT` (nom du répertoire
   `/opt/<projet>` ; `foreman` par défaut). Secrets : `DEPLOY_SSH_KEY` (clé privée dédiée),
   `DEPLOY_KNOWN_HOSTS` (sortie de `ssh-keyscan`, vérifiée à la main).
 - Protection de `prod` : check requis `CI OK`, relecture CODEOWNERS.
@@ -71,7 +71,7 @@ deploy-custom.sh [--with-db] [<projet>] <image@sha256:digest>   # un seul argume
 envoyée par le workflow ; définir `FOREMAN_PROJECT` dans l'environnement de l'utilisateur de déploiement pour
 choisir le répertoire `/opt/<projet>`.
 
-**Hypothèses à confirmer** (valeurs par défaut, toutes surchargeables dans `.env`) : réseau Traefik `traefik`,
+**Hypothèses à confirmer** (valeurs par défaut, toutes surchargeables dans `.env`) : réseau Traefik `traefik` (à régler dans `.env` si le vôtre diffère, ex. `TRAEFIK_NETWORK=proxy`),
 entrypoints `web` et `websecure`, résolveur de certificats `letsencrypt`, provider Docker de Traefik actif avec
 `exposedByDefault=false`. Le premier déploiement réel sur votre serveur n'a pas été exécuté depuis
 l'environnement de développement (pas de démon Docker) : seul le rendu du compose et la validation des entrées sont testés.
