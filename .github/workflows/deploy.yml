@@ -1,19 +1,14 @@
 name: Deploy
 
-# Staging : automatique après un Build réussi sur main.
-# Production (et retour arrière) : manuel, derrière un environnement GitHub à relecteurs obligatoires.
+# Déploiement automatique vers l'environnement GitHub « env-perso » après un Build réussi sur prod
+# (c'est-à-dire au merge). Un déclenchement manuel permet de redéployer ou revenir en arrière sur un SHA.
 on:
   workflow_run:
     workflows: [Build]
     types: [completed]
-    branches: [main]
+    branches: [prod]
   workflow_dispatch:
     inputs:
-      environment:
-        description: Environnement cible
-        type: choice
-        options: [staging, production]
-        required: true
       sha:
         description: SHA complet du commit dont l'image est à déployer (retour arrière inclus)
         required: true
@@ -22,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+  group: deploy-env-perso
   cancel-in-progress: false
 
 env:
@@ -30,11 +25,14 @@ env:
 
 jobs:
   deploy:
-    name: Déploiement
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    name: Déploiement env-perso
+    # Automatique : seulement pour un Build réussi déclenché par un push (ni PR, ni tag).
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'staging' }}
+    environment: env-perso
     permissions:
       contents: read
       packages: read
@@ -42,9 +40,14 @@ jobs:
       SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
       DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_PROJECT: ${{ vars.DEPLOY_PROJECT || 'foreman' }}
     steps:
-      - name: Valide le SHA
-        run: '[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "SHA invalide" >&2; exit 1; }'
+      - name: Valide les entrées
+        run: |
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "SHA invalide" >&2; exit 1; }
+          [[ "$DEPLOY_PROJECT" =~ ^[a-z0-9][a-z0-9-]{1,40}$ ]] || { echo "DEPLOY_PROJECT invalide" >&2; exit 1; }
+          [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" ]] || { echo "variables DEPLOY_HOST et DEPLOY_USER requises dans l'environnement env-perso" >&2; exit 1; }
 
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
@@ -59,7 +62,7 @@ jobs:
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "digest introuvable" >&2; exit 1; }
           echo "ref=${IMAGE}@${digest}" >> "$GITHUB_OUTPUT"
 
-      - name: Prépare SSH (clé limitée à deploy.sh, hôte vérifié)
+      - name: Prépare SSH (clé limitée à deploy-custom.sh, hôte vérifié)
         env:
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -72,5 +75,5 @@ jobs:
         env:
           IMAGE_REF: ${{ steps.image.outputs.ref }}
         run: |
-          ssh -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            "${DEPLOY_USER}@${DEPLOY_HOST}" "deploy ${IMAGE_REF}"
+          ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" "deploy ${DEPLOY_PROJECT} ${IMAGE_REF}"
