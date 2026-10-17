@@ -106,8 +106,8 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
     assert "text/event-stream" in sse["content"]
 
 
-def test_routes_are_declared_but_not_implemented_yet(client: TestClient) -> None:
-    response = client.post("/api/projects", json={"title": "Safe Eat"})
+def test_events_route_is_still_a_501_stub(client: TestClient) -> None:
+    response = client.get(f"/api/projects/{uuid4()}/events")
     assert response.status_code == 501
     assert response.json() == {"error": "not_implemented"}
 
@@ -140,7 +140,9 @@ def test_naive_datetimes_are_rejected_in_projects_too() -> None:
 
 
 def test_project_creation_accepts_an_empty_body(client: TestClient) -> None:
-    assert client.post("/api/projects").status_code == 501
+    response = client.post("/api/projects")
+    assert response.status_code == 201
+    assert response.json()["title"] == ""
 
 
 def test_negative_after_is_rejected(client: TestClient) -> None:

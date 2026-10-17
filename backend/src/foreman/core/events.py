@@ -8,6 +8,7 @@ Une carte (`card`) remplace la précédente de même `card_id` ; un `execution_s
 est inconnue est ignoré.
 """
 
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -106,3 +107,27 @@ Event = Annotated[
     MessageEvent | CardEvent | ExecutionStepEvent | TurnStatusEvent | ErrorEvent,
     Field(discriminator="type"),
 ]
+
+
+EventData = MessageData | PlanCardData | ExecutionStepData | TurnStatusData | ErrorData
+AnyEvent = MessageEvent | CardEvent | ExecutionStepEvent | TurnStatusEvent | ErrorEvent
+
+
+def make_event(seq: int, project_id: UUID, turn_id: UUID, data: EventData) -> AnyEvent:
+    """Enveloppe `data` : le type de l'événement se déduit de la charge utile."""
+    at = datetime.now(UTC)
+    match data:
+        case MessageData():
+            return MessageEvent(seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data)
+        case PlanCardData():
+            return CardEvent(seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data)
+        case ExecutionStepData():
+            return ExecutionStepEvent(
+                seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data
+            )
+        case TurnStatusData():
+            return TurnStatusEvent(
+                seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data
+            )
+        case ErrorData():
+            return ErrorEvent(seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data)

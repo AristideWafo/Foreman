@@ -1,4 +1,4 @@
-"""Routes de l'API (contrat figé v1). Les corps sont implémentés par les PR suivantes."""
+"""Routes de l'API (contrat figé v1)."""
 
 from typing import Annotated, Any
 from uuid import UUID
@@ -6,16 +6,20 @@ from uuid import UUID
 from fastapi import APIRouter, Header, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from foreman.bootstrap.configure import App
+from foreman.core.ports import CapacityExceeded
 from foreman.core.projects import Project
-from foreman.surfaces.web.errors import error_response
+from foreman.core.turn import TurnInProgress, TurnRequest
+from foreman.surfaces.web.errors import ApiError, error_response
 from foreman.surfaces.web.schemas import (
     CreateProjectRequest,
     ErrorResponse,
     MessageAccepted,
     MessageRequest,
 )
+from foreman.surfaces.web.tasks import TaskRegistry
 
-router = APIRouter(prefix="/api")
+WEB_USER_ID = "web-anonymous"  # semaine 1 : aucune identité (authentification en S10)
 
 _ERRORS: dict[int | str, dict[str, Any]] = {
     # Descriptions explicites : la bibliothèque standard les libelle différemment selon la version
@@ -49,48 +53,70 @@ def _not_implemented() -> JSONResponse:
     return error_response(501, "not_implemented")
 
 
-@router.post("/projects", status_code=201, response_model=Project, responses=_ERRORS)
-async def create_project(body: CreateProjectRequest | None = None) -> JSONResponse:
-    """Crée un projet. Le corps est facultatif (`title` vaut alors une chaîne vide)."""
-    return _not_implemented()
+def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
+    router = APIRouter(prefix="/api")
 
+    @router.post("/projects", status_code=201, response_model=Project, responses=_ERRORS)
+    async def create_project(body: CreateProjectRequest | None = None) -> Project:
+        """Crée un projet. Le corps est facultatif (`title` vaut alors une chaîne vide)."""
+        try:
+            return await app.projects.create(body.title if body else "")
+        except CapacityExceeded:
+            raise ApiError(503, "capacity_exceeded") from None
 
-@router.get("/projects/{project_id}", response_model=Project, responses=_ERRORS)
-async def get_project(project_id: UUID) -> JSONResponse:
-    return _not_implemented()
+    @router.get("/projects/{project_id}", response_model=Project, responses=_ERRORS)
+    async def get_project(project_id: UUID) -> Project:
+        project = await app.projects.get(project_id)
+        if project is None:
+            raise ApiError(404, "not_found")
+        return project
 
-
-@router.post(
-    "/projects/{project_id}/messages",
-    status_code=202,
-    response_model=MessageAccepted,
-    responses={
-        **_ERRORS,
-        409: {
-            "model": ErrorResponse,
-            "description": "Un tour est déjà en cours pour ce projet (`turn_in_progress`)",
+    @router.post(
+        "/projects/{project_id}/messages",
+        status_code=202,
+        response_model=MessageAccepted,
+        responses={
+            **_ERRORS,
+            409: {
+                "model": ErrorResponse,
+                "description": "Un tour est déjà en cours pour ce projet (`turn_in_progress`)",
+            },
         },
-    },
-)
-async def post_message(project_id: UUID, body: MessageRequest) -> JSONResponse:
-    """Un seul tour à la fois par projet : un second message pendant un tour renvoie 409."""
-    return _not_implemented()
+    )
+    async def post_message(project_id: UUID, body: MessageRequest) -> MessageAccepted:
+        """Un seul tour à la fois par projet : un second message pendant un tour renvoie 409."""
+        if await app.projects.get(project_id) is None:
+            raise ApiError(404, "not_found")
+        try:
+            turn_id = app.turns.begin(project_id)
+        except TurnInProgress:
+            raise ApiError(409, "turn_in_progress") from None
+        request = TurnRequest(user_id=WEB_USER_ID, project_id=project_id, message=body.text)
+        try:
+            tasks.spawn(app.turns.run(request, turn_id))
+        except BaseException:
+            app.turns.release(project_id, turn_id)
+            raise
+        return MessageAccepted(turn_id=turn_id)
 
-
-@router.get(
-    "/projects/{project_id}/events",
-    response_class=EventStreamResponse,
-    responses={
-        200: {
-            "description": _SSE_DESCRIPTION,
-            "content": {"text/event-stream": {"schema": {"$ref": "#/components/schemas/Event"}}},
+    @router.get(
+        "/projects/{project_id}/events",
+        response_class=EventStreamResponse,
+        responses={
+            200: {
+                "description": _SSE_DESCRIPTION,
+                "content": {
+                    "text/event-stream": {"schema": {"$ref": "#/components/schemas/Event"}}
+                },
+            },
+            **_ERRORS,
         },
-        **_ERRORS,
-    },
-)
-async def stream_events(
-    project_id: UUID,
-    after: Annotated[int, Query(ge=0)] = 0,
-    last_event_id: Annotated[str | None, Header()] = None,
-) -> JSONResponse:
-    return _not_implemented()
+    )
+    async def stream_events(
+        project_id: UUID,
+        after: Annotated[int, Query(ge=0)] = 0,
+        last_event_id: Annotated[str | None, Header()] = None,
+    ) -> JSONResponse:
+        return _not_implemented()
+
+    return router
