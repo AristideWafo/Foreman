@@ -204,3 +204,47 @@ def test_script_accepts_hashed_credentials(tmp_path: Path, auth_line: str) -> No
     result = run_deploy(tmp_path, BASE_ENV + auth_line)
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "opt" / "mon-app" / ".current-image").read_text().strip() == IMAGE
+
+
+DB_ENV = (
+    BASE_ENV
+    + "FOREMAN_BASIC_AUTH_USERS='admin:$apr1$sel$empreinte'\n"
+    + "POSTGRES_PASSWORD=secretdetest\n"
+)
+
+
+def run_deploy_with_db(tmp_path: Path, env_file: str) -> subprocess.CompletedProcess[str]:
+    env = stub_docker(tmp_path)
+    project_dir = tmp_path / "opt" / "mon-app"
+    project_dir.mkdir(parents=True)
+    (project_dir / ".env").write_text(env_file)
+    return subprocess.run(  # noqa: S603
+        ["bash", str(SCRIPT), "--with-db", "mon-app", IMAGE],  # noqa: S607
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "url_line",
+    [
+        "",  # absent : l'application retomberait en mémoire sans erreur
+        "FOREMAN_DATABASE_URL=postgresql+psycopg://foreman:secretdetest@localhost:5432/foreman\n",
+        "FOREMAN_DATABASE_URL=mysql://foreman:secretdetest@db:3306/foreman\n",
+    ],
+)
+def test_with_db_requires_database_url_on_host_db(tmp_path: Path, url_line: str) -> None:
+    result = run_deploy_with_db(tmp_path, DB_ENV + url_line)
+    assert result.returncode == 66
+    assert "FOREMAN_DATABASE_URL" in result.stderr
+    assert "secretdetest" not in result.stderr + result.stdout
+    assert not (tmp_path / "opt" / "mon-app" / ".current-image").exists()
+
+
+def test_with_db_accepts_database_url_and_never_prints_it(tmp_path: Path) -> None:
+    url = "FOREMAN_DATABASE_URL=postgresql+psycopg://foreman:secretdetest@db:5432/foreman\n"
+    result = run_deploy_with_db(tmp_path, DB_ENV + url)
+    assert result.returncode == 0, result.stderr
+    assert "secretdetest" not in result.stderr + result.stdout

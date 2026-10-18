@@ -65,7 +65,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "projet      : ${PROJECT}"
   echo "répertoire  : ${APP_DIR}"
   echo "image       : ${IMAGE}"
-  echo "PostgreSQL  : $([[ $WITH_DB -eq 1 ]] && echo oui || echo non)"
+  echo "PostgreSQL  : $([[ $WITH_DB -eq 1 ]] && echo "oui (requiert POSTGRES_PASSWORD et FOREMAN_DATABASE_URL, hôte db)" || echo non)"
   echo "compose     : ${COMPOSE_TEMPLATE} -> ${APP_DIR}/compose.yaml"
   echo "étapes      : vérifier .env et le réseau Traefik, valider le compose, pull, up --wait, rollback si échec"
   exit 0
@@ -110,6 +110,10 @@ docker network inspect "$TRAEFIK_NETWORK" >/dev/null 2>&1 \
 
 if [[ "$WITH_DB" -eq 1 ]]; then
   [[ -n "$(env_value POSTGRES_PASSWORD)" ]] || die "POSTGRES_PASSWORD absent de ${APP_DIR}/.env (requis avec --with-db)" 66
+  # L'application doit viser le service « db » du compose ; sinon elle retomberait en mémoire sans erreur.
+  # La valeur n'est jamais affichée (elle contient le mot de passe).
+  [[ "$(env_value FOREMAN_DATABASE_URL)" =~ ^postgresql(\+psycopg)?://[^@/]+@db:[0-9]+/[A-Za-z0-9_]+$ ]] \
+    || die "FOREMAN_DATABASE_URL absent ou invalide dans ${APP_DIR}/.env (requis avec --with-db, hôte « db » : voir docs/DEPLOYMENT.md)" 66
   export COMPOSE_PROFILES="db"
 fi
 

@@ -121,6 +121,25 @@ Si le mot de passe contient des caractères spéciaux, les encoder dans l'URL (`
 - Les projets, plans, approbations, exécutions, registre et audit sont en PostgreSQL et survivent à un redéploiement ;
   le chat (événements) reste en mémoire et est vidé à chaque redémarrage.
 - L'URL de la base n'est écrite dans aucun journal. La retirer du `.env` ramène l'application en mémoire.
+- Le service `app` ne démarre qu'une fois `db` sain (`depends_on: service_healthy`, ignoré sans `--with-db`).
+- `deploy-custom.sh --with-db` refuse de déployer si `POSTGRES_PASSWORD` ou `FOREMAN_DATABASE_URL` (hôte `db`) manque
+  dans `/opt/<projet>/.env`, sans afficher leur valeur.
+- **Sauvegarde avant déploiement** (avant tout déploiement qui apporte une migration, et régulièrement) :
+
+  ```bash
+  cd /opt/<projet>
+  docker compose -p <projet> exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' \
+    > "/opt/backups/<projet>-$(date +%F-%H%M).dump"   # répertoire en 0700, hors du dépôt
+  ```
+
+  **Restauration** (application arrêtée au préalable : `docker compose -p <projet> stop app`) :
+
+  ```bash
+  docker compose -p <projet> exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' \
+    < /opt/backups/<projet>-<date>.dump
+  ```
+
+  Le retour arrière automatique du script ne restaure que l'image, jamais la base.
 - Retour arrière d'une migration : jamais automatique. `downgrade()` supprime les tables (audit compris) ; ne le lancer
   que sur une base de test.
 

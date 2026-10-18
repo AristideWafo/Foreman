@@ -33,6 +33,11 @@ services:
         reservations:
           memory: ${APP_MEM_RESERVATION:-128M}
     networks: [traefik, internal]
+    # Avec --with-db, l'application attend que PostgreSQL soit sain ; sans le profil « db », la dépendance est ignorée.
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
