@@ -9,7 +9,7 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from foreman.core.events import AnyEvent, EventData, make_event
-from foreman.core.ports import CapacityExceeded
+from foreman.core.ports import CapacityExceeded, ProjectStore
 from foreman.core.projects import Project
 from foreman.core.store import (
     LEASE_TTL_S,
@@ -36,6 +36,8 @@ from foreman.core.store import (
     StepStatus,
     StoreError,
     Stores,
+    UnknownProject,
+    ensure_audit_scope,
     steps_of,
 )
 
@@ -235,11 +237,14 @@ def _check_audit(entry: AuditEntry) -> None:
 
 
 class InMemoryPlanStore:
-    def __init__(self, state: MemoryState) -> None:
+    def __init__(self, state: MemoryState, projects: ProjectStore | None = None) -> None:
         self._s = state
+        self._projects = projects
 
     async def create(self, plan: NewPlan) -> PlanRecord:
         steps_of(plan.content)  # contenu valide
+        if self._projects is not None and await self._projects.get(plan.project_id) is None:
+            raise UnknownProject  # comme la clé étrangère de PostgreSQL
         previous = [
             p.record.version
             for p in self._s.plans.values()
@@ -382,6 +387,7 @@ class InMemoryExecutionStore:
         if e.state != "running" or step is None or step.status != "running":
             raise InvalidTransition
         # Tout est validé avant la première écriture : tout ou rien.
+        ensure_audit_scope(audit, e.project_id, e.id)
         for entry in audit:
             _check_audit(entry)
         keys = [(r.provider, r.resource_type, r.external_id) for r in created_resources]
@@ -406,6 +412,8 @@ class InMemoryExecutionStore:
         e = self._held(lease)
         if e.state != "running":
             raise InvalidTransition
+        if state == "succeeded" and any(s.status != "succeeded" for s in e.steps):
+            raise InvalidTransition  # un succès exige toutes les étapes réussies
         e.state = state
         if state == "succeeded":
             plan = self._s.plans[e.plan_id]
@@ -416,8 +424,11 @@ class InMemoryResourceRegistry:
     def __init__(self, state: MemoryState) -> None:
         self._s = state
 
-    async def contains(self, provider: str, resource_type: str, external_id: str) -> bool:
-        return (provider, resource_type, external_id) in self._s.resources
+    async def contains(
+        self, project_id: UUID, provider: str, resource_type: str, external_id: str
+    ) -> bool:
+        found = self._s.resources.get((provider, resource_type, external_id))
+        return found is not None and found.project_id == project_id
 
     async def list_for_project(self, project_id: UUID) -> list[ResourceRecord]:
         return [r for r in self._s.resources.values() if r.project_id == project_id]
@@ -435,10 +446,13 @@ class InMemoryAuditLog:
         return [e for e in self._s.audit if e.project_id == project_id][:limit]
 
 
-def in_memory_stores(clock: Clock = _utc_now) -> tuple[MemoryState, Stores]:
+def in_memory_stores(
+    clock: Clock = _utc_now, projects: ProjectStore | None = None
+) -> tuple[MemoryState, Stores]:
+    """Avec `projects`, un plan d'un projet inconnu est refusé comme en PostgreSQL."""
     state = MemoryState(clock=clock)
     return state, Stores(
-        plans=InMemoryPlanStore(state),
+        plans=InMemoryPlanStore(state, projects),
         executions=InMemoryExecutionStore(state),
         registry=InMemoryResourceRegistry(state),
         audit=InMemoryAuditLog(state),

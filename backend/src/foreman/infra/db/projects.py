@@ -5,7 +5,7 @@ from uuid import UUID
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from foreman.core.ports import CapacityExceeded
@@ -21,6 +21,8 @@ from foreman.infra.db import tables as t
 from foreman.infra.db.engine import log_failure
 
 MAX_PROJECTS = 100
+# Clé du verrou transactionnel qui sérialise la création de projets (borne atomique).
+PROJECT_CREATE_LOCK_KEY = 7_361_530_002
 
 
 async def seed_dev_identity(engine: AsyncEngine) -> None:
@@ -37,7 +39,7 @@ async def seed_dev_identity(engine: AsyncEngine) -> None:
                 .values(id=DEV_TEAM_ID, name=DEV_TEAM_NAME)
                 .on_conflict_do_nothing()
             )
-    except DBAPIError as exc:
+    except SQLAlchemyError as exc:
         log_failure("seed_dev_identity", exc)
         raise StoreError("stockage indisponible") from None
 
@@ -56,8 +58,8 @@ class PostgresProjectStore:
         self._max = max_projects
 
     async def create(self, title: str) -> Project:
-        """La borne est vérifiée dans la requête d'insertion ; un dépassement léger est possible
-        sous forte concurrence (la borne protège la mémoire du PoC, pas un quota facturé)."""
+        """La borne est atomique : un verrou transactionnel sérialise les créations, de sorte que
+        le comptage de l'insertion voit toujours les projets déjà validés."""
         under_cap = sa.select(sa.func.count()).select_from(t.projects).scalar_subquery() < self._max
         source = sa.select(
             sa.literal(self._team_id, PG_UUID(as_uuid=True)),
@@ -71,8 +73,11 @@ class PostgresProjectStore:
         )
         try:
             async with self._engine.begin() as conn:
+                await conn.execute(
+                    sa.select(sa.func.pg_advisory_xact_lock(PROJECT_CREATE_LOCK_KEY))
+                )
                 row = (await conn.execute(statement)).one_or_none()
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("project.create", exc)
             raise StoreError("stockage indisponible") from None
         if row is None:
@@ -86,7 +91,7 @@ class PostgresProjectStore:
         try:
             async with self._engine.connect() as conn:
                 row = (await conn.execute(statement)).one_or_none()
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("project.get", exc)
             raise StoreError("stockage indisponible") from None
         return (

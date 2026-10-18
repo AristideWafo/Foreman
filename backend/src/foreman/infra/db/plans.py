@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from foreman.core.store import (
@@ -72,7 +72,7 @@ class PostgresPlanStore:
                         .returning(*t.plans.c)
                     )
                 ).one()
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("plan.create", exc)
             raise StoreError("stockage indisponible") from None
         return plan_record(row)
@@ -84,7 +84,7 @@ class PostgresPlanStore:
         try:
             async with self._engine.connect() as conn:
                 row = (await conn.execute(statement)).one_or_none()
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("plan.get", exc)
             raise StoreError("stockage indisponible") from None
         return None if row is None else plan_record(row)
@@ -107,7 +107,7 @@ class PostgresPlanStore:
                 return ApprovalRefused("execution_in_progress")  # la transaction est annulée
             log_failure("plan.approve", exc)
             raise StoreError("stockage indisponible") from None
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("plan.approve", exc)
             raise StoreError("stockage indisponible") from None
 

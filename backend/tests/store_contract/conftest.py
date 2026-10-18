@@ -17,8 +17,9 @@ from foreman.infra.in_memory import InMemoryProjectStore, in_memory_stores
 async def harness(request: pytest.FixtureRequest) -> AsyncIterator[Harness]:
     if request.param == "memory":
         clock = ManualClock()
-        state, stores = in_memory_stores(clock)
-        yield MemoryHarness(InMemoryProjectStore(max_projects=1_000), stores, clock, state)
+        projects = InMemoryProjectStore(max_projects=1_000)
+        state, stores = in_memory_stores(clock, projects)
+        yield MemoryHarness(projects, stores, clock, state)
         return
     url: str = request.getfixturevalue("blank_database_url")
     await asyncio.to_thread(upgrade_head, url)

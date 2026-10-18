@@ -70,8 +70,9 @@ def configure(profile: Profile) -> App:
         stores = postgres_stores(engine)
         lifecycle = DatabaseLifecycle(url, engine)
     else:
-        projects = InMemoryProjectStore()
-        stores = _memory_stores()
+        memory_projects = InMemoryProjectStore()
+        projects = memory_projects
+        stores = in_memory_stores(projects=memory_projects)[1]
         lifecycle = NoLifecycle()
     # 4. Services du cœur
     return App(

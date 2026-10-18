@@ -9,12 +9,16 @@ POOL_SIZE = 5
 MAX_OVERFLOW = 5
 POOL_TIMEOUT_S = 10
 POOL_RECYCLE_S = 1_800
+STATEMENT_TIMEOUT_MS = 15_000  # une requête bloquée ne retient pas une connexion indéfiniment
 
 log = logging.getLogger(__name__)
 
 
 def make_engine(url: str) -> AsyncEngine:
-    """Pool borné, connexions testées avant usage. Transactions : `async with engine.begin()`."""
+    """Pool borné, connexions testées avant usage, requêtes bornées (`statement_timeout`).
+
+    Transactions : `async with engine.begin()`.
+    """
     return create_async_engine(
         url,
         echo=False,
@@ -23,6 +27,7 @@ def make_engine(url: str) -> AsyncEngine:
         pool_timeout=POOL_TIMEOUT_S,
         pool_recycle=POOL_RECYCLE_S,
         pool_pre_ping=True,
+        connect_args={"options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"},
     )
 
 

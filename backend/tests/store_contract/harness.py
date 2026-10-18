@@ -10,12 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from foreman.core.ports import ProjectStore
 from foreman.core.store import DEV_USER_ID, Lease, Stores
 from foreman.infra.db import tables as t
-from foreman.infra.in_memory import MemoryState
+from foreman.infra.db.projects import PostgresProjectStore
+from foreman.infra.in_memory import InMemoryProjectStore, MemoryState
 
 
 class Harness(Protocol):
     projects: ProjectStore
     stores: Stores
+
+    def bounded_projects(self, max_projects: int) -> ProjectStore:
+        """Un dépôt de projets avec une borne, sur la même « base » que le banc."""
+        ...
 
     async def expire_lease(self, lease: Lease) -> None:
         """Fait expirer le bail comme le temps le ferait."""
@@ -39,6 +44,9 @@ class MemoryHarness:
     clock: ManualClock
     state: MemoryState
 
+    def bounded_projects(self, max_projects: int) -> ProjectStore:
+        return InMemoryProjectStore(max_projects=max_projects)
+
     async def expire_lease(self, lease: Lease) -> None:
         self.clock.now += timedelta(hours=1)
 
@@ -48,6 +56,9 @@ class PostgresHarness:
     projects: ProjectStore
     stores: Stores
     engine: AsyncEngine
+
+    def bounded_projects(self, max_projects: int) -> ProjectStore:
+        return PostgresProjectStore(self.engine, max_projects=max_projects)
 
     async def expire_lease(self, lease: Lease) -> None:
         async with self.engine.begin() as conn:

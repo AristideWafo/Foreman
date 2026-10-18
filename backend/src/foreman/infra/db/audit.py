@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from foreman.core.store import AuditEntry, StoreError
@@ -39,7 +39,7 @@ class PostgresAuditLog:
         try:
             async with self._engine.begin() as conn:
                 await conn.execute(sa.insert(t.audit_events).values(**audit_values(entry)))
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("audit.append", exc)
             raise StoreError("audit invalide") from None
 
@@ -53,7 +53,7 @@ class PostgresAuditLog:
         try:
             async with self._engine.connect() as conn:
                 rows = (await conn.execute(statement)).all()
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("audit.list", exc)
             raise StoreError("stockage indisponible") from None
         return [
