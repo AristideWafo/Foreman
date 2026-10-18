@@ -1,10 +1,10 @@
 import { SparklesIcon } from "@heroicons/react/24/outline";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createProject, describeError } from "../../api/client";
 import { PageHeader } from "@/components/PageHeader";
-import { useRecentProjects } from "../projects/useRecentProjects";
+import { PROJECTS_KEY } from "../projects/useProjects";
 import { MessageInput } from "./MessageInput";
 import { PromptSuggestions } from "./PromptSuggestions";
 
@@ -12,15 +12,15 @@ const TITLE_MAX = 60;
 
 export function HomePage() {
   const navigate = useNavigate();
-  const { add } = useRecentProjects();
+  const queryClient = useQueryClient();
   const [text, setText] = useState("");
   const create = useMutation({
-    mutationFn: () => createProject({ title: "" }),
+    mutationFn: (title: string) => createProject({ title }),
   });
 
   async function start(message: string) {
-    const project = await create.mutateAsync();
-    add({ id: project.id, title: message.slice(0, TITLE_MAX) });
+    const project = await create.mutateAsync(message.slice(0, TITLE_MAX));
+    await queryClient.invalidateQueries({ queryKey: PROJECTS_KEY });
     // La page du projet ouvre le flux d'événements, puis poste ce premier message.
     await navigate(`/projects/${project.id}`, { state: { firstMessage: message } });
   }

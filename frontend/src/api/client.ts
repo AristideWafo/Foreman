@@ -72,6 +72,10 @@ export function createProject(body: CreateProjectBody = { title: "" }): Promise<
   return request<Project>("/api/projects", jsonPost(body));
 }
 
+export function listProjects(): Promise<Project[]> {
+  return request<Project[]>("/api/projects");
+}
+
 export function getProject(projectId: string): Promise<Project> {
   return request<Project>(`/api/projects/${encodeURIComponent(projectId)}`);
 }

@@ -19,8 +19,8 @@ redéfinit ni couleurs, ni rayons, ni ombres.
   bas sont **désactivées** (« bientôt ») : leurs pages n'existent pas encore.
 - **Un seul bouton de barre latérale**, dans l'en-tête de page : il replie le tout sur le rail ; sur mobile, seul
   le rail s'ouvre en tiroir.
-- Liste des projets : **locale au navigateur** (le serveur n'a pas encore de route de liste). Elle peut
-  contenir un projet que le serveur a oublié (redémarrage) : l'ouvrir affiche « Projet introuvable ».
+- Liste des projets : celle du **serveur** (`GET /api/projects`, base de données), pas de liste locale. Un projet
+  prend pour titre le début de son premier message ; sans titre, « Sans titre ».
 - Contenu : `max-w-3xl`, centré, en-tête commun (`PageHeader`).
 
 ## Écrans

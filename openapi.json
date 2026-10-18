@@ -1373,6 +1373,67 @@
   "openapi": "3.1.0",
   "paths": {
     "/api/projects": {
+      "get": {
+        "description": "Projets connus du serveur, du plus r\u00e9cent au plus ancien.",
+        "operationId": "list_projects_api_projects_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Project"
+                  },
+                  "title": "Response List Projects Api Projects Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "List Projects"
+      },
       "post": {
         "description": "Cr\u00e9e un projet. Le corps est facultatif (`title` vaut alors une cha\u00eene vide).",
         "operationId": "create_project_api_projects_post",

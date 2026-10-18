@@ -90,6 +90,10 @@ class ProjectStore(Protocol):
 
     async def get(self, project_id: UUID) -> Project | None: ...
 
+    async def list(self) -> list[Project]:
+        """Les projets, du plus récent au plus ancien (bornés par la capacité du magasin)."""
+        ...
+
 
 class Subscription(Protocol):
     """Abonnement au direct d'un projet. `next` renvoie `None` quand le flux est fermé."""

@@ -90,6 +90,11 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         except CapacityExceeded:
             raise ApiError(503, "capacity_exceeded") from None
 
+    @router.get("/projects", response_model=list[Project], responses=_ERRORS)
+    async def list_projects() -> list[Project]:
+        """Projets connus du serveur, du plus récent au plus ancien."""
+        return await app.projects.list()
+
     @router.get("/projects/{project_id}", response_model=Project, responses=_ERRORS)
     async def get_project(project_id: UUID) -> Project:
         project = await app.projects.get(project_id)
