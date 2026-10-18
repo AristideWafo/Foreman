@@ -7,16 +7,22 @@ from typing import Protocol
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from foreman.core.ports import ProjectStore
+from foreman.core.ports import EventLog, ProjectStore
 from foreman.core.store import DEV_USER_ID, Lease, Stores
 from foreman.infra.db import tables as t
+from foreman.infra.db.events import PostgresEventLog
 from foreman.infra.db.projects import PostgresProjectStore
-from foreman.infra.in_memory import InMemoryProjectStore, MemoryState
+from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, MemoryState
 
 
 class Harness(Protocol):
     projects: ProjectStore
     stores: Stores
+    events: EventLog
+
+    def reopen_events(self) -> EventLog:
+        """Un second journal sur la même « base » : c'est ce que voit un redéploiement."""
+        ...
 
     def bounded_projects(self, max_projects: int) -> ProjectStore:
         """Un dépôt de projets avec une borne, sur la même « base » que le banc."""
@@ -43,6 +49,10 @@ class MemoryHarness:
     stores: Stores
     clock: ManualClock
     state: MemoryState
+    events: InMemoryEventLog
+
+    def reopen_events(self) -> EventLog:
+        return self.events  # la mémoire n'a pas de second processus : même journal
 
     def bounded_projects(self, max_projects: int) -> ProjectStore:
         return InMemoryProjectStore(max_projects=max_projects)
@@ -56,6 +66,10 @@ class PostgresHarness:
     projects: ProjectStore
     stores: Stores
     engine: AsyncEngine
+    events: PostgresEventLog
+
+    def reopen_events(self) -> EventLog:
+        return PostgresEventLog(self.engine)
 
     def bounded_projects(self, max_projects: int) -> ProjectStore:
         return PostgresProjectStore(self.engine, max_projects=max_projects)

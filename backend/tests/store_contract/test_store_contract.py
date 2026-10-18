@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 from harness import APPROVER, Harness
 
+from foreman.core.events import EventData, MessageData
 from foreman.core.ports import CapacityExceeded
 from foreman.core.store import (
     MAX_AUDIT_DURATION_MS,
@@ -475,3 +476,40 @@ async def test_projects_are_listed_newest_first(harness: Harness) -> None:
     first = await harness.projects.create("premier")
     second = await harness.projects.create("second")
     assert [p.id for p in await harness.projects.list()] == [second.id, first.id]
+
+
+# --- Journal d'événements --------------------------------------------------------------------
+
+
+def message(text: str) -> EventData:
+    return MessageData(role="user", text=text)
+
+
+async def test_a_second_log_rereads_the_history_and_continues_at_the_next_seq(
+    harness: Harness,
+) -> None:
+    project, turn = await new_project(harness), uuid4()
+    for text in ("un", "deux", "trois"):
+        await harness.events.append(project, turn, message(text))
+
+    reopened = harness.reopen_events()  # redéploiement : nouveau processus, même base
+    history = await reopened.read_after(project, 0)
+    assert [(e.seq, e.data.text) for e in history] == [(1, "un"), (2, "deux"), (3, "trois")]  # type: ignore[union-attr]
+    assert [e.seq for e in await reopened.read_after(project, 2)] == [3]
+    assert (await reopened.append(project, turn, message("quatre"))).seq == 4
+    assert await reopened.read_after(await new_project(harness), 0) == []  # autre projet : vide
+
+
+async def test_concurrent_appends_stay_contiguous_and_reach_the_subscriber_in_order(
+    harness: Harness,
+) -> None:
+    project, turn = await new_project(harness), uuid4()
+    subscription = harness.events.subscribe(project)
+    appended = await asyncio.gather(
+        *(harness.events.append(project, turn, message(str(n))) for n in range(20))
+    )
+    assert sorted(e.seq for e in appended) == list(range(1, 21))  # aucun trou, aucun doublon
+    delivered = [(await subscription.next()) for _ in range(20)]
+    assert [e.seq for e in delivered if e is not None] == list(range(1, 21))  # ordre de seq
+    assert [e.seq for e in await harness.events.read_after(project, 0)] == list(range(1, 21))
+    subscription.close()
