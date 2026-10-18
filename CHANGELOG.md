@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.0](https://github.com/AristideWafo/Foreman/compare/v0.8.0...v0.9.0) (2026-10-18)
+
+
+### Features
+
+* **catalog:** schéma de projet et règle ask_user dans les Skills ([9556380](https://github.com/AristideWafo/Foreman/commit/955638030d904e0401bb1b51df0afc0466d401fd))
+* clarification par ask_user, historique au Provider, route de réponse (PR-D, S3) ([ccfe10e](https://github.com/AristideWafo/Foreman/commit/ccfe10eba73e55cca7b7ffc279fab068e78739fe))
+* clarification par ask_user, historique au Provider, route de réponse réelle ([1c100cc](https://github.com/AristideWafo/Foreman/commit/1c100ccf639b37e715292a00581739de3b0c149e)), closes [#33](https://github.com/AristideWafo/Foreman/issues/33) [#157](https://github.com/AristideWafo/Foreman/issues/157)
+* **contrat:** carte et route de clarification (S3, route en 501) ([3e152af](https://github.com/AristideWafo/Foreman/commit/3e152af017fe148bc94f3ff7c00ba9300da2f355)), closes [#156](https://github.com/AristideWafo/Foreman/issues/156)
+* **contrat:** carte et route de clarification (S3) ([7bef1a4](https://github.com/AristideWafo/Foreman/commit/7bef1a4b403f9c7a9c2c3858c9a0b50bc41ffc85))
+* **front:** badge Mode mémoire ([a1a6b8a](https://github.com/AristideWafo/Foreman/commit/a1a6b8acc3d4e3f4016fcf9a156cb2ae36ed978f))
+* **front:** badge Mode mémoire en pied de barre latérale ([3d3b951](https://github.com/AristideWafo/Foreman/commit/3d3b95120a8675567053e6d7e07c769ce88e9812)), closes [#155](https://github.com/AristideWafo/Foreman/issues/155)
+* journal d'événements persisté en PostgreSQL (migration 0002) ([7131fa7](https://github.com/AristideWafo/Foreman/commit/7131fa7a31fb8541432ba37e127c655223c64ebc)), closes [#154](https://github.com/AristideWafo/Foreman/issues/154)
+* journal d'événements persisté en PostgreSQL (PR-A, [#154](https://github.com/AristideWafo/Foreman/issues/154)) ([f250ff5](https://github.com/AristideWafo/Foreman/commit/f250ff56b5461c2c375fdef74de33a7896337be9))
+
 ## [0.8.0](https://github.com/AristideWafo/Foreman/compare/v0.7.0...v0.8.0) (2026-10-18)
 
 
