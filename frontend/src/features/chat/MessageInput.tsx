@@ -1,6 +1,9 @@
-import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
+import { Send } from "lucide-react";
 import { useId } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 interface MessageInputProps {
   value: string;
@@ -59,7 +62,7 @@ export function MessageInput({
       </label>
       <div className="flex items-end gap-2">
         {/* readOnly plutôt que disabled : le champ garde le focus pendant un tour en cours. */}
-        <textarea
+        <Textarea
           id={id}
           autoFocus
           rows={2}
@@ -71,24 +74,20 @@ export function MessageInput({
           placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
-          className="max-h-48 min-h-12 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 placeholder:text-slate-500 read-only:bg-slate-100 read-only:text-slate-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="max-h-48 min-h-12 resize-y read-only:bg-muted"
         />
-        <button
-          type="submit"
-          disabled={!canSend}
-          className="inline-flex h-12 shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
-        >
-          <PaperAirplaneIcon className="size-5" aria-hidden="true" />
+        <Button type="submit" size="lg" disabled={!canSend} className="h-12 shrink-0">
+          <Send aria-hidden="true" />
           <span className="max-sm:sr-only">{submitLabel}</span>
-        </button>
+        </Button>
       </div>
-      <p className="text-xs text-slate-600">
+      <p className="text-xs text-muted-foreground">
         Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne.
       </p>
       {error ? (
-        <p id={errorId} role="alert" className="text-sm font-medium text-red-700">
-          {error}
-        </p>
+        <Alert variant="destructive" id={errorId}>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       ) : null}
     </form>
   );

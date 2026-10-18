@@ -1,9 +1,10 @@
-import { ServerStackIcon } from "@heroicons/react/24/outline";
 import { useMutation } from "@tanstack/react-query";
+import { Server } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createProject, describeError } from "../../api/client";
 import { MessageInput } from "./MessageInput";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -20,24 +21,30 @@ export function HomePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col justify-center gap-6 px-4 py-8">
-      <header className="flex items-center gap-3">
-        <ServerStackIcon className="size-8 text-indigo-600" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold text-slate-900">Foreman</h1>
-      </header>
-      <p className="text-slate-700">
-        Décrivez ce que vous voulez faire : Foreman propose un plan que vous pouvez relire.
-      </p>
-      <MessageInput
-        value={text}
-        onChange={setText}
-        onSend={start}
-        label="Votre demande"
-        submitLabel="Démarrer"
-        placeholder="Par exemple : déployer mon application sur un nouveau serveur"
-        busy={create.isPending}
-        error={create.isError ? describeError(create.error) : null}
-      />
+    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col justify-center px-4 py-8">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <Server className="size-8 text-primary" aria-hidden="true" />
+            <h1 className="text-2xl font-semibold">Foreman</h1>
+          </div>
+          <CardDescription>
+            Décrivez ce que vous voulez faire : Foreman propose un plan que vous pouvez relire.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MessageInput
+            value={text}
+            onChange={setText}
+            onSend={start}
+            label="Votre demande"
+            submitLabel="Démarrer"
+            placeholder="Par exemple : déployer mon application sur un nouveau serveur"
+            busy={create.isPending}
+            error={create.isError ? describeError(create.error) : null}
+          />
+        </CardContent>
+      </Card>
     </main>
   );
 }

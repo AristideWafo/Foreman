@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: { alias: { "@": decodeURIComponent(new URL("./src", import.meta.url).pathname) } },
   plugins: [react(), tailwindcss()],
   server: { proxy: { "/api": "http://localhost:8000" } },
   test: { environment: "jsdom", setupFiles: ["./src/test-setup.ts"], globals: false },

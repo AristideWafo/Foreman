@@ -1,56 +1,61 @@
 import {
-  CheckCircleIcon,
-  ClockIcon,
-  ExclamationTriangleIcon,
-  MinusCircleIcon,
-  ArrowPathIcon,
-  ArrowUturnLeftIcon,
-} from "@heroicons/react/24/outline";
-import type { ComponentType, SVGProps } from "react";
+  CheckCircle2,
+  Clock,
+  MinusCircle,
+  RefreshCw,
+  TriangleAlert,
+  Undo2,
+  type LucideIcon,
+} from "lucide-react";
 import type { PlanCardData, StepStatus } from "../../api/events";
+import { Badge } from "@/components/ui/badge";
+import { Card as UiCard, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 
-const STATUS: Record<StepStatus, { label: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }> =
-  {
-    pending: { label: "En attente", Icon: ClockIcon },
-    running: { label: "En cours", Icon: ArrowPathIcon },
-    succeeded: { label: "Réussie", Icon: CheckCircleIcon },
-    failed: { label: "Échouée", Icon: ExclamationTriangleIcon },
-    compensated: { label: "Annulée (compensée)", Icon: ArrowUturnLeftIcon },
-    skipped: { label: "Ignorée", Icon: MinusCircleIcon },
-  };
+const STATUS: Record<StepStatus, { label: string; Icon: LucideIcon }> = {
+  pending: { label: "En attente", Icon: Clock },
+  running: { label: "En cours", Icon: RefreshCw },
+  succeeded: { label: "Réussie", Icon: CheckCircle2 },
+  failed: { label: "Échouée", Icon: TriangleAlert },
+  compensated: { label: "Annulée (compensée)", Icon: Undo2 },
+  skipped: { label: "Ignorée", Icon: MinusCircle },
+};
 
 function StepStatusBadge({ status }: { status: StepStatus }) {
   // Un statut hors contrat s'affiche tel quel, sans icône spécifique.
   const known = STATUS[status] as (typeof STATUS)[StepStatus] | undefined;
-  const Icon = known?.Icon ?? ClockIcon;
+  const Icon = known?.Icon ?? Clock;
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-slate-600">
-      <Icon className="size-4" aria-hidden="true" />
+    <Badge variant={status === "failed" ? "destructive" : "secondary"} className="shrink-0">
+      <Icon aria-hidden="true" />
       {known?.label ?? String(status)}
-    </span>
+    </Badge>
   );
 }
 
 function PlanCard({ card }: { card: PlanCardData }) {
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="text-base font-semibold text-slate-900">{card.title}</h3>
-      <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">{card.summary}</p>
-      <ol className="mt-3 space-y-2">
-        {card.steps.map((step) => (
-          <li
-            key={step.step}
-            className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm"
-          >
-            <span className="min-w-0 break-words text-slate-800">
-              <span className="mr-2 font-mono text-xs text-slate-500">{step.step}.</span>
-              {step.title}
-            </span>
-            <StepStatusBadge status={step.status} />
-          </li>
-        ))}
-      </ol>
-    </article>
+    <UiCard>
+      <CardHeader>
+        <h3 className="text-base font-semibold">{card.title}</h3>
+        <CardDescription className="whitespace-pre-wrap">{card.summary}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ol className="space-y-2">
+          {card.steps.map((step) => (
+            <li
+              key={step.step}
+              className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 rounded-lg bg-muted px-3 py-2 text-sm"
+            >
+              <span className="min-w-0 break-words">
+                <span className="mr-2 font-mono text-xs text-muted-foreground">{step.step}.</span>
+                {step.title}
+              </span>
+              <StepStatusBadge status={step.status} />
+            </li>
+          ))}
+        </ol>
+      </CardContent>
+    </UiCard>
   );
 }
 
@@ -61,9 +66,9 @@ export function Card({ card }: { card: PlanCardData }) {
       return <PlanCard card={card} />;
     default:
       return (
-        <article className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-          Carte non prise en charge.
-        </article>
+        <UiCard className="border border-dashed bg-muted text-sm text-muted-foreground">
+          <CardContent>Carte non prise en charge.</CardContent>
+        </UiCard>
       );
   }
 }
