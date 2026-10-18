@@ -85,7 +85,8 @@ commitée. Ce mécanisme est provisoire : il sera remplacé par l'authentificati
 1. Copier `deploy/deploy-custom.sh` et `deploy/compose.custom.yaml` côte à côte sur le serveur
    (par exemple `/opt/deploy/`), script exécutable.
 2. Créer `/opt/<projet>/.env` à partir de `.env.deploy.example` (au minimum `FOREMAN_DOMAIN` et
-   `FOREMAN_BASIC_AUTH_USERS` ; avec `--with-db`, aussi `POSTGRES_PASSWORD`).
+   `FOREMAN_BASIC_AUTH_USERS` ; avec `--with-db`, aussi `POSTGRES_PASSWORD` et `FOREMAN_DATABASE_URL`,
+   voir « Base de données » ci-dessous).
 3. Si le registre est privé : `docker login ghcr.io` une fois avec un jeton en lecture seule.
 4. Essai à blanc : `deploy-custom.sh --dry-run <projet> ghcr.io/<owner>/<repo>@sha256:<digest>`.
 
@@ -99,6 +100,29 @@ deploy-custom.sh [--with-db] [<projet>] <image@sha256:digest>   # un seul argume
 (`command="/opt/deploy/deploy-custom.sh",no-port-forwarding,...`). Il accepte la forme `deploy <image>` déjà
 envoyée par le workflow ; définir `FOREMAN_PROJECT` dans l'environnement de l'utilisateur de déploiement pour
 choisir le répertoire `/opt/<projet>`.
+
+### Base de données (`--with-db`)
+
+Le workflow `deploy.yml` lance `deploy --with-db <projet> <image@sha256:…>` : le service `db` démarre avec l'application.
+À renseigner **une fois**, dans `/opt/<projet>/.env` (jamais dans le dépôt) :
+
+```bash
+POSTGRES_PASSWORD='<mot de passe généré, p. ex. openssl rand -hex 24>'
+# Hôte « db » : le service PostgreSQL du compose, sur le réseau privé.
+FOREMAN_DATABASE_URL='postgresql+psycopg://foreman:<même mot de passe>@db:5432/foreman'
+```
+
+Si le mot de passe contient des caractères spéciaux, les encoder dans l'URL (`openssl rand -hex` n'en produit pas).
+
+- Au démarrage, l'application applique les migrations Alembic sous un verrou consultatif PostgreSQL (deux instances qui
+  démarrent ensemble s'exécutent l'une après l'autre), puis insère l'utilisateur et l'équipe de développement
+  (idempotent). Si la base n'est pas encore prête, elle réessaie 5 fois à 2 secondes d'intervalle avant d'échouer
+  (Compose relance alors le conteneur).
+- Les projets, plans, approbations, exécutions, registre et audit sont en PostgreSQL et survivent à un redéploiement ;
+  le chat (événements) reste en mémoire et est vidé à chaque redémarrage.
+- L'URL de la base n'est écrite dans aucun journal. La retirer du `.env` ramène l'application en mémoire.
+- Retour arrière d'une migration : jamais automatique. `downgrade()` supprime les tables (audit compris) ; ne le lancer
+  que sur une base de test.
 
 **Hypothèses à confirmer** (valeurs par défaut, toutes surchargeables dans `.env`) : réseau Traefik `traefik`,
 entrypoints `web` et `websecure`, résolveur de certificats `letsencrypt`, provider Docker de Traefik actif avec
