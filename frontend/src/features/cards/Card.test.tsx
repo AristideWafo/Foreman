@@ -3,7 +3,32 @@ import { expect, test } from "vitest";
 import type { PlanCardData, ProjectEvent } from "../../api/events";
 import { Card } from "./Card";
 
-// Événement d'exemple conforme au contrat v1 (enveloppe `Event`, type `card`).
+// Le serveur sérialise aussi les champs vides : ils arrivent à `null` (contrat v1, ajouts de la Semaine 2).
+const noStepMeta = { tool: null, tool_class: null, reversibility: null } as const;
+
+// Carte plan d'exemple conforme au contrat v1.
+const planData: PlanCardData = {
+  card_id: "plan-1",
+  kind: "plan",
+  title: "Déployer l'application",
+  summary: "Trois étapes pour la mise en ligne.",
+  steps: [
+    { step: 1, title: "Préparer le serveur", status: "succeeded", ...noStepMeta },
+    { step: 2, title: "Copier les fichiers", status: "running", ...noStepMeta },
+    { step: 3, title: "Redémarrer le service", status: "pending", ...noStepMeta },
+  ],
+  plan_id: null,
+  plan_hash: null,
+  status: null,
+  environment: null,
+  autonomy_level: null,
+  stack: null,
+  skills: null,
+  expected_resources: null,
+  approvable: null,
+};
+
+// Enveloppe `Event`, type `card`.
 const event: Extract<ProjectEvent, { type: "card" }> = {
   v: 1,
   seq: 3,
@@ -11,17 +36,7 @@ const event: Extract<ProjectEvent, { type: "card" }> = {
   turn_id: "6f1c2a3e-0000-4000-8000-000000000002",
   at: "2026-10-17T10:00:00Z",
   type: "card",
-  data: {
-    card_id: "plan-1",
-    kind: "plan",
-    title: "Déployer l'application",
-    summary: "Trois étapes pour la mise en ligne.",
-    steps: [
-      { step: 1, title: "Préparer le serveur", status: "succeeded" },
-      { step: 2, title: "Copier les fichiers", status: "running" },
-      { step: 3, title: "Redémarrer le service", status: "pending" },
-    ],
-  },
+  data: planData,
 };
 
 test("la carte plan affiche titre, progression et étapes avec leur statut", () => {
@@ -49,7 +64,7 @@ test("une carte de kind inconnu affiche le repli", () => {
 
 test("un texte contenant du HTML est affiché littéralement", () => {
   const html = '<img src=x onerror="alert(1)"> <b>gras</b>';
-  const card: PlanCardData = { ...event.data, title: html, summary: html };
+  const card: PlanCardData = { ...planData, title: html, summary: html };
   const { container } = render(<Card card={card} />);
   expect(screen.getByText(`Plan : ${html}`)).toBeInTheDocument();
   expect(container.querySelector("img")).toBeNull();

@@ -136,6 +136,7 @@ class TurnService:
             return "internal_error"
         card = PlanCardData(
             card_id=uuid4().hex,
+            kind="plan",
             title=plan.title,
             summary=plan.summary,
             steps=[

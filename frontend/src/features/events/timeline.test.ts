@@ -53,7 +53,8 @@ describe("timeline (sémantique du flux, contrat v1)", () => {
     const state = run([message(1), card(2, "c1", "v1"), message(3), card(4, "c1", "v2")]);
     const cards = state.items.filter((i) => i.kind === "card");
     expect(cards).toHaveLength(1);
-    expect(state.items[1]?.kind === "card" && state.items[1].card.title).toBe("v2");
+    const second = state.items[1];
+    expect(second?.kind === "card" && second.card.kind === "plan" && second.card.title).toBe("v2");
   });
 
   test("execution_step : met à jour l'étape, et ignore une carte inconnue", () => {
