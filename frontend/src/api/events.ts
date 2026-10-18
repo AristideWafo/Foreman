@@ -8,3 +8,6 @@ export type ExecutionCardData = components["schemas"]["ExecutionCardData"];
 export type CardData = PlanCardData | ExecutionCardData;
 export type CardStep = components["schemas"]["CardStep"];
 export type StepStatus = CardStep["status"];
+export type PlanStatus = NonNullable<PlanCardData["status"]>;
+export type ExecutionState = ExecutionCardData["state"];
+export type ResourceRef = components["schemas"]["ResourceRef"];
