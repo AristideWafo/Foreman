@@ -3,6 +3,8 @@ import type { PlanCardData, ProjectEvent } from "../../api/events";
 export type TimelineItem =
   | { key: string; kind: "message"; role: "user" | "assistant"; text: string }
   | { key: string; kind: "card"; card: PlanCardData }
+  /** Activité d'un tour : réflexion en cours, puis outils utilisés (déduits des événements du contrat). */
+  | { key: string; kind: "trace"; status: "running" | "done" | "error"; tools: string[] }
   | { key: string; kind: "error"; message: string };
 
 export interface TimelineState {
@@ -38,6 +40,36 @@ export function parseEvent(raw: string): ProjectEvent | null {
   return null;
 }
 
+function lastRunningTrace(items: TimelineItem[]): number {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item?.kind === "trace" && item.status === "running") return i;
+  }
+  return -1;
+}
+
+function addTool(items: TimelineItem[], tool: string): TimelineItem[] {
+  const index = lastRunningTrace(items);
+  const trace = items[index];
+  if (trace?.kind !== "trace" || trace.tools.includes(tool)) return items;
+  const next = items.slice();
+  next[index] = { ...trace, tools: [...trace.tools, tool] };
+  return next;
+}
+
+/** `running` ouvre une trace ; `completed` et `failed` ferment la trace en cours. */
+function updateTrace(items: TimelineItem[], status: string, key: string): TimelineItem[] {
+  const index = lastRunningTrace(items);
+  if (status === "running") {
+    return index === -1 ? [...items, { key, kind: "trace", status: "running", tools: [] }] : items;
+  }
+  const trace = items[index];
+  if (trace?.kind !== "trace") return items;
+  const next = items.slice();
+  next[index] = { ...trace, status: status === "failed" ? "error" : "done" };
+  return next;
+}
+
 function applyContent(state: TimelineState, event: ProjectEvent): TimelineState {
   const key = `e${event.seq}`;
   switch (event.type) {
@@ -62,7 +94,11 @@ function applyContent(state: TimelineState, event: ProjectEvent): TimelineState 
       const index = state.items.findIndex(
         (item) => item.kind === "card" && item.card.card_id === card.card_id,
       );
-      if (index === -1) return { ...state, items: [...state.items, { key, kind: "card", card }] };
+      if (index === -1) {
+        // Une carte de plan est le résultat de l'outil `propose_plan` : on l'ajoute à la trace du tour.
+        const items = card.kind === "plan" ? addTool(state.items, "propose_plan") : state.items;
+        return { ...state, items: [...items, { key, kind: "card", card }] };
+      }
       // Même `card_id` : la carte remplace la précédente, à la même place.
       const items = state.items.slice();
       items[index] = { key: state.items[index]?.key ?? key, kind: "card", card };
@@ -85,8 +121,14 @@ function applyContent(state: TimelineState, event: ProjectEvent): TimelineState 
       items[index] = { ...target, card };
       return { ...state, items };
     }
-    case "turn_status":
-      return { ...state, turnRunning: event.data.status === "running" };
+    case "turn_status": {
+      const { status } = event.data;
+      return {
+        ...state,
+        turnRunning: status === "running",
+        items: updateTrace(state.items, status, key),
+      };
+    }
     case "error":
       if (typeof event.data.message !== "string") return state;
       return {

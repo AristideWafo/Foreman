@@ -1,7 +1,9 @@
 import { Route, Routes, useParams } from "react-router-dom";
+import { AppShell } from "./features/layout/AppShell";
 import { HomePage } from "./features/chat/HomePage";
 import { ProjectPage } from "./features/chat/ProjectPage";
 import { LinkButton } from "@/components/LinkButton";
+import { PageHeader } from "@/components/PageHeader";
 
 function ProjectRoute() {
   const { projectId } = useParams();
@@ -11,19 +13,24 @@ function ProjectRoute() {
 
 function NotFoundPage() {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col items-start justify-center gap-4 px-4">
-      <h1 className="text-2xl font-semibold">Page introuvable</h1>
-      <LinkButton to="/">Retour à l'accueil</LinkButton>
-    </main>
+    <>
+      <PageHeader>Page introuvable</PageHeader>
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-start gap-4 px-4 py-8">
+        <p>Cette page n'existe pas.</p>
+        <LinkButton to="/">Retour à l'accueil</LinkButton>
+      </main>
+    </>
   );
 }
 
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/projects/:projectId" element={<ProjectRoute />} />
-      <Route path="*" element={<NotFoundPage />} />
+      <Route element={<AppShell />}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/projects/:projectId" element={<ProjectRoute />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
     </Routes>
   );
 }

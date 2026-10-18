@@ -1,50 +1,59 @@
-import { ServerStackIcon } from "@heroicons/react/24/outline";
+import { SparklesIcon } from "@heroicons/react/24/outline";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createProject, describeError } from "../../api/client";
+import { PageHeader } from "@/components/PageHeader";
+import { useRecentProjects } from "../projects/useRecentProjects";
 import { MessageInput } from "./MessageInput";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { PromptSuggestions } from "./PromptSuggestions";
+
+const TITLE_MAX = 60;
 
 export function HomePage() {
   const navigate = useNavigate();
+  const { add } = useRecentProjects();
   const [text, setText] = useState("");
   const create = useMutation({
     mutationFn: () => createProject({ title: "" }),
   });
 
-  async function start() {
-    const message = text.trim();
+  async function start(message: string) {
     const project = await create.mutateAsync();
+    add({ id: project.id, title: message.slice(0, TITLE_MAX) });
     // La page du projet ouvre le flux d'événements, puis poste ce premier message.
     await navigate(`/projects/${project.id}`, { state: { firstMessage: message } });
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col justify-center px-4 py-8">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <ServerStackIcon className="size-8 text-primary" aria-hidden="true" />
-            <h1 className="text-2xl font-semibold">Foreman</h1>
-          </div>
-          <CardDescription>
-            Décrivez ce que vous voulez faire : Foreman propose un plan que vous pouvez relire.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <MessageInput
-            value={text}
-            onChange={setText}
-            onSend={start}
-            label="Votre demande"
-            submitLabel="Démarrer"
-            placeholder="Par exemple : déployer mon application sur un nouveau serveur"
-            busy={create.isPending}
-            error={create.isError ? describeError(create.error) : null}
-          />
-        </CardContent>
-      </Card>
-    </main>
+    <>
+      <PageHeader>Nouveau projet</PageHeader>
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-10 px-4 py-8">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <SparklesIcon className="size-4" aria-hidden="true" />
+            Bonjour
+          </p>
+          <h2 className="text-3xl font-semibold tracking-tight">Que voulez-vous faire ?</h2>
+          <p className="text-sm">
+            Décrivez votre demande : Foreman propose un plan que vous relisez avant toute action.
+          </p>
+        </div>
+        <MessageInput
+          value={text}
+          onChange={setText}
+          onSend={() => start(text.trim())}
+          label="Votre demande"
+          submitLabel="Démarrer"
+          placeholder="Par exemple : déployer mon application sur un nouveau serveur"
+          busy={create.isPending}
+          error={create.isError ? describeError(create.error) : null}
+        />
+        <PromptSuggestions
+          disabled={create.isPending}
+          onPick={(suggestion) => void start(suggestion).catch(() => undefined)}
+        />
+      </main>
+    </>
   );
 }

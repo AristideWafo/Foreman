@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
 import type { ComponentProps } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 type LinkButtonProps = Omit<ComponentProps<typeof Button>, "render" | "nativeButton"> & {

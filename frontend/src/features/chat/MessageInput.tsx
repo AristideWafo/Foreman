@@ -1,9 +1,14 @@
-import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
+import { ArrowUpIcon } from "@heroicons/react/24/outline";
 import { useId } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupText,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
 
 interface MessageInputProps {
   value: string;
@@ -56,13 +61,13 @@ export function MessageInput({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-2">
+    <form onSubmit={onSubmit} className="flex flex-col gap-2">
       <label htmlFor={id} className="sr-only">
         {label}
       </label>
-      <div className="flex items-end gap-2">
+      <InputGroup>
         {/* readOnly plutôt que disabled : le champ garde le focus pendant un tour en cours. */}
-        <Textarea
+        <InputGroupTextarea
           id={id}
           autoFocus
           rows={2}
@@ -74,16 +79,22 @@ export function MessageInput({
           placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
-          className="max-h-48 min-h-12 resize-y read-only:bg-muted"
+          className="max-h-48 min-h-12"
         />
-        <Button type="submit" size="lg" disabled={!canSend} className="h-12 shrink-0">
-          <PaperAirplaneIcon aria-hidden="true" />
-          <span className="max-sm:sr-only">{submitLabel}</span>
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne.
-      </p>
+        <InputGroupAddon align="block-end">
+          <InputGroupText>Maj+Entrée : nouvelle ligne</InputGroupText>
+          <InputGroupButton
+            type="submit"
+            variant="default"
+            size="icon-sm"
+            disabled={!canSend}
+            className="ml-auto rounded-full"
+          >
+            <ArrowUpIcon />
+            <span className="sr-only">{submitLabel}</span>
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
       {error ? (
         <Alert variant="destructive" id={errorId}>
           <AlertDescription>{error}</AlertDescription>
