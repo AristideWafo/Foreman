@@ -182,11 +182,22 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         response_model=ApprovalAccepted,
         responses={
             **_ERRORS,
+            200: {
+                "model": ApprovalAccepted,
+                "description": (
+                    "Rejeu idempotent : le plan est déjà approuvé avec ce hash ; "
+                    "mêmes `approval_id` et `execution_id` que la création"
+                ),
+            },
+            404: {
+                "model": ErrorResponse,
+                "description": "Introuvable, y compris un plan d'un autre projet",
+            },
             409: {
                 "model": ErrorResponse,
                 "description": (
-                    "`plan_hash_mismatch` (le hash ne correspond pas au plan), "
-                    "`plan_not_approvable` (déjà approuvé, expiré ou exécuté), "
+                    "`plan_hash_mismatch` (hash différent de celui du plan), "
+                    "`plan_not_approvable` (expiré, invalidé ou exécuté), "
                     "`execution_in_progress`"
                 ),
             },

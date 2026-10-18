@@ -7,7 +7,9 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue
 
 from foreman.core.events import (
     Budget,
+    ExecutionResult,
     ExecutionState,
+    PlanStatus,
     ResourceRef,
     Sha256,
     StepStatus,
@@ -64,15 +66,10 @@ class ApprovalAccepted(BaseModel):
     execution_id: UUID
 
 
-PlanStatusView = Literal[
-    "proposed", "dev_approved", "admin_approved", "invalidated", "expired", "executed"
-]
-
-
 class PlanView(BaseModel):
     id: UUID
     version: Annotated[int, Field(ge=1)]
-    status: PlanStatusView
+    status: PlanStatus
     content_hash: Sha256
     content: Annotated[dict[str, JsonValue], Field(description="Contenu canonique haché du plan")]
     created_at: AwareDatetime
@@ -80,7 +77,7 @@ class PlanView(BaseModel):
 
 
 class ExecutionStepView(BaseModel):
-    seq: Annotated[int, Field(ge=1)]
+    step: Annotated[int, Field(ge=1)]
     title: Annotated[str, Field(max_length=200)]
     tool: Annotated[str, Field(max_length=100)]
     status: StepStatus
@@ -91,8 +88,10 @@ class ExecutionStepView(BaseModel):
 class ExecutionView(BaseModel):
     id: UUID
     plan_id: UUID
+    plan_card_id: Annotated[str | None, Field(max_length=100)] = None
     state: ExecutionState
     autonomy_level: Annotated[int, Field(ge=1, le=4)]
-    budget_used: Budget
+    budget: Budget
     steps: Annotated[list[ExecutionStepView], Field(max_length=20)]
     resources: Annotated[list[ResourceRef], Field(max_length=50)]
+    result: ExecutionResult | None = None

@@ -671,11 +671,6 @@
             ],
             "title": "Finished At"
           },
-          "seq": {
-            "minimum": 1.0,
-            "title": "Seq",
-            "type": "integer"
-          },
           "started_at": {
             "anyOf": [
               {
@@ -700,6 +695,11 @@
             "title": "Status",
             "type": "string"
           },
+          "step": {
+            "minimum": 1.0,
+            "title": "Step",
+            "type": "integer"
+          },
           "title": {
             "maxLength": 200,
             "title": "Title",
@@ -712,7 +712,7 @@
           }
         },
         "required": [
-          "seq",
+          "step",
           "title",
           "tool",
           "status"
@@ -728,13 +728,25 @@
             "title": "Autonomy Level",
             "type": "integer"
           },
-          "budget_used": {
+          "budget": {
             "$ref": "#/components/schemas/Budget"
           },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "plan_card_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Card Id"
           },
           "plan_id": {
             "format": "uuid",
@@ -748,6 +760,16 @@
             "maxItems": 50,
             "title": "Resources",
             "type": "array"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "state": {
             "enum": [
@@ -777,7 +799,7 @@
           "plan_id",
           "state",
           "autonomy_level",
-          "budget_used",
+          "budget",
           "steps",
           "resources"
         ],
@@ -822,7 +844,7 @@
           },
           "url": {
             "maxLength": 500,
-            "pattern": "^https?://",
+            "pattern": "^https?://[^\\s\\x00-\\x1f\\x7f]+$",
             "title": "Url",
             "type": "string"
           }
@@ -1053,10 +1075,13 @@
           "stack": {
             "anyOf": [
               {
-                "additionalProperties": {
-                  "type": "string"
-                },
                 "maxProperties": 10,
+                "patternProperties": {
+                  "^[a-z][a-z0-9-]{0,49}$": {
+                    "maxLength": 100,
+                    "type": "string"
+                  }
+                },
                 "type": "object"
               },
               {
@@ -1071,7 +1096,10 @@
               {
                 "enum": [
                   "proposed",
-                  "approved",
+                  "dev_approved",
+                  "admin_approved",
+                  "invalidated",
+                  "expired",
                   "executed"
                 ],
                 "type": "string"
@@ -1220,7 +1248,7 @@
             "anyOf": [
               {
                 "maxLength": 500,
-                "pattern": "^https?://",
+                "pattern": "^https?://[^\\s\\x00-\\x1f\\x7f]+$",
                 "type": "string"
               },
               {
@@ -1248,7 +1276,7 @@
             "type": "string"
           },
           "sha256": {
-            "pattern": "^[0-9a-f]{64}$",
+            "pattern": "^sha256:[0-9a-f]{64}$",
             "title": "Sha256",
             "type": "string"
           },
@@ -1876,6 +1904,16 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalAccepted"
+                }
+              }
+            },
+            "description": "Rejeu idempotent : le plan est d\u00e9j\u00e0 approuv\u00e9 avec ce hash ; m\u00eames `approval_id` et `execution_id` que la cr\u00e9ation"
+          },
           "201": {
             "content": {
               "application/json": {
@@ -1894,7 +1932,7 @@
                 }
               }
             },
-            "description": "Introuvable"
+            "description": "Introuvable, y compris un plan d'un autre projet"
           },
           "409": {
             "content": {
@@ -1904,7 +1942,7 @@
                 }
               }
             },
-            "description": "`plan_hash_mismatch` (le hash ne correspond pas au plan), `plan_not_approvable` (d\u00e9j\u00e0 approuv\u00e9, expir\u00e9 ou ex\u00e9cut\u00e9), `execution_in_progress`"
+            "description": "`plan_hash_mismatch` (hash diff\u00e9rent de celui du plan), `plan_not_approvable` (expir\u00e9, invalid\u00e9 ou ex\u00e9cut\u00e9), `execution_in_progress`"
           },
           "422": {
             "content": {

@@ -3,10 +3,22 @@
 Règle d'évolution : un ajout (nouveau `type`, nouveau champ optionnel) garde `v: 1` ;
 tout autre changement passe à `v: 2`. Le front ignore les types qu'il ne connaît pas.
 
+Les clients IGNORENT les champs inconnus et ne valident pas `additionalProperties` (le schéma publié
+le déclare faux pour les modèles émis par le serveur : c'est de la rigueur côté émission, pas une
+consigne de validation côté client) ; sans cela, aucun ajout ne serait réellement additif.
+
 Sémantique de `seq` : strictement croissant, contigu à partir de 1, par projet, livré dans l'ordre.
-Une carte (`card`) remplace la précédente de même `card_id` ; un `execution_step` dont la carte
-est inconnue est ignoré. Deux sortes de cartes (`kind`) : `plan` et `execution`. Les lignes de
-journal (`execution_log`) sont déjà filtrées par la Tool Gateway avant d'arriver ici.
+Une carte (`card`) remplace la précédente de même `card_id`. Deux sortes de cartes (`kind`) : `plan`
+et `execution`.
+
+Ordre et portée (Semaine 2) :
+- après l'approbation, la carte plan est RÉÉMISE (`status: dev_approved`, `approvable: false`)
+  AVANT la carte d'exécution ;
+- la carte d'exécution est émise AVANT tout `execution_step` ou `execution_log` de même `card_id` ;
+- `execution_step.card_id` et `execution_log.card_id` désignent la carte d'EXÉCUTION
+  (jamais la carte plan) ;
+  un `execution_step` ou un `execution_log` dont la carte est inconnue est ignoré ;
+- les lignes de journal (`execution_log`) sont déjà filtrées par la Tool Gateway.
 """
 
 from datetime import UTC, datetime
@@ -29,9 +41,15 @@ ExecutionState = Literal[
     "blocked",
     "degraded",
 ]
-PlanStatus = Literal["proposed", "approved", "executed"]
-# Seuls http et https : jamais de lien `javascript:` venant du serveur.
-Url = Annotated[str, Field(max_length=500, pattern=r"^https?://")]
+# Les six états de la spec, en un seul vocabulaire (carte plan ET `PlanView`) : en ajouter un
+# plus tard casserait un client strict.
+PlanStatus = Literal[
+    "proposed", "dev_approved", "admin_approved", "invalidated", "expired", "executed"
+]
+# Clé d'un dictionnaire libre : sans `_` ni majuscule (`__proto__` piégerait un `Object.assign`).
+SlugKey = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{0,49}$")]
+# Seuls http et https, avec un hôte, sans espace ni contrôle : jamais de lien `javascript:`.
+Url = Annotated[str, Field(max_length=500, pattern=r"^https?://[^\s\x00-\x1f\x7f]+$")]
 Sha256 = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 
 
@@ -67,7 +85,7 @@ class CardStep(_Model):
 class SkillRef(_Model):
     name: Annotated[str, Field(max_length=100)]
     version: Annotated[int, Field(ge=1)]
-    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    sha256: Sha256
 
 
 class ExpectedResource(_Model):
@@ -89,7 +107,9 @@ class PlanCardData(_Model):
     status: PlanStatus | None = None
     environment: Annotated[str | None, Field(max_length=50)] = None
     autonomy_level: Annotated[int | None, Field(ge=1, le=4)] = None
-    stack: Annotated[dict[str, str] | None, Field(max_length=10)] = None
+    stack: Annotated[
+        dict[SlugKey, Annotated[str, Field(max_length=100)]] | None, Field(max_length=10)
+    ] = None
     skills: Annotated[list[SkillRef] | None, Field(max_length=10)] = None
     expected_resources: Annotated[list[ExpectedResource] | None, Field(max_length=50)] = None
     approvable: Annotated[

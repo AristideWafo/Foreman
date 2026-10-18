@@ -36,15 +36,20 @@ fournisseurs réels, `environments`, `servers`, `connectors`, `permission_reques
 2. `approvals.plan_hash` doit égaler `plans.content_hash` : `UNIQUE(id, content_hash)` sur `plans` et clé
    étrangère composite `(plan_id, plan_hash)`, plus un index unique partiel `(plan_id, kind) WHERE decision='approved'`.
 3. `executions` : `UNIQUE(plan_id)`, colonne `project_id`, index unique partiel
-   `(project_id) WHERE state IN ('running','awaiting_permission','awaiting_remediation')`.
+   `(project_id) WHERE state IN ('running','awaiting_permission','awaiting_remediation')`. Pas d'état
+   `awaiting_approval` dans le `CHECK` (l'attente est portée par le plan). Isolation entre projets :
+   `UNIQUE(id, project_id)` sur `plans` et clé étrangère composite `(plan_id, project_id)` sur `executions`.
 4. `execution_steps.idempotency_key` n'est plus unique : les étapes sont pré-insérées en `pending`
    (`UNIQUE(execution_id, seq)`) et la réservation passe par `step_idempotency(key PK, step_id, result)` avec
-   `INSERT … ON CONFLICT DO NOTHING RETURNING`.
-5. `audit_events` : trigger `BEFORE TRUNCATE` en plus de `UPDATE/DELETE` ; colonnes `project_id`, `plan_id`,
+   `INSERT … ON CONFLICT DO NOTHING RETURNING`. Portée de la clé : `PRIMARY KEY (project_id, key)` (jamais
+   globale) et colonne `status` (`reserved` | `succeeded` | `failed`) pour distinguer réservé et terminé.
+5. `audit_events` : trigger `BEFORE UPDATE/DELETE` (par ligne) et trigger **distinct** `BEFORE TRUNCATE`
+   (`FOR EACH STATEMENT`, seule forme valide pour `TRUNCATE`) ; colonnes `project_id`, `plan_id`,
    `step_seq`, `plan_hash`, `actor` ; pas de clé étrangère sur `execution_id`. Limite documentée : le rôle de
    l'application possède la table et peut supprimer le trigger (rôles séparés en v1.0).
 6. `observed_state` : ajout de `id bigserial` (pas de clé primaire dans la spec).
-7. Pas d'état « en file » : `running` avec bail nul ou expiré = à prendre. L'attente d'approbation est portée par
+7. Bail : colonne `lease_epoch` incrémentée à chaque prise ; toute écriture d'une étape vérifie l'époque (un
+   travailleur dont le bail a expiré ne peut plus écrire). Pas d'état « en file » : `running` avec bail nul ou expiré = à prendre. L'attente d'approbation est portée par
    `plans.status = 'proposed'`.
 8. `plans.expires_at` : `created_at + 24 h` (fixe cette semaine).
 9. États en anglais partout (base, API, événements).
@@ -80,7 +85,7 @@ journal (chaque décision). No-op documentés : essais par étape et coût du mo
 
 | Méthode | Chemin | Corps | Réponses |
 | --- | --- | --- | --- |
-| POST | `/api/projects/{id}/plans/{plan_id}/approvals` | `{"plan_hash": "sha256:<64 hex>", "decision": "approved"}` | 201 `{approval_id, execution_id}` ; 404 ; 422 ; 409 `plan_hash_mismatch` / `plan_not_approvable` / `execution_in_progress` |
+| POST | `/api/projects/{id}/plans/{plan_id}/approvals` | `{"plan_hash": "sha256:<64 hex>", "decision": "approved"}` | 201 `{approval_id, execution_id}` (création) ; **200 mêmes identifiants** (rejeu idempotent, même hash sur un plan déjà `dev_approved`) ; 404 (aussi pour une ressource d'un autre projet) ; 422 ; 409 `plan_hash_mismatch` (hash différent) / `plan_not_approvable` (expiré, invalidé, exécuté) / `execution_in_progress` |
 | GET | `/api/projects/{id}/plans/{plan_id}` | – | 200 `PlanView` ; 404 |
 | GET | `/api/projects/{id}/executions/{execution_id}` | – | 200 `ExecutionView` ; 404 |
 
@@ -92,6 +97,19 @@ journal (chaque décision). No-op documentés : essais par étape et coût du mo
   result{summary, links}`. Réémise **entière** (remplacement par `card_id`) à chaque changement.
 - Nouveau type `execution_log` : `{card_id, step, lines[≤50 de ≤500 caractères]}`, toujours filtré par la gateway.
 - `ErrorData.code` gagne `invalid_plan`.
+
+**Approbation atomique.** Insertion de l'approbation, passage du plan à `dev_approved` et création de l'exécution
+se font dans **une seule transaction** ; un double clic ne crée donc jamais deux exécutions.
+
+**Ordre des événements.** Après approbation, la carte plan est **réémise** (`status: dev_approved`,
+`approvable: false`) *avant* la carte d'exécution ; la carte d'exécution précède tout `execution_step` et
+`execution_log` de même `card_id` ; ces deux types visent la carte d'**exécution**. Sur un 409, le front attend
+la carte plan réémise plutôt que de deviner l'état. Un événement dont la carte est inconnue est ignoré.
+
+**Vocabulaires et formats.** Un seul `PlanStatus` à six valeurs (carte plan et `PlanView`). Tous les hachages
+valent `sha256:<64 hex>` (y compris `skills[].sha256`). `ExecutionStepView.step` et `ExecutionView.budget` suivent
+les noms des événements ; `ExecutionView` porte `plan_card_id` et `result`. Les clients **ignorent les champs
+inconnus**. `stack` est borné (≤10 clés `[a-z][a-z0-9-]*`, valeurs ≤100 caractères).
 
 **Précisions.** Le serveur sérialise aussi les champs vides (`null`) : côté TypeScript ils sont **présents et
 nullables**. Les liens (`url`) sont limités à `http(s)` : jamais `javascript:`. `ExecutionState` contient dès
@@ -135,7 +153,8 @@ bout. **Mutations** à vérifier : retirer la comparaison du hash, `ON CONFLICT`
 - Volume de la semaine : le livrable A sécurise la persistance même si B glisse.
 - Rôle PostgreSQL propriétaire de l'audit : le trigger est contournable (rôles séparés en v1.0).
 - Le replay `default` répond S1 à toute demande en staging (démonstration assumée).
-- Au redémarrage le chat est vidé alors que plans et exécutions restent en base.
+- Au redémarrage le chat est vidé alors que plans et exécutions restent en base ; il n'y a pas de route de liste :
+  le front retrouve un plan ou une exécution par identifiant (portés par les cartes).
 - À trancher : (1) valider ce contrat additif ; (2) valider les ajustements du schéma ci-dessus ; (3) migrations au
   démarrage de l'application ou commande dédiée ; (4) marquage `managed-by=foreman` ; (5) `POSTGRES_PASSWORD` et
   `FOREMAN_DATABASE_URL` dans `/opt/foreman/.env` ; (6) #64 (ADR modèle et logs bruts) : ne bloque pas la semaine.

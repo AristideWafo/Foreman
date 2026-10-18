@@ -476,8 +476,6 @@ export interface components {
         ExecutionStepView: {
             /** Finished At */
             finished_at?: string | null;
-            /** Seq */
-            seq: number;
             /** Started At */
             started_at?: string | null;
             /**
@@ -485,6 +483,8 @@ export interface components {
              * @enum {string}
              */
             status: "pending" | "running" | "succeeded" | "failed" | "compensated" | "skipped";
+            /** Step */
+            step: number;
             /** Title */
             title: string;
             /** Tool */
@@ -494,12 +494,14 @@ export interface components {
         ExecutionView: {
             /** Autonomy Level */
             autonomy_level: number;
-            budget_used: components["schemas"]["Budget"];
+            budget: components["schemas"]["Budget"];
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            /** Plan Card Id */
+            plan_card_id?: string | null;
             /**
              * Plan Id
              * Format: uuid
@@ -507,6 +509,7 @@ export interface components {
             plan_id: string;
             /** Resources */
             resources: components["schemas"]["ResourceRef"][];
+            result?: components["schemas"]["ExecutionResult"] | null;
             /**
              * State
              * @enum {string}
@@ -647,7 +650,7 @@ export interface components {
              * Status
              * @default null
              */
-            status: ("proposed" | "approved" | "executed") | null;
+            status: ("proposed" | "dev_approved" | "admin_approved" | "invalidated" | "expired" | "executed") | null;
             /** Steps */
             steps: components["schemas"]["CardStep"][];
             /** Summary */
@@ -1165,6 +1168,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Rejeu idempotent : le plan est déjà approuvé avec ce hash ; mêmes `approval_id` et `execution_id` que la création */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalAccepted"];
+                };
+            };
             /** @description Successful Response */
             201: {
                 headers: {
@@ -1174,7 +1186,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApprovalAccepted"];
                 };
             };
-            /** @description Introuvable */
+            /** @description Introuvable, y compris un plan d'un autre projet */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1183,7 +1195,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `plan_hash_mismatch` (le hash ne correspond pas au plan), `plan_not_approvable` (déjà approuvé, expiré ou exécuté), `execution_in_progress` */
+            /** @description `plan_hash_mismatch` (hash différent de celui du plan), `plan_not_approvable` (expiré, invalidé ou exécuté), `execution_in_progress` */
             409: {
                 headers: {
                     [name: string]: unknown;

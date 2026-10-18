@@ -2,16 +2,17 @@
 
 import json
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, get_args
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
-from foreman.core.events import ERROR_MESSAGES, Event
+from foreman.core.events import ERROR_MESSAGES, Event, PlanStatus
 from foreman.core.projects import Project
 from foreman.surfaces.web.app import create_app
+from foreman.surfaces.web.schemas import PlanView
 
 ADAPTER: TypeAdapter[Any] = TypeAdapter(Event)
 PROJECT, TURN = str(uuid4()), str(uuid4())
@@ -65,7 +66,7 @@ NEW_EXAMPLES = {
             "environment": "staging",
             "autonomy_level": 2,
             "stack": {"backend": "go", "frontend": "react"},
-            "skills": [{"name": "gitlab-project-creation", "version": 1, "sha256": "b" * 64}],
+            "skills": [{"name": "gitlab-project-creation", "version": 1, "sha256": SHA}],
             "expected_resources": [
                 {"provider": "gitlab", "resource_type": "group", "name": "safe-eat"}
             ],
@@ -175,6 +176,25 @@ def test_every_event_type_validates_and_roundtrips(type_: str, data: dict[str, A
         envelope("execution_log", {"card_id": "c", "step": 1, "lines": ["x" * 501]}),
         envelope("error", {"code": "invalid_plan", "message": "Traceback (most recent call"}),
         envelope("message", {"role": "user", "text": "x" * 8001}),
+        envelope("card", {**EXAMPLES["card"], "status": "approved"}),  # hors des 6 états du plan
+        envelope("card", {**EXAMPLES["card"], "stack": {"__proto__": "x"}}),
+        envelope("card", {**EXAMPLES["card"], "stack": {"python": "x" * 101}}),
+        envelope("card", {**EXAMPLES["card"], "stack": {f"k{i}": "v" for i in range(11)}}),
+        *(
+            envelope(
+                "card",
+                {
+                    **NEW_EXAMPLES["card (exécution)"][1],
+                    "result": {"summary": "x", "links": [{"label": "l", "url": url}]},
+                },
+            )
+            for url in (
+                "http://exemple.test/x\nhttps://y",
+                "https://x\njavascript:1",
+                "https://x\x00",
+                "ftp://exemple.test",
+            )
+        ),
     ],
 )
 def test_invalid_events_are_rejected(bad: dict[str, Any]) -> None:
@@ -331,3 +351,56 @@ def test_approval_conflicts_are_documented_with_their_codes(client: TestClient) 
     for code in ("plan_hash_mismatch", "plan_not_approvable", "execution_in_progress"):
         assert code in responses["409"]["description"]
         assert code in spec["components"]["schemas"]["ErrorResponse"]["properties"]["error"]["enum"]
+
+
+def test_plan_view_and_plan_card_share_one_status_vocabulary() -> None:
+    card = get_args(PlanStatus)
+    view = get_args(PlanView.model_fields["status"].annotation)
+    assert (
+        set(card)
+        == set(view)
+        == {
+            "proposed",
+            "dev_approved",
+            "admin_approved",
+            "invalidated",
+            "expired",
+            "executed",
+        }
+    )
+
+
+def test_approval_documents_created_and_idempotent_replay(client: TestClient) -> None:
+    spec = client.get("/openapi.json").json()
+    responses = spec["paths"]["/api/projects/{project_id}/plans/{plan_id}/approvals"]["post"][
+        "responses"
+    ]
+    assert {"200", "201", "404", "409"} <= set(responses)
+
+
+# Champs requis des types figés en S1 : un ajout se fait en optionnel (v1) ; si ce test échoue
+# parce qu'un champ est devenu requis, c'est un changement non additif => contrat v2.
+FROZEN_REQUIRED = {
+    "MessageData": {"role", "text"},
+    "CardStep": {"step", "title", "status"},
+    "PlanCardData": {"card_id", "kind", "title", "summary", "steps"},
+    "ExecutionStepData": {"card_id", "step", "status"},
+    "ErrorData": {"code", "message"},
+}
+
+
+@pytest.mark.parametrize("name", sorted(FROZEN_REQUIRED))
+def test_s1_required_fields_stay_frozen(client: TestClient, name: str) -> None:
+    schema = client.get("/openapi.json").json()["components"]["schemas"].get(name)
+    assert schema is not None, f"{name} supprimé ou renommé => contrat v2"
+    assert set(schema.get("required", [])) == FROZEN_REQUIRED[name]
+
+
+@pytest.mark.parametrize("label", sorted(NEW_EXAMPLES))
+def test_examples_cover_every_field_of_their_model(label: str) -> None:
+    # Un champ ajouté au modèle sans exemple ne serait ni validé ni rejoué : il doit y figurer.
+    type_, data = NEW_EXAMPLES[label]
+    event = ADAPTER.validate_python(envelope(type_, data))
+    dumped = json.loads(event.data.model_dump_json())
+    assert set(dumped) == set(type(event.data).model_fields)
+    assert set(data) <= set(dumped)
