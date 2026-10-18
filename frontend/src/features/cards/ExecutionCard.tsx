@@ -4,6 +4,13 @@ import { ExternalLink } from "@/components/ExternalLink";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { StepLogs } from "../events/timeline";
+import {
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceLine,
+  TraceTitle,
+} from "@/components/ui/trace";
 import { FactList } from "./FactList";
 import { StepList } from "./StepList";
 import { executionStateLabel } from "./vocabulary";
@@ -11,17 +18,23 @@ import { executionStateLabel } from "./vocabulary";
 /** Journal filtré d'une étape : défilement interne, focalisable au clavier. */
 function StepLog({ step, lines }: { step: number; lines: readonly string[] }) {
   return (
-    <div className="flex flex-col gap-1">
-      <h4 className="text-xs text-muted-foreground">Journal de l'étape {step}</h4>
-      <pre
-        role="log"
-        aria-label={`Journal de l'étape ${step}`}
-        tabIndex={0}
-        className="max-h-40 overflow-auto rounded-md bg-muted p-2 font-mono text-xs wrap-break-word whitespace-pre-wrap outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        {lines.join("\n")}
-      </pre>
-    </div>
+    <TraceCollapsible defaultOpen>
+      <TraceCollapsibleTrigger>
+        <TraceLine>
+          <TraceTitle>Journal de l'étape {step}</TraceTitle>
+        </TraceLine>
+      </TraceCollapsibleTrigger>
+      <TraceCollapsibleContent>
+        <pre
+          role="log"
+          aria-label={`Journal de l'étape ${step}`}
+          tabIndex={0}
+          className="max-h-40 overflow-auto rounded-md bg-muted p-2 font-mono text-xs wrap-break-word whitespace-pre-wrap text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          {lines.join("\n")}
+        </pre>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
   );
 }
 
@@ -41,7 +54,7 @@ export function ExecutionCard({ card, logs }: { card: ExecutionCardData; logs: S
   const links = result?.links ?? [];
 
   return (
-    <Card role="group" aria-label="Exécution">
+    <Card role="group" aria-label="Exécution" className="ring-0">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <PlayCircleIcon aria-hidden="true" />

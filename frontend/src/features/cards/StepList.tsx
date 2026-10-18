@@ -1,5 +1,13 @@
 import type { CardStep } from "../../api/events";
-import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "@/components/ui/trace";
 import { reversibilityLabel, stepStatus, toolClassLabel } from "./vocabulary";
 
 /** Détail d'une étape : outil, classe, réversibilité (champs facultatifs, `null` si absents). */
@@ -17,22 +25,29 @@ export function StepList({ steps }: { steps: readonly CardStep[] }) {
         const status = stepStatus(String(step.status));
         const meta = stepMeta(step);
         return (
-          <div
+          <TraceCollapsible
             key={step.step}
-            className="flex flex-col gap-0.5 motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0 motion-safe:slide-in-from-left-1 motion-safe:fill-mode-backwards"
+            defaultOpen
+            className="motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0 motion-safe:slide-in-from-left-1 motion-safe:fill-mode-backwards"
             style={{ animationDelay: `${index * 120}ms` }}
           >
-            <TraceLine status={status.line}>
-              <TraceIcon>
-                <status.Icon />
-              </TraceIcon>
-              <TraceTitle>
-                <span className="font-mono">{step.step}.</span> {step.title}
-                <span className="sr-only"> : {status.label}</span>
-              </TraceTitle>
-            </TraceLine>
-            {meta ? <p className="pl-7 font-mono text-xs text-muted-foreground">{meta}</p> : null}
-          </div>
+            <TraceCollapsibleTrigger disabled={!meta}>
+              <TraceLine status={status.line}>
+                <TraceIcon>
+                  <status.Icon />
+                </TraceIcon>
+                <TraceTitle>
+                  <span className="font-mono">{step.step}.</span> {step.title}
+                  <span className="sr-only"> : {status.label}</span>
+                </TraceTitle>
+              </TraceLine>
+            </TraceCollapsibleTrigger>
+            {meta ? (
+              <TraceCollapsibleContent>
+                <p className="font-mono text-xs">{meta}</p>
+              </TraceCollapsibleContent>
+            ) : null}
+          </TraceCollapsible>
         );
       })}
     </Trace>

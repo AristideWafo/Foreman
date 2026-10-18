@@ -12,6 +12,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceLine,
+  TraceTitle,
+} from "@/components/ui/trace";
 import { FactList } from "./FactList";
 import { StepList } from "./StepList";
 import { usePlanApproval } from "./usePlanApproval";
@@ -70,7 +77,7 @@ export function PlanCard({ card, projectId }: { card: PlanCardData; projectId: s
   const status = planStatusLabel(card.status);
 
   return (
-    <Card role="group" aria-label={`Plan : ${card.title}`}>
+    <Card role="group" aria-label={`Plan : ${card.title}`} className="ring-0">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ClipboardDocumentListIcon aria-hidden="true" />
@@ -89,12 +96,18 @@ export function PlanCard({ card, projectId }: { card: PlanCardData; projectId: s
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <section className="flex flex-col gap-2" aria-label="Étapes du plan">
-          <h3 className="text-xs text-muted-foreground">
-            Étapes : {done} sur {card.steps.length} terminées
-          </h3>
-          <StepList steps={card.steps} />
-        </section>
+        <TraceCollapsible defaultOpen>
+          <TraceCollapsibleTrigger>
+            <TraceLine>
+              <TraceTitle>
+                Étapes : {done} sur {card.steps.length} terminées
+              </TraceTitle>
+            </TraceLine>
+          </TraceCollapsibleTrigger>
+          <TraceCollapsibleContent>
+            <StepList steps={card.steps} />
+          </TraceCollapsibleContent>
+        </TraceCollapsible>
         <div
           className="motion-safe:animate-in motion-safe:duration-300 motion-safe:fade-in-0 motion-safe:fill-mode-backwards"
           style={{ animationDelay: `${card.steps.length * 120 + 200}ms` }}
@@ -151,7 +164,7 @@ export function PlanCard({ card, projectId }: { card: PlanCardData; projectId: s
         </div>
       </CardContent>
       {canApprove && planId && planHash ? (
-        <CardFooter>
+        <CardFooter className="border-t-0 bg-transparent">
           <ApprovePlan
             key={`${planId}:${planHash}:${card.status}`}
             projectId={projectId}
