@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import httpx
@@ -14,9 +15,10 @@ from foreman.bootstrap.configure import Profile, configure
 from foreman.core.approval import ApprovalService
 from foreman.core.execution.engine import ExecutionEngine
 from foreman.core.gateway.pipeline import ToolGateway
-from foreman.core.planning import Draft, DraftStep, Planner
+from foreman.core.gateway.port import GatewayCall, GatewayResult
+from foreman.core.planning import Draft, DraftStep, Planner, plan_card_id
 from foreman.core.ports import AdapterResult, ToolAdapter
-from foreman.core.store import Approved
+from foreman.core.store import ApprovalRefused, Approved, AuditEntry
 from foreman.infra.file_catalog import load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
 from foreman.integrations.dns.simulated import SimulatedDns
@@ -179,3 +181,121 @@ async def test_an_adapter_defect_blocks_the_execution_without_leaking_details(
     assert [s.status for s in last.steps] == ["succeeded", "failed", "pending"]
     assert last.result is not None
     assert last.result.summary == "L'exécution est bloquée à l'étape 2. Rien d'autre n'a été lancé."
+
+
+# --- Bail renouvelé pendant un appel long ; refus d'approbation ---------------------------------
+
+
+class SteppedClock:
+    """Horloge des dépôts : n'avance que quand le test le décide."""
+
+    def __init__(self) -> None:
+        self.now = datetime(2030, 1, 1, tzinfo=UTC)
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
+def far_future() -> datetime:
+    return datetime(2100, 1, 1, tzinfo=UTC)
+
+
+def long_ago() -> datetime:
+    return datetime(2000, 1, 1, tzinfo=UTC)
+
+
+class SlowGateway:
+    """Un appel long : ne rend la main que lorsque le test le libère."""
+
+    def __init__(self) -> None:
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def call(self, call: GatewayCall) -> GatewayResult:
+        self.entered.set()
+        await self.release.wait()
+        return GatewayResult(
+            output={"group_id": 2000},
+            logs=[],
+            resources=(),
+            audit=AuditEntry(
+                actor_kind="engine",
+                project_id=call.project_id,
+                execution_id=call.execution_id,
+                step_seq=call.step_seq,
+                decision="allow",
+            ),
+        )
+
+
+async def test_the_lease_is_renewed_during_a_long_call() -> None:
+    catalog = load_catalog(environment="staging")
+    clock = SteppedClock()
+    projects = InMemoryProjectStore()
+    _, stores = in_memory_stores(clock, projects)
+    events = InMemoryEventLog()
+    project = (await projects.create("p")).id
+    draft = Draft(
+        title="Groupe",
+        summary="Un groupe",
+        steps=[
+            DraftStep(
+                "Racine",
+                "gitlab.create_group",
+                {"parent_group_id": 1000, "name": "A", "path": "aa"},
+            )
+        ],
+    )
+    record, _ = await Planner(catalog, stores.plans, clock=far_future).propose(project, draft)
+    approved = await ApprovalService(catalog, stores, events).approve(
+        project, record.id, record.content_hash
+    )
+    assert isinstance(approved, Approved)
+    gateway = SlowGateway()
+    engine = ExecutionEngine(
+        catalog=catalog,
+        stores=stores,
+        gateway=gateway,
+        events=events,
+        lease_renew_interval_s=0.01,
+    )
+    task = asyncio.create_task(engine.run(project, approved.execution_id))
+    await gateway.entered.wait()
+    for _ in range(3):  # 90 s passent : sans renouvellement, le bail de 60 s serait expiré
+        clock.now += timedelta(seconds=30)
+        await asyncio.sleep(0.05)
+    assert await stores.executions.claim_lease(approved.execution_id, "autre-moteur") is None
+    gateway.release.set()
+    await task
+    execution = await stores.executions.get(project, approved.execution_id)
+    assert execution is not None and execution.state == "succeeded"
+
+
+async def test_a_refused_approval_reissues_the_plan_card_from_the_stored_state() -> None:
+    catalog = load_catalog(environment="staging")
+    projects = InMemoryProjectStore()
+    _, stores = in_memory_stores(projects=projects)
+    events = InMemoryEventLog()
+    project = (await projects.create("p")).id
+    draft = Draft(
+        title="Groupe",
+        summary="Un groupe",
+        steps=[
+            DraftStep(
+                "Racine",
+                "gitlab.create_group",
+                {"parent_group_id": 1000, "name": "A", "path": "aa"},
+            )
+        ],
+    )
+    record, _ = await Planner(catalog, stores.plans, clock=long_ago).propose(
+        project, draft
+    )  # expiré
+    refused = await ApprovalService(catalog, stores, events).approve(
+        project, record.id, record.content_hash
+    )
+    assert refused == ApprovalRefused("plan_not_approvable")
+    cards = [e.data for e in await events.read_after(project, 0) if e.type == "card"]
+    assert len(cards) == 1
+    assert cards[0].kind == "plan" and cards[0].card_id == plan_card_id(record.id)
+    assert (cards[0].status, cards[0].approvable) == ("expired", False)

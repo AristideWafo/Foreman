@@ -45,6 +45,8 @@ RESUME_CLAIM_ATTEMPTS: Final = 15  # le bail d'un processus tué reste valide ju
 RESUME_CLAIM_DELAY_S: Final = 5.0
 IN_PROGRESS_ATTEMPTS: Final = 5  # `call_in_progress` : le même appel tourne encore
 IN_PROGRESS_DELAY_S: Final = 1.0
+LEASE_RENEW_INTERVAL_S: Final = 20.0  # un tiers du bail (60 s) : renouvelé pendant un appel long
+SHUTDOWN_GRACE_S: Final = 8.0  # sous les 10 s de `docker stop` par défaut (voir `shutdown`)
 
 
 class _Blocked(Exception):
@@ -59,6 +61,10 @@ class _LeaseLost(Exception):
     """Interne : un autre travailleur tient l'exécution ; on s'arrête sans rien écrire."""
 
 
+class _Stopped(Exception):
+    """Interne : arrêt demandé (`shutdown`) ; on ne prend plus d'étape, on libère le bail."""
+
+
 class ExecutionEngine:
     def __init__(
         self,
@@ -70,6 +76,7 @@ class ExecutionEngine:
         clock: Callable[[], float] = time.monotonic,
         resume_claim_attempts: int = RESUME_CLAIM_ATTEMPTS,
         resume_claim_delay_s: float = RESUME_CLAIM_DELAY_S,
+        lease_renew_interval_s: float = LEASE_RENEW_INTERVAL_S,
     ) -> None:
         self._catalog = catalog
         self._stores = stores
@@ -78,6 +85,22 @@ class ExecutionEngine:
         self._clock = clock
         self._resume_attempts = resume_claim_attempts
         self._resume_delay_s = resume_claim_delay_s
+        self._renew_interval_s = lease_renew_interval_s
+        self._stopping = False
+        self._active: set[asyncio.Task[None]] = set()
+
+    async def shutdown(self, grace_s: float = SHUTDOWN_GRACE_S) -> None:
+        """Arrêt propre : plus aucune étape n'est prise, l'appel en cours peut se terminer.
+
+        Borné par `grace_s` ; au-delà, l'appelant annule les tâches et chaque étape coupée
+        libère sa réservation (`release`). Le délai de grâce d'uvicorn (5 s dans le Dockerfile)
+        est plus court que `timeout_s` de certains outils (900 s pour `apply_playbook`) : un
+        appel plus long que le délai est coupé, puis rejoué à la reprise (clé d'idempotence).
+        """
+        self._stopping = True
+        pending = [t for t in self._active if not t.done()]
+        if pending:
+            await asyncio.wait(pending, timeout=grace_s)
 
     async def run(self, project_id: UUID, execution_id: UUID, *, resumed: bool = False) -> None:
         """Mène l'exécution à son terme. Ne lève jamais (sauf annulation de la tâche).
@@ -85,6 +108,18 @@ class ExecutionEngine:
         `resumed` : reprise au démarrage. La carte d'exécution est alors réémise d'abord (le flux
         du chat est vide après un redémarrage) et la prise du bail est retentée un temps borné.
         """
+        if self._stopping:
+            return
+        task = asyncio.current_task()
+        if task is not None:
+            self._active.add(task)
+        try:
+            await self._run(project_id, execution_id, resumed)
+        finally:
+            if task is not None:
+                self._active.discard(task)
+
+    async def _run(self, project_id: UUID, execution_id: UUID, resumed: bool) -> None:
         owner = f"{OWNER_PREFIX}-{uuid4().hex[:12]}"  # un propriétaire par run : le bail exclut
         lease = await self._claim(execution_id, owner, resumed)
         if lease is None:
@@ -95,6 +130,8 @@ class ExecutionEngine:
                 await self._emit_card(project_id, execution_id, started)
             await self._drive(lease, project_id, started)
             await self._finish(lease, project_id, started)
+        except _Stopped:
+            await self._release(lease, None)
         except _LeaseLost:
             log.info("execution %s : bail perdu, arrêt", execution_id)
         except StaleLease:
@@ -132,9 +169,23 @@ class ExecutionEngine:
             raise _Blocked
         outputs = _outputs(execution)
         while (step := await self._stores.executions.next_step(lease.execution_id)) is not None:
+            if self._stopping:
+                raise _Stopped
             if not await self._stores.executions.renew(lease):
                 raise _LeaseLost
-            await self._run_step(lease, project_id, plan, step, outputs, started)
+            try:
+                await self._run_step(lease, project_id, plan, step, outputs, started)
+            except Exception as exc:
+                if isinstance(exc, _Blocked | _LeaseLost | StaleLease):
+                    raise
+                # Défaut de stockage ou autre : on bloque en désignant l'étape en cause.
+                log.warning(
+                    "execution %s : défaut à l'étape %d (%s)",
+                    lease.execution_id,
+                    step.seq,
+                    type(exc).__name__,
+                )
+                raise _Blocked(step.seq) from None
 
     async def _run_step(
         self,
@@ -161,6 +212,7 @@ class ExecutionEngine:
                 plan_hash=plan.content_hash,
                 tool=step.tool,
                 decision="replayed",
+                rule_id="engine-replay",
                 result_redacted=dict(reservation.result),
             )
             await stores.executions.complete_step(lease, step.seq, result, [], [replay])
@@ -169,6 +221,24 @@ class ExecutionEngine:
             await self._emit_card(project_id, lease.execution_id, started)
             return
         assert isinstance(reservation, NewReservation)  # noqa: S101 - union fermée
+        try:
+            await self._execute(lease, project_id, plan, step, outputs, started)
+        except asyncio.CancelledError:
+            # Annulation (arrêt du serveur) : la réservation ne reste pas orpheline. Si l'effet a
+            # peut-être eu lieu, le rejeu est sûr : l'adaptateur est idempotent sur la clé.
+            await asyncio.shield(asyncio.ensure_future(self._release(lease, step.seq)))
+            raise
+
+    async def _execute(
+        self,
+        lease: Lease,
+        project_id: UUID,
+        plan: PlanRecord,
+        step: StepRecord,
+        outputs: dict[int, Mapping[str, JsonValue]],
+        started: float,
+    ) -> None:
+        stores = self._stores
         await self._step_event(project_id, lease.execution_id, step.seq, "running")
         try:
             params = resolve_params(cast(Mapping[str, JsonValue], step.params), outputs, step.seq)
@@ -227,7 +297,7 @@ class ExecutionEngine:
         )
         for attempt in range(1, IN_PROGRESS_ATTEMPTS + 1):
             try:
-                return await self._gateway.call(call)
+                return await self._call_leased(lease, call)
             except CallDenied as denied:
                 if denied.code == "stale_lease":
                     raise _LeaseLost from None
@@ -235,6 +305,41 @@ class ExecutionEngine:
                     raise
                 await asyncio.sleep(IN_PROGRESS_DELAY_S)
         raise _Blocked(step.seq)  # inatteignable : la boucle rend ou lève
+
+    async def _call_leased(self, lease: Lease, call: GatewayCall) -> GatewayResult:
+        """Appel de la gateway pendant lequel le bail est renouvelé en tâche de fond.
+
+        Si le renouvellement échoue (bail repris), l'appel est annulé et le moteur s'arrête.
+        """
+        call_task = asyncio.ensure_future(self._gateway.call(call))
+        beat = asyncio.ensure_future(self._heartbeat(lease))
+        try:
+            await asyncio.wait({call_task, beat}, return_when=asyncio.FIRST_COMPLETED)
+            if not call_task.done():
+                raise _LeaseLost
+            return call_task.result()
+        finally:
+            beat.cancel()
+            call_task.cancel()
+            await asyncio.gather(beat, call_task, return_exceptions=True)
+
+    async def _heartbeat(self, lease: Lease) -> None:
+        """Rend la main (donc annule l'appel) dès que le bail ne peut plus être renouvelé."""
+        while True:
+            await asyncio.sleep(self._renew_interval_s)
+            try:
+                if not await self._stores.executions.renew(lease):
+                    return
+            except Exception:
+                return
+
+    async def _release(self, lease: Lease, step_seq: int | None) -> None:
+        try:
+            await self._stores.executions.release(lease, step_seq)
+        except Exception as exc:
+            log.warning(
+                "execution %s : libération non écrite (%s)", lease.execution_id, type(exc).__name__
+            )
 
     # --- Fin -----------------------------------------------------------------------------------
 

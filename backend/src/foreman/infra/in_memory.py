@@ -416,6 +416,16 @@ class InMemoryExecutionStore:
         self._s.idempotency[(e.project_id, step.idempotency_key)] = dict(result)
         step.status, step.result = "succeeded", dict(result)
 
+    async def release(self, lease: Lease, step_seq: int | None) -> None:
+        e = self._held(lease)
+        step = next((s for s in e.steps if s.seq == step_seq), None)
+        if step is not None and step.status == "running" and step.result is None:
+            key = (e.project_id, step.idempotency_key)
+            if key in self._s.idempotency and self._s.idempotency[key] is None:
+                del self._s.idempotency[key]
+            step.status = "pending"
+        e.lease_owner, e.lease_expires_at = None, None
+
     async def finish(self, lease: Lease, state: Literal["succeeded", "blocked"]) -> None:
         e = self._held(lease)
         if e.state != "running":

@@ -185,7 +185,10 @@ def render_key(template: str, project_id: UUID, seq: int, params: Mapping[str, J
             return str(seq)
         if name.startswith("input."):
             value = params.get(name[len("input.") :])
-            return "" if value is None else _reference_text(value)
+            text = "" if value is None else _reference_text(value)
+            if "{" in text or "}" in text:
+                raise InvalidPlan  # une valeur ne doit pas fabriquer un `{execution_id}`
+            return text
         return match.group(0)  # `{execution_id}`
 
     return _PLACEHOLDER.sub(replace, template)
@@ -286,6 +289,10 @@ def build_content(draft: Draft, project_id: UUID, catalog: Catalog) -> tuple[Pla
             seq,
             proposed.params,
         )
+        if _reference_keys(proposed.params) and EXECUTION_ID_PLACEHOLDER not in key:
+            # Une clé bâtie sur le texte d'une référence (`$from(1.group_id)`) ne dit rien de la
+            # valeur résolue : sans `{execution_id}`, un autre plan du projet le rejouerait.
+            key = f"{EXECUTION_ID_PLACEHOLDER}:{key}"
         if not key or len(key) > MAX_KEY_CHARS or reversibility == "per_playbook":
             raise InvalidPlan
         tools.append(tool)

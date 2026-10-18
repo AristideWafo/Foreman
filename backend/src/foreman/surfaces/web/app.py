@@ -62,6 +62,8 @@ def create_app(app_state: App | None = None) -> FastAPI:
         try:
             yield
         finally:
+            if state.engine is not None:
+                await state.engine.shutdown()  # laisse finir l'étape en cours (borné)
             await tasks.shutdown()
             await state.lifecycle.stop()
 

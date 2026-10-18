@@ -7,6 +7,9 @@ réémise (`dev_approved`, `approvable: false`) AVANT la carte d'exécution.
 """
 
 import logging
+from collections.abc import Callable
+from dataclasses import replace
+from datetime import UTC, datetime
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -20,17 +23,29 @@ from foreman.core.store import (
     ApprovalRefused,
     ApprovalResult,
     Approved,
+    PlanRecord,
     Stores,
 )
 
 log = logging.getLogger(__name__)
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 class ApprovalService:
-    def __init__(self, catalog: Catalog, stores: Stores, events: EventLog) -> None:
+    def __init__(
+        self,
+        catalog: Catalog,
+        stores: Stores,
+        events: EventLog,
+        clock: Callable[[], datetime] = _utc_now,
+    ) -> None:
         self._catalog = catalog
         self._stores = stores
         self._events = events
+        self._clock = clock
 
     async def approve(self, project_id: UUID, plan_id: UUID, plan_hash: str) -> ApprovalResult:
         """Lève `StoreError` si le stockage est indisponible (aucun détail)."""
@@ -43,13 +58,32 @@ class ApprovalService:
             return ApprovalRefused("plan_not_approvable")
         environment = self._catalog.policy.autonomy.environments.get(content.environment)
         if environment is None or environment.admin_approval_required:
-            return ApprovalRefused("plan_not_approvable")  # la validation d'un admin viendra en S10
+            refused = ApprovalRefused("plan_not_approvable")  # validation d'un admin : en S10
+            await self._reissue_plan_card(project_id, plan, content)
+            return refused
         result = await self._stores.plans.approve(
             project_id, plan_id, plan_hash, DEV_USER_ID, content.autonomy_level
         )
         if isinstance(result, Approved) and result.created:
             await self._announce(project_id, plan_id, result.execution_id, content)
+        elif isinstance(result, ApprovalRefused) and result.reason != "not_found":
+            # Le front attend la carte plan réémise plutôt que de deviner l'état après un 409.
+            current = await self._stores.plans.get(project_id, plan_id)
+            await self._reissue_plan_card(project_id, current or plan, content)
         return result
+
+    async def _reissue_plan_card(
+        self, project_id: UUID, record: PlanRecord, content: PlanContent
+    ) -> None:
+        """Carte plan telle que l'état persisté la décrit. `expired` n'est jamais écrit en base :
+        un plan proposé dont l'échéance est passée s'affiche `expired`, non approuvable."""
+        try:
+            if record.status == "proposed" and record.expires_at <= self._clock():
+                record = replace(record, status="expired")
+            card = plan_card(record, content, self._catalog, plan_card_id(record.id))
+            await self._events.append(project_id, record.id, card)  # turn_id = plan_id
+        except Exception as exc:
+            log.warning("approbation %s : carte non réémise (%s)", record.id, type(exc).__name__)
 
     async def _announce(
         self, project_id: UUID, plan_id: UUID, execution_id: UUID, content: PlanContent

@@ -289,6 +289,15 @@ class ExecutionStore(Protocol):
         """
         ...
 
+    async def release(self, lease: Lease, step_seq: int | None) -> None:
+        """Arrêt propre : libère le bail et, si `step_seq` est donné, l'étape réservée SANS résultat
+        (réservation supprimée, étape `pending`). Sans effet sur une étape déjà réussie.
+
+        À ne pas confondre avec un crash : sans appel à `release`, la réservation reste orpheline
+        et la reprise bloque l'exécution. Lève `StaleLease` si le bail n'est plus le nôtre.
+        """
+        ...
+
     async def finish(self, lease: Lease, state: Literal["succeeded", "blocked"]) -> None:
         """`succeeded` exige que toutes les étapes le soient (`InvalidTransition` sinon)."""
         ...

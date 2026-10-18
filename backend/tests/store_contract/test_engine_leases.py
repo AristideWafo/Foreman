@@ -33,12 +33,18 @@ REF = {"$from": {"step": 1, "field": "group_id"}}
 class CountingGateway:
     """Gateway factice : une sortie par étape, et le compte des appels par numéro d'étape."""
 
-    def __init__(self) -> None:
+    def __init__(self, hang_once_at: int | None = None) -> None:
         self.calls: Counter[int] = Counter()
         self.parents: dict[int, object] = {}
+        self.entered = asyncio.Event()
+        self._hang_once_at = hang_once_at
 
     async def call(self, call: GatewayCall) -> GatewayResult:
         await asyncio.sleep(0)  # laisse l'autre moteur s'intercaler
+        if call.step_seq == self._hang_once_at and self.calls[call.step_seq] == 0:
+            self.calls[call.step_seq] += 1
+            self.entered.set()
+            await asyncio.Event().wait()  # l'appel ne revient jamais (jusqu'à l'annulation)
         self.calls[call.step_seq] += 1
         self.parents[call.step_seq] = call.params.get("parent_group_id")
         return GatewayResult(
@@ -62,14 +68,18 @@ class WorkerKilled(BaseException):
 class DyingExecutionStore:
     """Délègue au dépôt réel, mais le processus « meurt » avant de réserver l'étape `die_at`."""
 
-    def __init__(self, inner: Stores, die_at: int) -> None:
+    def __init__(self, inner: Stores, die_at: int, after_reserve: bool = False) -> None:
         self._inner = inner.executions
         self._die_at = die_at
+        self._after_reserve = after_reserve
 
     async def reserve_idempotency(self, lease: Lease, step_seq: int) -> Reservation:
-        if step_seq == self._die_at:
+        if step_seq == self._die_at and not self._after_reserve:
             raise WorkerKilled
-        return await self._inner.reserve_idempotency(lease, step_seq)
+        reservation = await self._inner.reserve_idempotency(lease, step_seq)
+        if step_seq == self._die_at:
+            raise WorkerKilled  # la clé est réservée, l'appel n'a pas eu lieu
+        return reservation
 
     def __getattr__(self, name: str) -> object:
         return getattr(self._inner, name)
@@ -84,9 +94,16 @@ class Bench:
     stores: Stores
 
 
-async def approved_execution(h: Harness, stores: Stores | None = None) -> Bench:
+async def approved_execution(
+    h: Harness,
+    stores: Stores | None = None,
+    *,
+    project: UUID | None = None,
+    root: str = "aa",
+    gateway: CountingGateway | None = None,
+) -> Bench:
     catalog = load_catalog(environment="staging")
-    project = (await h.projects.create("p")).id
+    project = project or (await h.projects.create("p")).id
     draft = Draft(
         title="Groupes",
         summary="Deux groupes puis un contrôle",
@@ -94,7 +111,7 @@ async def approved_execution(h: Harness, stores: Stores | None = None) -> Bench:
             DraftStep(
                 "Racine",
                 "gitlab.create_group",
-                {"parent_group_id": 1000, "name": "A", "path": "aa"},
+                {"parent_group_id": 1000, "name": "A", "path": root},
             ),
             DraftStep(
                 "Sous-groupe",
@@ -110,7 +127,7 @@ async def approved_execution(h: Harness, stores: Stores | None = None) -> Bench:
         project, record.id, record.content_hash
     )
     assert isinstance(approved, Approved)
-    gateway = CountingGateway()
+    gateway = gateway or CountingGateway()
     engine = ExecutionEngine(
         catalog=catalog, stores=stores or h.stores, gateway=gateway, events=events
     )
@@ -162,3 +179,62 @@ async def test_two_engines_run_each_step_once_and_a_dead_one_is_replaced(harness
     assert resumed is not None and resumed.state == "succeeded"
     assert bench.gateway.calls == Counter({1: 1, 2: 1, 3: 1})  # l'étape 1 n'est pas rejouée
     assert await harness.stores.executions.list_resumable() == []
+
+
+def new_engine(h: Harness, bench: Bench, stores: Stores | None = None) -> ExecutionEngine:
+    return ExecutionEngine(
+        catalog=load_catalog(environment="staging"),
+        stores=stores or h.stores,
+        gateway=bench.gateway,
+        events=InMemoryEventLog(),
+    )
+
+
+async def test_a_second_plan_of_the_project_really_runs_its_dependent_step(
+    harness: Harness,
+) -> None:
+    # Deux plans successifs d'un même projet : « bb » sous `$from(1.group_id)` n'est pas le même
+    # groupe selon la racine. La clé d'idempotence ne doit pas faire rejouer le résultat du plan 1.
+    first = await approved_execution(harness, root="aa")
+    await first.engine.run(first.project, first.execution)
+    second = await approved_execution(harness, project=first.project, root="xx")
+    await second.engine.run(second.project, second.execution)
+    execution = await harness.stores.executions.get(second.project, second.execution)
+    assert execution is not None and execution.state == "succeeded"
+    assert second.gateway.calls == Counter({1: 1, 2: 1, 3: 1})  # l'étape 2 est bien appelée
+    assert second.gateway.parents[2] == 1001
+
+
+async def test_a_call_cut_by_shutdown_is_released_and_replayed_once(harness: Harness) -> None:
+    bench = await approved_execution(harness, gateway=CountingGateway(hang_once_at=2))
+    task = asyncio.create_task(bench.engine.run(bench.project, bench.execution))
+    await bench.gateway.entered.wait()  # l'étape 2 est réservée et son appel est en cours
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    cut = await harness.stores.executions.get(bench.project, bench.execution)
+    assert cut is not None and cut.state == "running"
+    assert [s.status for s in cut.steps] == ["succeeded", "pending", "pending"]
+    await new_engine(harness, bench).run(bench.project, bench.execution)  # bail déjà libéré
+    resumed = await harness.stores.executions.get(bench.project, bench.execution)
+    assert resumed is not None and resumed.state == "succeeded"  # pas `blocked`
+    assert bench.gateway.calls == Counter({1: 1, 2: 2, 3: 1})  # l'étape coupée est rejouée une fois
+
+
+async def test_a_crash_after_the_reservation_blocks_and_never_calls_twice(
+    harness: Harness,
+) -> None:
+    dying = Stores(
+        plans=harness.stores.plans,
+        executions=DyingExecutionStore(harness.stores, die_at=2, after_reserve=True),  # type: ignore[arg-type]
+        registry=harness.stores.registry,
+        audit=harness.stores.audit,
+    )
+    bench = await approved_execution(harness, dying)
+    with pytest.raises(WorkerKilled):
+        await bench.engine.run(bench.project, bench.execution)
+    await harness.expire_lease(Lease(bench.execution, "ancien", 0))
+    await new_engine(harness, bench).run(bench.project, bench.execution)
+    execution = await harness.stores.executions.get(bench.project, bench.execution)
+    assert execution is not None and execution.state == "blocked"
+    assert bench.gateway.calls == Counter({1: 1})  # l'adaptateur n'est jamais rappelé à l'aveugle
