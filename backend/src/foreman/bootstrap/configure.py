@@ -14,9 +14,9 @@ from foreman.config.env import (
 from foreman.core.catalog import Catalog
 from foreman.core.ports import EventLog, ProjectStore
 from foreman.core.turn import TurnService
-from foreman.infra.file_catalog import load_catalog
+from foreman.infra.file_catalog import catalog_dir_from_env, load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
-from foreman.infra.scripted_provider import ScriptedProvider
+from foreman.infra.replay_provider import ReplayProvider
 
 
 class Profile(StrEnum):
@@ -32,9 +32,7 @@ class App:
     projects: ProjectStore
     events: EventLog
     turns: TurnService
-    catalog: Catalog | None = (
-        None  # chargé au démarrage par `configure` ; absent dans certains tests
-    )
+    catalog: Catalog | None = None  # chargé par `configure` ; absent dans certains tests
 
 
 def configure(profile: Profile) -> App:
@@ -45,7 +43,7 @@ def configure(profile: Profile) -> App:
     environment = os.environ.get(ENV_ENVIRONMENT, DEFAULT_ENVIRONMENT)
     catalog = load_catalog(environment=environment)
     # 3. Adaptateurs (un seul endroit : voir adapters.py quand il existera)
-    provider = ScriptedProvider()
+    provider = ReplayProvider.s01(catalog_dir_from_env())
     projects = InMemoryProjectStore()
     events = InMemoryEventLog()
     # 4. Services du cœur

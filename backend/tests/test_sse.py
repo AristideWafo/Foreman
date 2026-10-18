@@ -16,8 +16,9 @@ from foreman.bootstrap.configure import App, Profile
 from foreman.core.events import MessageData
 from foreman.core.ports import Provider
 from foreman.core.turn import TurnService
+from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
-from foreman.infra.scripted_provider import ScriptedProvider
+from foreman.infra.replay_provider import ReplayProvider
 from foreman.surfaces.web.app import create_app
 
 TIMEOUT = 10  # filet de sécurité : jamais atteint quand tout fonctionne
@@ -71,7 +72,7 @@ async def serve(
 
 @pytest.fixture
 async def server() -> AsyncIterator[Server]:
-    async for s in serve(ScriptedProvider()):
+    async for s in serve(ReplayProvider.s01(catalog_dir_from_env())):
         yield s
 
 
@@ -142,7 +143,7 @@ async def test_a_turn_is_streamed_end_to_end_and_the_card_is_read(server: Server
     card = frames[3].data
     assert card is not None
     assert card["data"]["kind"] == "plan"
-    assert [s["status"] for s in card["data"]["steps"]] == ["pending"] * 3
+    assert [s["status"] for s in card["data"]["steps"]] == ["pending"] * 7
     assert card["turn_id"] == posted.json()["turn_id"]
 
 
@@ -293,7 +294,9 @@ async def data_frames(frames: AsyncIterator[Frame]) -> AsyncIterator[Frame]:
 
 
 async def test_too_many_streams_on_a_project_get_an_opaque_503() -> None:
-    async for server in serve(ScriptedProvider(), max_subscribers_per_project=2):
+    async for server in serve(
+        ReplayProvider.s01(catalog_dir_from_env()), max_subscribers_per_project=2
+    ):
         async with server.client() as client:
             project = await server.new_project(client)
             url = f"/api/projects/{project}/events"
@@ -309,7 +312,7 @@ async def test_too_many_streams_on_a_project_get_an_opaque_503() -> None:
 
 
 async def test_an_absurdly_long_last_event_id_is_ignored_not_a_500() -> None:
-    async for server in serve(ScriptedProvider()):
+    async for server in serve(ReplayProvider.s01(catalog_dir_from_env())):
         async with server.client() as client:
             project = await server.new_project(client)
             url = f"/api/projects/{project}/events"

@@ -87,6 +87,15 @@ type = "independence"
 modules = ["foreman.surfaces.web", "foreman.surfaces.cli"]
 
 [[tool.importlinter.contracts]]
+name = "Les connecteurs sont indépendants (un fake n'importe jamais un autre adaptateur)"
+type = "independence"
+modules = [
+  "foreman.integrations.gitlab",
+  "foreman.integrations.server",
+  "foreman.integrations.dns",
+]
+
+[[tool.importlinter.contracts]]
 name = "config est une feuille"
 type = "forbidden"
 source_modules = ["foreman.config"]
