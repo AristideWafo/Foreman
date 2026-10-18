@@ -1,7 +1,7 @@
 """Plans et approbations en PostgreSQL. Toutes les lectures sont cloisonnées par projet."""
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -159,14 +159,16 @@ class PostgresPlanStore:
                 .returning(t.approvals.c.id)
             )
         ).scalar_one()
-        execution_id = (
-            await conn.execute(
-                sa.insert(t.executions)
-                .values(plan_id=plan_id, project_id=project_id, autonomy_level=autonomy_level)
-                .returning(t.executions.c.id)
+        execution_id = uuid4()  # connu avant l'insertion : il entre dans les clés d'idempotence
+        await conn.execute(
+            sa.insert(t.executions).values(
+                id=execution_id,
+                plan_id=plan_id,
+                project_id=project_id,
+                autonomy_level=autonomy_level,
             )
-        ).scalar_one()
-        steps = steps_of(plan.content)
+        )
+        steps = [s.bound_to(execution_id) for s in steps_of(plan.content)]
         if steps:
             await conn.execute(
                 sa.insert(t.execution_steps),

@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Final, Literal
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
@@ -403,6 +403,11 @@ def plan_card(
     )
 
 
+def plan_card_id(plan_id: UUID) -> str:
+    """Identifiant déterministe : la carte plan réémise à l'approbation remplace la première."""
+    return plan_id.hex
+
+
 def _utc_now() -> datetime:
     return datetime.now(UTC)
 
@@ -430,4 +435,4 @@ class Planner:
         return record, content
 
     def card(self, record: PlanRecord, content: PlanContent) -> PlanCardData:
-        return plan_card(record, content, self._catalog, uuid4().hex)
+        return plan_card(record, content, self._catalog, plan_card_id(record.id))

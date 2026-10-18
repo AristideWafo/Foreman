@@ -15,10 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from foreman.core.store import (
     LEASE_TTL_S,
+    MAX_RESUMABLE,
     AuditEntry,
     CompletedReservation,
     DuplicateResource,
     ExecutionRecord,
+    ExecutionRef,
     InvalidTransition,
     Lease,
     NewReservation,
@@ -105,6 +107,21 @@ class PostgresExecutionStore:
             autonomy_level=execution.autonomy_level,
             steps=[_step(s) for s in steps],
         )
+
+    async def list_resumable(self) -> list[ExecutionRef]:
+        statement = (
+            sa.select(t.executions.c.project_id, t.executions.c.id)
+            .where(t.executions.c.state == "running")
+            .order_by(t.executions.c.started_at, t.executions.c.id)
+            .limit(MAX_RESUMABLE)
+        )
+        try:
+            async with self._engine.connect() as conn:
+                rows = (await conn.execute(statement)).all()
+        except SQLAlchemyError as exc:
+            log_failure("execution.list_resumable", exc)
+            raise StoreError("stockage indisponible") from None
+        return [ExecutionRef(row.project_id, row.id) for row in rows]
 
     async def claim_lease(
         self, execution_id: UUID, owner: str, ttl_s: int = LEASE_TTL_S

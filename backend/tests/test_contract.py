@@ -313,16 +313,14 @@ def test_event_stream_documents_only_event_stream(client: TestClient) -> None:
 PLAN, OTHER = uuid4(), uuid4()
 
 
-def test_approval_routes_are_declared_but_not_implemented_yet(client: TestClient) -> None:
-    approve = client.post(
-        f"/api/projects/{OTHER}/plans/{PLAN}/approvals",
-        json={"plan_hash": SHA, "decision": "approved"},
-    )
-    assert approve.status_code == 501
-    assert approve.json() == {"error": "not_implemented"}
-    unknown = client.get(f"/api/projects/{OTHER}/plans/{PLAN}")  # route réelle depuis C1
-    assert (unknown.status_code, unknown.json()) == (404, {"error": "not_found"})
-    assert client.get(f"/api/projects/{OTHER}/executions/{PLAN}").status_code == 501
+def test_unknown_plans_and_executions_are_opaque_404s(client: TestClient) -> None:
+    body = {"plan_hash": SHA, "decision": "approved"}
+    for response in (
+        client.post(f"/api/projects/{OTHER}/plans/{PLAN}/approvals", json=body),
+        client.get(f"/api/projects/{OTHER}/plans/{PLAN}"),
+        client.get(f"/api/projects/{OTHER}/executions/{PLAN}"),
+    ):
+        assert (response.status_code, response.json()) == (404, {"error": "not_found"})
 
 
 @pytest.mark.parametrize(

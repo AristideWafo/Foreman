@@ -6,7 +6,7 @@ absente (`None`), jamais « interdite ».
 """
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Final, Literal, Protocol
 from uuid import UUID
@@ -81,12 +81,20 @@ class PlanRecord:
     expires_at: datetime
 
 
+EXECUTION_ID_PLACEHOLDER: Final = "{execution_id}"  # gabarit haché dans le plan
+
+
 @dataclass(frozen=True, slots=True)
 class StepSpec:
     seq: int
     tool: str
     params: Mapping[str, object]
     idempotency_key: str
+
+    def bound_to(self, execution_id: UUID) -> "StepSpec":
+        """Clé d'idempotence définitive : `{execution_id}` est substitué à l'approbation."""
+        key = self.idempotency_key.replace(EXECUTION_ID_PLACEHOLDER, str(execution_id))
+        return replace(self, idempotency_key=key)
 
 
 def steps_of(content: Mapping[str, object]) -> list[StepSpec]:
@@ -176,6 +184,12 @@ class ExecutionRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class ExecutionRef:
+    project_id: UUID
+    execution_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
 class NewReservation:
     """L'étape peut s'exécuter : personne ne l'a réservée avant."""
 
@@ -228,8 +242,18 @@ def ensure_audit_scope(entries: Sequence[AuditEntry], project_id: UUID, executio
             raise StoreError("audit invalide")
 
 
+MAX_RESUMABLE: Final = 100
+
+
 class ExecutionStore(Protocol):
     async def get(self, project_id: UUID, execution_id: UUID) -> ExecutionRecord | None: ...
+
+    async def list_resumable(self) -> list[ExecutionRef]:
+        """Exécutions `running` (au plus `MAX_RESUMABLE`, les plus anciennes d'abord).
+
+        Appelé au démarrage : le bail décide ensuite qui peut les reprendre.
+        """
+        ...
 
     async def claim_lease(
         self, execution_id: UUID, owner: str, ttl_s: int = LEASE_TTL_S
