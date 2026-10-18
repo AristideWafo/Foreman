@@ -72,6 +72,8 @@ déployer : le site ne peut pas être publié ouvert par oubli. Un mot de passe 
 4. Vérifier : `curl -s -o /dev/null -w '%{http_code}' https://<domaine>/api/projects` renvoie `401` sans
    identifiants ; avec `-u admin:<mot de passe>` il répond ; `https://<domaine>/healthz` reste accessible sans
    identifiants.
+   La version déployée est lue sur `curl https://<domaine>/healthz` (champ `version`) : elle vient du manifeste
+   release-please au moment du build (`dev` hors release).
 
 Le navigateur renvoie lui-même les identifiants au flux d'événements (même domaine). L'en-tête
 `Authorization` est retiré par Traefik avant d'atteindre l'application. L'empreinte (pas le mot de passe) se

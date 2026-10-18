@@ -63,10 +63,12 @@ async def wait_for_status(log: InMemoryEventLog, project_id: UUID, status: str) 
     raise AssertionError("flux fermé avant le statut attendu")
 
 
-def test_healthz() -> None:
-    response = TestClient(create_app()).get("/healthz")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok", "profile": "web"}
+def test_healthz_reports_the_version_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = TestClient(create_app())
+    monkeypatch.setenv("FOREMAN_VERSION", "0.2.0")
+    assert client.get("/healthz").json() == {"status": "ok", "profile": "web", "version": "0.2.0"}
+    monkeypatch.delenv("FOREMAN_VERSION")
+    assert client.get("/healthz").json() == {"status": "ok", "profile": "web", "version": "dev"}
 
 
 async def test_project_lifecycle_and_a_turn_through_the_api() -> None:

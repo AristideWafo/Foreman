@@ -46,12 +46,23 @@ jobs:
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then tags="${tags},${IMAGE}:${GITHUB_REF_NAME#v}"; fi
           echo "list=${tags}" >> "$GITHUB_OUTPUT"
 
+      - name: Version (manifeste release-please)
+        id: version
+        run: |
+          version="$(jq -r '.["."]' .release-please-manifest.json)"
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version invalide dans le manifeste : ${version}" >&2
+            exit 1
+          fi
+          echo "value=${version}" >> "$GITHUB_OUTPUT"
+
       - name: Build et push
         id: push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: deploy/Dockerfile
+          build-args: APP_VERSION=${{ steps.version.outputs.value }}
           push: true
           tags: ${{ steps.tags.outputs.list }}
           cache-from: type=gha
