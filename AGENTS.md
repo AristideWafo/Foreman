@@ -54,7 +54,7 @@ Toute exception à ces règles est listée dans `docs/DEBT.md` et figée par un 
 - Branches courtes depuis `main`, PR petites. Pour une grosse fonctionnalité : PR empilées.
 - Commits conventionnels (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `ci:`).
 - Après chaque push : vérifiez le statut des checks (`gh pr checks`), corrigez la cause racine, surveillez `main` après fusion.
-- Une modification de `gateway/`, `policy/`, `migrations/` ou `.github/workflows/` exige la relecture du propriétaire (CODEOWNERS).
+- Une modification de `gateway/`, `policy/`, `migrations/` ou `.github/workflows/` exige une relecture attentive : revue indépendante par un agent et relecture du propriétaire. `CODEOWNERS` est désactivé pour l'instant (un seul contributeur) : la vigilance reste la même.
 - Pas de couche de compatibilité : quand un module est remplacé, l'ancien est supprimé dans le même changement.
 
 ## Ajouter une intégration

@@ -1,8 +1,12 @@
+# CODEOWNERS DÉSACTIVÉ pour l'instant : le dépôt n'a qu'un contributeur, qui ne peut pas approuver ses
+# propres PR. Pour réactiver, décommenter les règles ci-dessous ET, dans la protection de `prod`
+# (Settings > Branches), cocher « Require review from Code Owners » (avec un second relecteur).
+#
 # Les chemins sensibles exigent la relecture du propriétaire.
-*                           @AristideWafo
-/.github/workflows/         @AristideWafo
-/backend/src/foreman/core/gateway/   @AristideWafo
-/backend/src/foreman/core/policy/    @AristideWafo
-/backend/migrations/        @AristideWafo
-/deploy/                    @AristideWafo
-/SECURITY.md                @AristideWafo
+# *                           @AristideWafo
+# /.github/workflows/         @AristideWafo
+# /backend/src/foreman/core/gateway/   @AristideWafo
+# /backend/src/foreman/core/policy/    @AristideWafo
+# /backend/migrations/        @AristideWafo
+# /deploy/                    @AristideWafo
+# /SECURITY.md                @AristideWafo
