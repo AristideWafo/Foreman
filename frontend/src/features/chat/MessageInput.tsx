@@ -1,4 +1,4 @@
-import { Send } from "lucide-react";
+import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
 import { useId } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -77,7 +77,7 @@ export function MessageInput({
           className="max-h-48 min-h-12 resize-y read-only:bg-muted"
         />
         <Button type="submit" size="lg" disabled={!canSend} className="h-12 shrink-0">
-          <Send aria-hidden="true" />
+          <PaperAirplaneIcon aria-hidden="true" />
           <span className="max-sm:sr-only">{submitLabel}</span>
         </Button>
       </div>

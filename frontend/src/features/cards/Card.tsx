@@ -1,29 +1,30 @@
 import {
-  CheckCircle2,
-  Clock,
-  MinusCircle,
-  RefreshCw,
-  TriangleAlert,
-  Undo2,
-  type LucideIcon,
-} from "lucide-react";
+  ArrowPathIcon,
+  ArrowUturnLeftIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  ExclamationTriangleIcon,
+  MinusCircleIcon,
+} from "@heroicons/react/24/outline";
+import type { ComponentType, SVGProps } from "react";
 import type { PlanCardData, StepStatus } from "../../api/events";
 import { Badge } from "@/components/ui/badge";
 import { Card as UiCard, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 
-const STATUS: Record<StepStatus, { label: string; Icon: LucideIcon }> = {
-  pending: { label: "En attente", Icon: Clock },
-  running: { label: "En cours", Icon: RefreshCw },
-  succeeded: { label: "Réussie", Icon: CheckCircle2 },
-  failed: { label: "Échouée", Icon: TriangleAlert },
-  compensated: { label: "Annulée (compensée)", Icon: Undo2 },
-  skipped: { label: "Ignorée", Icon: MinusCircle },
-};
+const STATUS: Record<StepStatus, { label: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }> =
+  {
+    pending: { label: "En attente", Icon: ClockIcon },
+    running: { label: "En cours", Icon: ArrowPathIcon },
+    succeeded: { label: "Réussie", Icon: CheckCircleIcon },
+    failed: { label: "Échouée", Icon: ExclamationTriangleIcon },
+    compensated: { label: "Annulée (compensée)", Icon: ArrowUturnLeftIcon },
+    skipped: { label: "Ignorée", Icon: MinusCircleIcon },
+  };
 
 function StepStatusBadge({ status }: { status: StepStatus }) {
   // Un statut hors contrat s'affiche tel quel, sans icône spécifique.
   const known = STATUS[status] as (typeof STATUS)[StepStatus] | undefined;
-  const Icon = known?.Icon ?? Clock;
+  const Icon = known?.Icon ?? ClockIcon;
   return (
     <Badge variant={status === "failed" ? "destructive" : "secondary"} className="shrink-0">
       <Icon aria-hidden="true" />

@@ -1,7 +1,7 @@
-import { Link, Route, Routes, useParams } from "react-router-dom";
+import { Route, Routes, useParams } from "react-router-dom";
 import { HomePage } from "./features/chat/HomePage";
 import { ProjectPage } from "./features/chat/ProjectPage";
-import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/LinkButton";
 
 function ProjectRoute() {
   const { projectId } = useParams();
@@ -13,7 +13,7 @@ function NotFoundPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col items-start justify-center gap-4 px-4">
       <h1 className="text-2xl font-semibold">Page introuvable</h1>
-      <Button render={<Link to="/" />}>Retour à l'accueil</Button>
+      <LinkButton to="/">Retour à l'accueil</LinkButton>
     </main>
   );
 }

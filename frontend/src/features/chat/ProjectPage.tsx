@@ -1,12 +1,13 @@
+import { ArrowLeftIcon, ArrowPathIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, RefreshCw, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { describeError, postMessage } from "../../api/client";
 import { Card } from "../cards/Card";
 import { useProjectEvents } from "../events/useProjectEvents";
 import type { TimelineItem } from "../events/timeline";
 import { MessageInput } from "./MessageInput";
+import { LinkButton } from "@/components/LinkButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -86,10 +87,10 @@ export function ProjectPage({ projectId }: { projectId: string }) {
 
   const header = (
     <header className="flex items-center gap-3 border-b px-4 py-3">
-      <Button variant="ghost" size="sm" render={<Link to="/" />}>
-        <ArrowLeft aria-hidden="true" />
+      <LinkButton to="/" variant="ghost" size="sm">
+        <ArrowLeftIcon aria-hidden="true" />
         Accueil
-      </Button>
+      </LinkButton>
       <h1 className="text-lg font-semibold">Foreman</h1>
     </header>
   );
@@ -106,10 +107,10 @@ export function ProjectPage({ projectId }: { projectId: string }) {
               : "Impossible de joindre le projet pour le moment."}
           </p>
           {notFound ? (
-            <Button render={<Link to="/" />}>Retour à l'accueil</Button>
+            <LinkButton to="/">Retour à l'accueil</LinkButton>
           ) : (
             <Button type="button" onClick={retry}>
-              <RefreshCw aria-hidden="true" />
+              <ArrowPathIcon aria-hidden="true" />
               Réessayer
             </Button>
           )}
@@ -147,7 +148,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
               ))}
               {turnRunning ? (
                 <li role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Sparkles className="size-4 motion-safe:animate-pulse" aria-hidden="true" />
+                  <SparklesIcon className="size-4 motion-safe:animate-pulse" aria-hidden="true" />
                   Foreman prépare une réponse…
                 </li>
               ) : null}

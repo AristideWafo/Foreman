@@ -1,5 +1,5 @@
+import { ServerStackIcon } from "@heroicons/react/24/outline";
 import { useMutation } from "@tanstack/react-query";
-import { Server } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createProject, describeError } from "../../api/client";
@@ -25,7 +25,7 @@ export function HomePage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <Server className="size-8 text-primary" aria-hidden="true" />
+            <ServerStackIcon className="size-8 text-primary" aria-hidden="true" />
             <h1 className="text-2xl font-semibold">Foreman</h1>
           </div>
           <CardDescription>
