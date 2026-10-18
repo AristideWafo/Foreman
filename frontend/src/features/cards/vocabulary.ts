@@ -2,7 +2,7 @@ import {
   ArrowPathIcon,
   ArrowUturnLeftIcon,
   CheckCircleIcon,
-  ClockIcon,
+  EllipsisHorizontalCircleIcon,
   ExclamationCircleIcon,
   MinusCircleIcon,
   PlayCircleIcon,
@@ -20,7 +20,7 @@ function label<K extends string>(labels: Record<K, string>, value: string | null
 }
 
 export const STEP_STATUS: Record<StepStatus, { label: string; Icon: Icon; line: LineStatus }> = {
-  pending: { label: "En attente", Icon: ClockIcon, line: "pending" },
+  pending: { label: "En attente", Icon: EllipsisHorizontalCircleIcon, line: "pending" },
   running: { label: "En cours", Icon: PlayCircleIcon, line: "running" },
   succeeded: { label: "Réussie", Icon: CheckCircleIcon, line: undefined },
   failed: { label: "Échouée", Icon: ExclamationCircleIcon, line: "error" },

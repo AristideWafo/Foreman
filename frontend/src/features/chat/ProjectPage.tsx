@@ -1,6 +1,6 @@
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { describeError, postMessage } from "../../api/client";
 import { LinkButton } from "@/components/LinkButton";
@@ -19,10 +19,14 @@ import {
 } from "@/components/ui/message-scroller";
 import { Card } from "../cards/Card";
 import { useProjectEvents } from "../events/useProjectEvents";
-import type { TimelineItem } from "../events/timeline";
+import { foldExecutions, type TimelineItem } from "../events/timeline";
 import { useRecentProjects } from "../projects/useRecentProjects";
 import { MessageInput } from "./MessageInput";
 import { TurnTrace } from "./TurnTrace";
+import { useStaggered } from "./useStaggered";
+
+/** Durée pendant laquelle la réflexion reste visible avant la suite (cf. TurnTrace). */
+const TRACE_MS = 1800;
 
 function readFirstMessage(state: unknown): string | null {
   if (typeof state === "object" && state !== null && "firstMessage" in state) {
@@ -61,7 +65,14 @@ function TimelineEntry({ item, projectId }: { item: TimelineItem; projectId: str
     case "trace":
       return <TurnTrace status={item.status} tools={item.tools} />;
     case "card":
-      return <Card card={item.card} projectId={projectId} logs={item.logs} />;
+      return (
+        <Card
+          card={item.card}
+          projectId={projectId}
+          logs={item.execution?.logs ?? item.logs}
+          execution={item.execution?.card}
+        />
+      );
     case "error":
       return (
         <Alert variant="destructive">
@@ -75,7 +86,9 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { projects } = useRecentProjects();
-  const { items, turnRunning, connection, retry } = useProjectEvents(projectId);
+  const { items: events, turnRunning, connection, retry } = useProjectEvents(projectId);
+  const items = useMemo(() => foldExecutions(events), [events]);
+  const visible = useStaggered(items, (previous) => (previous.kind === "trace" ? TRACE_MS : 450));
   const [draft, setDraft] = useState("");
   const firstMessage = useRef(readFirstMessage(location.state));
   const send = useMutation({ mutationFn: (text: string) => postMessage(projectId, text) });
@@ -124,7 +137,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
 
   const connecting = connection.status === "connecting" && items.length === 0;
   // Entre l'envoi et le premier événement du serveur : la réflexion est déjà affichée.
-  const awaitingServer = send.isPending && !turnRunning;
+  const awaitingServer = send.isPending && !turnRunning && visible.length === items.length;
 
   return (
     <>
@@ -146,11 +159,11 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           </p>
         ) : null}
         <div className="min-h-0 flex-1">
-          <MessageScrollerProvider autoScroll>
+          <MessageScrollerProvider>
             <MessageScroller aria-label="Conversation" role="log">
               <MessageScrollerViewport>
                 <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 px-4 py-4">
-                  {items.map((item) => (
+                  {visible.map((item) => (
                     <MessageScrollerItem
                       key={item.key}
                       messageId={item.key}

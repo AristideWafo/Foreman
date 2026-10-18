@@ -1,4 +1,4 @@
-import type { CardData } from "../../api/events";
+import type { CardData, ExecutionCardData } from "../../api/events";
 import { Card as UiCard, CardContent } from "@/components/ui/card";
 import type { StepLogs } from "../events/timeline";
 import { ExecutionCard } from "./ExecutionCard";
@@ -11,14 +11,17 @@ export function Card({
   card,
   projectId,
   logs = NO_LOGS,
+  execution,
 }: {
   card: CardData;
   projectId: string;
   logs?: StepLogs;
+  /** Exécution de ce plan : affichée dans la carte plan. */
+  execution?: ExecutionCardData;
 }) {
   switch (card.kind) {
     case "plan":
-      return <PlanCard card={card} projectId={projectId} />;
+      return <PlanCard card={card} projectId={projectId} execution={execution} logs={logs} />;
     case "execution":
       return <ExecutionCard card={card} logs={logs} />;
     default:

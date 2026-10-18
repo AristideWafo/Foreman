@@ -44,6 +44,15 @@ Bulle de l'utilisateur : `Bubble` `secondary`. Réponse de l'agent : texte simpl
 (« Plan proposé »), puis la **carte plan** (voir « Cartes de plan et d'exécution ») dont les étapes ont une
 icône de statut (horloge, en cours, validée, échec).
 
+La trace est une ligne repliable (« Réflexion en cours » avec spinner, ouverte ; « Réflexion terminée en n étapes »,
+repliée) dont les étapes apparaissent une à une. Les éléments d'un tour (bulle, trace, texte, carte) sont révélés
+l'un après l'autre (`useStaggered`), même avec des données simulées ; un historique rechargé s'affiche d'un coup.
+La réflexion reste « en cours » au moins 1,5 s pour être lisible.
+
+Après « Valider le plan », l'exécution ne crée pas de seconde carte : elle s'affiche **dans la carte du plan**
+(`foldExecutions`). Les étapes passent en cours puis réussies en direct, et le journal de chaque étape (repliable)
+apparaît sous cette étape.
+
 Limite du contrat v1 : le serveur n'envoie ni texte de raisonnement ni appel d'outil. La trace est déduite
 de `turn_status` et des cartes. Un vrai raisonnement ou des outils détaillés demandent de nouveaux types
 d'événements (évolution additive du contrat), pas un changement d'interface.
@@ -65,6 +74,25 @@ Icônes : **Heroicons `24/outline`**, une seule taille (**18 px**) et un trait d
 une règle globale dans `src/index.css` (hors `@layer`, elle l'emporte sur les tailles des composants shadcn) :
 on n'écrit donc aucun `size-*` sur une icône. Pas de `24/solid`.
 
+### Inventaire des textes (visuel → classes)
+
+Deux tailles (`text-sm`, `text-xs`) et deux couleurs : **noir** (`foreground`, ce qu'on lit) et **gris**
+(`muted-foreground`, ce qui accompagne). Seul le titre d'accueil sort de l'échelle.
+
+| Texte à l'écran                                             | Taille / graisse              | Couleur |
+| ----------------------------------------------------------- | ----------------------------- | ------- |
+| « Que voulez-vous faire ? »                                 | `text-3xl font-semibold`      | noir    |
+| Titre de page, titre de carte (« Plan : … », « Exécution ») | `text-sm font-semibold`       | noir    |
+| Bulles de conversation, valeurs des faits (Environnement…)  | `text-sm`                     | noir    |
+| Trace de réflexion, « Étapes : n sur m », titres d'étapes   | `text-sm`                     | gris    |
+| Description de carte (résumé du plan)                       | `text-sm`                     | gris    |
+| Libellés des faits (Budget, Skills…), fournisseur et type   | `text-xs`                     | gris    |
+| Détail d'étape (outil · classe · réversibilité), pastille   | `text-xs`, Geist Mono / Badge | gris    |
+| Journal d'étape (bloc gris)                                 | `text-xs`, Geist Mono         | noir    |
+
+Pas de gris intermédiaire : une étape en attente n'est pas atténuée, son icône suffit. Ces textes passent par
+`CardHeading`, `CollapsibleSection`, `FactList`, `StepList` : on ne règle pas une taille ou une couleur ailleurs.
+
 ## Couleurs et formes
 
 Celles de shadcn (thème neutre, clair et sombre) via les variables de `src/index.css` : `primary` pour
@@ -72,6 +100,9 @@ l'action principale, `muted` pour le secondaire, `destructive` pour l'échec. Au
 écrite dans le code.
 
 ## Composants
+
+Composants partagés (`components/`) : `CardHeading` (en-tête de carte), `CollapsibleSection` (ligne repliable),
+`reveal` (apparition décalée). Cartes (`features/cards/`) : `StepList`, `FactList`, `ResourceList`.
 
 Existants : shadcn (`Button`, `Card`, `Badge`, `Alert`, `Textarea`, `InputGroup`, `Sidebar`, `Tooltip`,
 `Separator`, `Collapsible`, `Skeleton`, `Sheet`, `ScrollArea`, `MessageScroller`, `Message`, `Bubble`,
@@ -109,7 +140,7 @@ reconnexion (une ligne de statut).
 ## Mouvement
 
 150 à 200 ms, `ease-out`, opacité et couleur seulement ; `prefers-reduced-motion` respecté
-(`motion-safe:`). Apparition d'un message : fondu. Texte « en cours » : `shimmer` de shadcn. Pas de
+(`motion-safe:`). Apparition d'un message : fondu. Texte « en cours » : `shimmer` de shadcn. Seule boucle permise : le spinner d'une étape « en cours ». Pas de
 rebond ni d'effet d'enfoncement.
 
 ## Accessibilité

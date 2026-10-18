@@ -1,8 +1,15 @@
-import type { CardData, ProjectEvent } from "../../api/events";
+import type { CardData, ExecutionCardData, ProjectEvent } from "../../api/events";
 
 export type TimelineItem =
   | { key: string; kind: "message"; role: "user" | "assistant"; text: string }
-  | { key: string; kind: "card"; card: CardData; logs: StepLogs }
+  | {
+      key: string;
+      kind: "card";
+      card: CardData;
+      logs: StepLogs;
+      /** Exécution de ce plan, repliée dans sa carte par `foldExecutions`. */
+      execution?: { card: ExecutionCardData; logs: StepLogs };
+    }
   /** Activité d'un tour : réflexion en cours, puis outils utilisés (déduits des événements du contrat). */
   | { key: string; kind: "trace"; status: "running" | "done" | "error"; tools: string[] }
   | { key: string; kind: "error"; message: string };
@@ -201,4 +208,31 @@ export function applyEvent(state: TimelineState, event: ProjectEvent): TimelineS
   // `v` différent de 1 : format incompatible. On consomme le `seq` sans appliquer le contenu.
   if (event.v !== 1) return { ...base, lastSeq: event.seq };
   return { ...applyContent(base, event), lastSeq: event.seq };
+}
+
+/**
+ * Vue d'affichage : l'exécution d'un plan est montrée dans la carte de ce plan (mêmes étapes, statuts et
+ * journaux en direct), pas dans une seconde carte. Une exécution sans plan connu reste une carte à part.
+ */
+export function foldExecutions(items: TimelineItem[]): TimelineItem[] {
+  const executions = new Map<string, { card: ExecutionCardData; logs: StepLogs }>();
+  for (const item of items) {
+    if (item.kind === "card" && item.card.kind === "execution") {
+      executions.set(item.card.plan_card_id, { card: item.card, logs: item.logs });
+    }
+  }
+  const folded: TimelineItem[] = [];
+  for (const item of items) {
+    if (item.kind !== "card") {
+      folded.push(item);
+    } else if (item.card.kind === "execution") {
+      const planCardId = item.card.plan_card_id;
+      const hasPlan = items.some((i) => i.kind === "card" && i.card.card_id === planCardId);
+      if (!hasPlan) folded.push(item);
+    } else {
+      const execution = executions.get(item.card.card_id);
+      folded.push(execution ? { ...item, execution } : item);
+    }
+  }
+  return folded;
 }

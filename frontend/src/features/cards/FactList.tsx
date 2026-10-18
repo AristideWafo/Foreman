@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 
+export interface Fact {
+  label: string;
+  value: ReactNode | null | undefined;
+}
+
 /** Liste de définitions (étiquette `text-xs`, valeur `text-sm`) ; les valeurs absentes ne s'affichent pas. */
-export function FactList({
-  facts,
-}: {
-  facts: readonly { label: string; value: ReactNode | null | undefined }[];
-}) {
+export function FactList({ facts }: { facts: readonly Fact[] }) {
   const shown = facts.filter((f) => f.value !== null && f.value !== undefined && f.value !== "");
   if (shown.length === 0) return null;
   return (
