@@ -1,0 +1,12 @@
+# Champs qu'un plan doit connaître. `environment` est obligatoire : sans lui, l'agent le demande
+# (`ask_user`) avant tout plan. Les options viennent de ces référentiels, jamais du modèle.
+version: 1
+fields:
+  environment:
+    required: true
+    description: Environnement cible du déploiement.
+    options_from: {referentiel: environments, key: environments}
+  stack:
+    required: false
+    description: Stack du projet (modèles de dépôt backend et frontend).
+    options_from: {referentiel: boilerplates, key: stacks}

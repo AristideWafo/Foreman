@@ -10,6 +10,8 @@ tools: [gitlab.create_group, gitlab.create_project]
 Créer la structure GitLab d'un projet selon les conventions de l'équipe.
 
 # Instructions
+0. Si l'environnement ou la stack manquent (`referentiels/project-schema.yaml`), appeler `ask_user`
+   avant tout plan : ne jamais les deviner, ne proposer aucun plan tant que la réponse manque.
 1. Lire `referentiels/gitlab-groups.yaml` pour trouver le groupe parent de l'équipe.
 2. Planifier un groupe `<slug>` sous ce parent, puis deux sous-groupes `frontend` et `backend`.
 3. Planifier un dépôt par sous-groupe depuis le boilerplate correspondant à la stack
