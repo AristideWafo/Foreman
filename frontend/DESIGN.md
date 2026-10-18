@@ -22,6 +22,11 @@ redéfinit ni couleurs, ni rayons, ni ombres.
 - Liste des projets : celle du **serveur** (`GET /api/projects`, base de données), pas de liste locale. Un projet
   prend pour titre le début de son premier message ; sans titre, « Sans titre ».
 - Contenu : `max-w-3xl`, centré, en-tête commun (`PageHeader`).
+- **Badge « Mode mémoire »** : en pied du panneau de la barre latérale, un `Badge` `outline` avec l'icône
+  `ExclamationTriangleIcon`, `role="status"` et le texte « Mode mémoire » (le texte seul porte le sens, pas la couleur).
+  Une infobulle native (`title`) explique : « Les données sont perdues au redémarrage du serveur. » Il n'apparaît que si
+  `GET /healthz` renvoie `persistence = "memory"` ; avec `postgres`, ou si la requête échoue, rien n'est affiché (le
+  front ne devine pas). Le panneau est masqué sur mobile (seul le rail s'ouvre), le badge l'est donc aussi.
 
 ## Écrans
 
@@ -106,7 +111,7 @@ Composants partagés (`components/`) : `CardHeading` (en-tête de carte), `Colla
 
 Existants : shadcn (`Button`, `Card`, `Badge`, `Alert`, `Textarea`, `InputGroup`, `Sidebar`, `Tooltip`,
 `Separator`, `Collapsible`, `Skeleton`, `Sheet`, `ScrollArea`, `MessageScroller`, `Message`, `Bubble`,
-`Marker`, `Trace`) et applicatifs : `LinkButton`, `PageHeader`, `AppSidebar`. À créer au besoin :
+`Marker`, `Trace`) et applicatifs : `LinkButton`, `PageHeader`, `AppSidebar`, `MemoryModeBadge`. À créer au besoin :
 `BrandLogo` (logos svgl). Une carte = un composant par `kind` dans `features/cards/`, avec repli.
 
 ## Cartes de plan et d'exécution (Semaine 2)
