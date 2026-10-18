@@ -32,7 +32,7 @@ function readFirstMessage(state: unknown): string | null {
   return null;
 }
 
-function TimelineEntry({ item }: { item: TimelineItem }) {
+function TimelineEntry({ item, projectId }: { item: TimelineItem; projectId: string }) {
   switch (item.kind) {
     case "message":
       return item.role === "user" ? (
@@ -61,7 +61,7 @@ function TimelineEntry({ item }: { item: TimelineItem }) {
     case "trace":
       return <TurnTrace status={item.status} tools={item.tools} />;
     case "card":
-      return <Card card={item.card} />;
+      return <Card card={item.card} projectId={projectId} logs={item.logs} />;
     case "error":
       return (
         <Alert variant="destructive">
@@ -157,7 +157,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
                       scrollAnchor={item.kind === "message" && item.role === "user"}
                       className="motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0"
                     >
-                      <TimelineEntry item={item} />
+                      <TimelineEntry item={item} projectId={projectId} />
                     </MessageScrollerItem>
                   ))}
                   {awaitingServer ? (

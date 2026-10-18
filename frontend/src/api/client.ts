@@ -9,6 +9,9 @@ type CreateProjectBody = NonNullable<
 type MessageAccepted =
   paths["/api/projects/{project_id}/messages"]["post"]["responses"][202]["content"]["application/json"];
 
+type ApprovalBody = components["schemas"]["ApprovalRequest"];
+type ApprovalAccepted = components["schemas"]["ApprovalAccepted"];
+
 const ERROR_CODES: readonly ErrorCode[] = [
   "not_found",
   "invalid_request",
@@ -17,6 +20,9 @@ const ERROR_CODES: readonly ErrorCode[] = [
   "capacity_exceeded",
   "internal_error",
   "not_implemented",
+  "plan_hash_mismatch",
+  "plan_not_approvable",
+  "execution_in_progress",
 ];
 
 /** Erreur d'API : seuls le statut et le code opaque du contrat sont conservés. */
@@ -77,6 +83,19 @@ export function postMessage(projectId: string, text: string): Promise<MessageAcc
   );
 }
 
+/** Approuve un plan (201 à la création, 200 au rejeu idempotent : les deux sont des succès). */
+export function approvePlan(
+  projectId: string,
+  planId: string,
+  planHash: string,
+): Promise<ApprovalAccepted> {
+  const body: ApprovalBody = { plan_hash: planHash, decision: "approved" };
+  return request<ApprovalAccepted>(
+    `/api/projects/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(planId)}/approvals`,
+    jsonPost(body),
+  );
+}
+
 export function eventsUrl(projectId: string): string {
   return `/api/projects/${encodeURIComponent(projectId)}/events`;
 }
@@ -96,4 +115,36 @@ export function describeError(error: unknown): string {
     default:
       return "Une erreur est survenue. Réessayez dans un instant.";
   }
+}
+
+/** Ce que le front fait après un refus d'approbation : réessayer, ou attendre la carte plan réémise. */
+export interface ApprovalFailure {
+  message: string;
+  /** 409 et 404 : l'état a changé côté serveur, on attend la carte réémise plutôt que de deviner. */
+  waitForCard: boolean;
+}
+
+/** Message utilisateur opaque pour l'approbation d'un plan. */
+export function describeApprovalError(error: unknown): ApprovalFailure {
+  const status = error instanceof ApiError ? error.status : 0;
+  const code = error instanceof ApiError ? error.code : null;
+  if (status === 501 || code === "not_implemented") {
+    return { message: "La validation n'est pas encore disponible.", waitForCard: false };
+  }
+  if (code === "execution_in_progress") {
+    return { message: "Une exécution est déjà en cours pour ce plan.", waitForCard: true };
+  }
+  if (status === 409) {
+    return {
+      message: "Ce plan a changé ou ne peut plus être validé. La carte va être mise à jour.",
+      waitForCard: true,
+    };
+  }
+  if (status === 404) {
+    return { message: "Ce plan est introuvable. La carte va être mise à jour.", waitForCard: true };
+  }
+  if (status === 422) {
+    return { message: "Ce plan ne peut pas être validé en l'état.", waitForCard: false };
+  }
+  return { message: "La validation a échoué. Réessayez dans un instant.", waitForCard: false };
 }
