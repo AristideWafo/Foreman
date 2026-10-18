@@ -8,8 +8,9 @@ import pytest
 
 from foreman.core.ports import ModelReply, Provider, ToolCall
 from foreman.core.turn import TurnInProgress, TurnRequest, TurnService
+from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog
-from foreman.infra.scripted_provider import ScriptedProvider
+from foreman.infra.replay_provider import ReplayProvider
 
 USER_TEXT_MARKER = "mot-de-passe-de-l-utilisateur"
 ERROR_MARKER = "secret-interne postgres://user:pass@db"
@@ -77,10 +78,15 @@ async def test_turn_emits_the_contract_sequence_with_contiguous_seq() -> None:
     assert events[4]["data"] == {"status": "completed"}
 
 
-async def test_scripted_provider_proposes_a_three_step_pending_plan() -> None:
-    events = await play(ScriptedProvider(), "Crée Safe Eat")
-    assert events[2]["data"]["text"] == "Reçu : Crée Safe Eat"
-    assert [s["status"] for s in events[3]["data"]["steps"]] == ["pending"] * 3
+async def test_the_replayed_s01_turn_proposes_a_seven_step_pending_plan() -> None:
+    events = await play(ReplayProvider.s01(catalog_dir_from_env()), "Crée Safe Eat")
+    assert types(events) == ["message", "turn_status", "message", "card", "turn_status"]
+    assert events[3]["data"]["kind"] == "plan"
+    assert [s["title"] for s in events[3]["data"]["steps"]][:2] == [
+        "Créer le groupe safe-eat",
+        "Créer le sous-groupe backend",
+    ]
+    assert [s["status"] for s in events[3]["data"]["steps"]] == ["pending"] * 7
 
 
 async def test_provider_exception_never_reaches_the_events() -> None:

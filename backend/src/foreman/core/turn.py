@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
+from foreman.core.catalog import TOOL_NAME_PATTERN
 from foreman.core.events import (
     ERROR_MESSAGES,
     CardStep,
@@ -42,6 +43,9 @@ class _PlanStepArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: Annotated[str, Field(max_length=200)]
+    # Facultatifs : le planning (semaine 2, P7) les exige ; la carte de ce tour n'en dépend pas.
+    tool: Annotated[str, Field(pattern=TOOL_NAME_PATTERN)] | None = None
+    params: dict[str, JsonValue] | None = None
 
 
 class ProposePlanArguments(BaseModel):
@@ -52,6 +56,15 @@ class ProposePlanArguments(BaseModel):
     title: Annotated[str, Field(max_length=200)]
     summary: Annotated[str, Field(max_length=500)]
     steps: Annotated[list[_PlanStepArgs], Field(min_length=1, max_length=20)]
+    skills: list[Annotated[str, Field(max_length=64)]] | None = Field(default=None, max_length=10)
+    environment: Annotated[str, Field(max_length=32)] | None = None
+    stack: (
+        dict[
+            Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]*$")],
+            Annotated[str, Field(max_length=100)],
+        ]
+        | None
+    ) = Field(default=None, max_length=10)
 
 
 class TurnService:

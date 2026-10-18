@@ -175,6 +175,13 @@ bout. **Mutations** à vérifier : retirer la comparaison du hash, `ON CONFLICT`
 - Rôle PostgreSQL propriétaire de l'audit : le trigger est contournable (suppression, `session_replication_role =
   replica` ; rôles séparés en v1.0).
 - Le replay `default` répond S1 à toute demande en staging (démonstration assumée).
+- Les identifiants du replay S1 sont **littéraux** : les sous-groupes visent les groupes `2000`, `2001` et `2002`,
+  que `SimulatedGitLab` produit dans l'ordre. P6 (gateway) doit donc filtrer le registre par `project_id` (deux
+  projets ne partagent pas leurs ressources), et P7 (planning) prévoira des références aux sorties d'étapes
+  (par exemple `{{steps.1.group_id}}`) au lieu d'identifiants écrits en dur.
+- `apply_playbook` : la réversibilité et la portée viennent du playbook (`playbooks` dans la définition) ; la gateway
+  doit imposer `params.environment == plan.environment`, et le fake GitLab n'adopte jamais une ressource sans le
+  marquage `managed-by=foreman` (`ForeignResource`).
 - Au redémarrage le chat est vidé alors que plans et exécutions restent en base ; il n'y a pas de route de liste :
   le front retrouve un plan ou une exécution par identifiant (portés par les cartes).
 - À trancher : (1) valider ce contrat additif ; (2) valider les ajustements du schéma ci-dessus ; (3) migrations au

@@ -11,8 +11,9 @@ from fastapi.testclient import TestClient
 from foreman.bootstrap.configure import App, Profile
 from foreman.core.ports import ModelReply, Provider
 from foreman.core.turn import TurnService
+from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
-from foreman.infra.scripted_provider import ScriptedProvider
+from foreman.infra.replay_provider import ReplayProvider
 from foreman.surfaces.web.app import create_app
 
 
@@ -72,7 +73,7 @@ def test_healthz_reports_the_version_from_the_environment(monkeypatch: pytest.Mo
 
 
 async def test_project_lifecycle_and_a_turn_through_the_api() -> None:
-    app, log = build_app(ScriptedProvider())
+    app, log = build_app(ReplayProvider.s01(catalog_dir_from_env()))
     async with http(app) as client:
         created = await client.post("/api/projects", json={"title": "Safe Eat"})
         assert created.status_code == 201
@@ -97,7 +98,7 @@ async def test_project_lifecycle_and_a_turn_through_the_api() -> None:
 
 
 async def test_unknown_project_is_an_opaque_404() -> None:
-    app, _ = build_app(ScriptedProvider())
+    app, _ = build_app(ReplayProvider.s01(catalog_dir_from_env()))
     async with http(app) as client:
         missing = f"/api/projects/{uuid4()}"
         for response in (
@@ -109,7 +110,7 @@ async def test_unknown_project_is_an_opaque_404() -> None:
 
 
 async def test_message_validation_does_not_echo_the_input() -> None:
-    app, _ = build_app(ScriptedProvider())
+    app, _ = build_app(ReplayProvider.s01(catalog_dir_from_env()))
     async with http(app) as client:
         project = (await client.post("/api/projects")).json()
         secret = "mot-de-passe-" + "x" * 4000
@@ -162,7 +163,9 @@ async def test_provider_failure_through_the_api_leaks_nothing() -> None:
 
 
 async def test_project_cap_is_a_503() -> None:
-    app, _ = build_app(ScriptedProvider(), InMemoryProjectStore(max_projects=1))
+    app, _ = build_app(
+        ReplayProvider.s01(catalog_dir_from_env()), InMemoryProjectStore(max_projects=1)
+    )
     async with http(app) as client:
         assert (await client.post("/api/projects")).status_code == 201
         full = await client.post("/api/projects")
