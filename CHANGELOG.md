@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0](https://github.com/AristideWafo/Foreman/compare/v0.6.0...v0.7.0) (2026-10-18)
+
+
+### Features
+
+* **front:** étapes et journaux repliables, carte sans bordure, icône d'attente ([ef19d53](https://github.com/AristideWafo/Foreman/commit/ef19d53af62d34a18725ed87fbbc66c39060f314))
+* **front:** exécution dans la carte du plan, composants partagés, échelle typographique ([344b82a](https://github.com/AristideWafo/Foreman/commit/344b82ada679bf9c801b244682226999e3f3e026))
+* **front:** trace repliable et animations séquentielles ([cdac1bc](https://github.com/AristideWafo/Foreman/commit/cdac1bc039d19bea04b50fd05ac8f04a09d0b30f))
+* **front:** trace repliable et apparition séquentielle des composants ([8886fb8](https://github.com/AristideWafo/Foreman/commit/8886fb80202b230b413ee95c5a175634ca5e479d))
+
 ## [0.6.0](https://github.com/AristideWafo/Foreman/compare/v0.5.0...v0.6.0) (2026-10-18)
 
 
