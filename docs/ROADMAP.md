@@ -20,7 +20,7 @@ règles pour les agents. Aucune logique métier : `TurnService` et `/healthz` se
 4. **Deux pistes en parallèle au maximum** (par exemple moteur et front), **contrats figés** : schéma OpenAPI
    et schéma des événements committés, vérifiés en CI. Au-delà de deux pistes, la relecture se dégrade.
 5. **Les tests relisent d'abord** : frontières de couches, scénarios rejoués. L'attention humaine va à la
-   Tool Gateway, à la matrice de droits et aux migrations, protégées par `CODEOWNERS`.
+   Tool Gateway, à la matrice de droits et aux migrations, relues avec une attention particulière (`CODEOWNERS` est désactivé pour l'instant : revue indépendante par un agent à la place).
 6. **Essai jetable avant les vrais outils serveur** : le script de bootstrap et le wrapper Compose, jamais
    exécutés, sont testés sur un conteneur SSH local. Le résultat est un compte rendu, pas du code à garder.
 
