@@ -10,7 +10,7 @@ from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from foreman.core.store import (
@@ -28,6 +28,7 @@ from foreman.core.store import (
     StaleLease,
     StepRecord,
     StoreError,
+    ensure_audit_scope,
 )
 from foreman.infra.db import tables as t
 from foreman.infra.db.audit import audit_values
@@ -93,7 +94,7 @@ class PostgresExecutionStore:
                         .order_by(t.execution_steps.c.seq)
                     )
                 ).all()
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("execution.get", exc)
             raise StoreError("stockage indisponible") from None
         return ExecutionRecord(
@@ -130,7 +131,7 @@ class PostgresExecutionStore:
         try:
             async with self._engine.begin() as conn:
                 epoch = (await conn.execute(statement)).scalar_one_or_none()
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("execution.claim_lease", exc)
             raise StoreError("stockage indisponible") from None
         return None if epoch is None else Lease(execution_id, owner, epoch)
@@ -153,7 +154,7 @@ class PostgresExecutionStore:
         try:
             async with self._engine.begin() as conn:
                 return (await conn.execute(statement)).scalar_one_or_none() is not None
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("execution.renew", exc)
             raise StoreError("stockage indisponible") from None
 
@@ -170,7 +171,7 @@ class PostgresExecutionStore:
         try:
             async with self._engine.connect() as conn:
                 row = (await conn.execute(statement)).one_or_none()
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("execution.next_step", exc)
             raise StoreError("stockage indisponible") from None
         return None if row is None else _step(row)
@@ -224,7 +225,7 @@ class PostgresExecutionStore:
                 if previous.status == "done" and previous.result is not None:
                     return CompletedReservation(previous.result)
                 return OrphanReservation()
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("execution.reserve_idempotency", exc)
             raise StoreError("stockage indisponible") from None
 
@@ -241,6 +242,7 @@ class PostgresExecutionStore:
                 execution = await _held(conn, lease)
                 if execution.state != "running":
                     raise InvalidTransition
+                ensure_audit_scope(audit, execution.project_id, lease.execution_id)
                 step = (
                     await conn.execute(
                         sa.update(t.execution_steps)
@@ -291,7 +293,7 @@ class PostgresExecutionStore:
                 raise DuplicateResource from None
             log_failure("execution.complete_step", exc)
             raise StoreError("stockage indisponible") from None
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("execution.complete_step", exc)
             raise StoreError("écriture refusée") from None
 
@@ -301,6 +303,17 @@ class PostgresExecutionStore:
                 execution = await _held(conn, lease)
                 if execution.state != "running":
                     raise InvalidTransition
+                if state == "succeeded":
+                    unfinished = await conn.execute(
+                        sa.select(
+                            sa.exists().where(
+                                t.execution_steps.c.execution_id == lease.execution_id,
+                                t.execution_steps.c.status != "succeeded",
+                            )
+                        )
+                    )
+                    if unfinished.scalar_one():
+                        raise InvalidTransition  # un succès exige toutes les étapes réussies
                 await conn.execute(
                     sa.update(t.executions)
                     .where(
@@ -317,6 +330,6 @@ class PostgresExecutionStore:
                         )
                         .values(status="executed")
                     )
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("execution.finish", exc)
             raise StoreError("stockage indisponible") from None

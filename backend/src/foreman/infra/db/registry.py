@@ -3,7 +3,7 @@
 from uuid import UUID
 
 import sqlalchemy as sa
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from foreman.core.store import ResourceRecord, StoreError
@@ -15,9 +15,12 @@ class PostgresResourceRegistry:
     def __init__(self, engine: AsyncEngine) -> None:
         self._engine = engine
 
-    async def contains(self, provider: str, resource_type: str, external_id: str) -> bool:
+    async def contains(
+        self, project_id: UUID, provider: str, resource_type: str, external_id: str
+    ) -> bool:
         statement = sa.select(
             sa.exists().where(
+                t.managed_resources.c.project_id == project_id,
                 t.managed_resources.c.provider == provider,
                 t.managed_resources.c.resource_type == resource_type,
                 t.managed_resources.c.external_id == external_id,
@@ -27,7 +30,7 @@ class PostgresResourceRegistry:
         try:
             async with self._engine.connect() as conn:
                 return bool((await conn.execute(statement)).scalar_one())
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("registry.contains", exc)
             raise StoreError("stockage indisponible") from None
 
@@ -43,7 +46,7 @@ class PostgresResourceRegistry:
         try:
             async with self._engine.connect() as conn:
                 rows = (await conn.execute(statement)).all()
-        except DBAPIError as exc:
+        except SQLAlchemyError as exc:
             log_failure("registry.list", exc)
             raise StoreError("stockage indisponible") from None
         return [

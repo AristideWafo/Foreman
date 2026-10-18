@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 from harness import APPROVER, Harness
 
+from foreman.core.ports import CapacityExceeded
 from foreman.core.store import (
     MAX_AUDIT_DURATION_MS,
     ApprovalRefused,
@@ -23,6 +24,7 @@ from foreman.core.store import (
     PlanRecord,
     StaleLease,
     StoreError,
+    UnknownProject,
 )
 
 FUTURE = datetime(2100, 1, 1, tzinfo=UTC)
@@ -91,6 +93,8 @@ async def test_plan_versions_increase_per_project_and_reads_are_scoped(harness: 
     assert (first.version, second.version, other.version) == (1, 2, 1)
     assert (await harness.stores.plans.get(a, first.id)) == first
     assert await harness.stores.plans.get(b, first.id) is None  # autre projet = absent
+    with pytest.raises(UnknownProject):  # même refus en mémoire et en PostgreSQL
+        await new_plan(harness, uuid4())
 
 
 async def test_approval_creates_the_execution_with_pending_steps(harness: Harness) -> None:
@@ -223,6 +227,16 @@ async def test_the_holder_can_reclaim_its_own_lease_with_a_new_token(harness: Ha
         await harness.stores.executions.finish(lease, "blocked")
 
 
+async def test_concurrent_claims_of_one_execution_give_a_single_lease(harness: Harness) -> None:
+    project = await new_project(harness)
+    plan = await new_plan(harness, project)
+    execution_id = (await approve(harness, plan)).execution_id
+    claims = await asyncio.gather(
+        *(harness.stores.executions.claim_lease(execution_id, f"worker-{i}") for i in range(6))
+    )
+    assert len([c for c in claims if c is not None]) == 1
+
+
 # --- Idempotence ------------------------------------------------------------------------------
 
 
@@ -281,7 +295,11 @@ async def test_complete_step_records_step_resources_and_audit_together(harness: 
     await store.complete_step(
         lease, 1, {"id": "g1"}, [resource], [audit(project, tool="gitlab.create_group", step_seq=1)]
     )
-    assert await harness.stores.registry.contains("gitlab", "group", resource.external_id)
+    assert await harness.stores.registry.contains(project, "gitlab", "group", resource.external_id)
+    stranger = await new_project(harness)  # le registre est cloisonné par projet
+    assert not await harness.stores.registry.contains(
+        stranger, "gitlab", "group", resource.external_id
+    )
     listed = await harness.stores.registry.list_for_project(project)
     assert [(r.external_id, r.origin, r.execution_id) for r in listed] == [
         (resource.external_id, "created", execution_id)
@@ -306,7 +324,9 @@ async def test_when_the_audit_fails_no_resource_is_registered(harness: Harness) 
             [resource],
             [audit(project), audit(project, duration_ms=TOO_LONG)],
         )
-    assert not await harness.stores.registry.contains("gitlab", "group", resource.external_id)
+    assert not await harness.stores.registry.contains(
+        project, "gitlab", "group", resource.external_id
+    )
     assert await harness.stores.audit.list_for_project(project) == []
     step = await store.next_step(execution_id)
     assert step is not None and (step.seq, step.status, step.result) == (1, "running", None)
@@ -335,6 +355,40 @@ async def test_a_resource_already_registered_rolls_the_whole_step_back(harness: 
     assert await harness.stores.audit.list_for_project(intruder) == []
     step = await store.next_step(execution_b)
     assert step is not None and step.status == "running"
+
+
+async def test_a_step_cannot_write_the_audit_of_another_project(harness: Harness) -> None:
+    project, other = await new_project(harness), await new_project(harness)
+    execution_id, lease = await running_execution(harness, project)
+    store = harness.stores.executions
+    assert isinstance(await store.reserve_idempotency(lease, 1), NewReservation)
+    resource = NewResource("gitlab", "group", f"g-{uuid4().hex}")
+    with pytest.raises(StoreError):
+        await store.complete_step(
+            lease, 1, {"id": "g1"}, [resource], [audit(project), audit(other)]
+        )
+    assert await harness.stores.audit.list_for_project(project) == []
+    assert await harness.stores.audit.list_for_project(other) == []
+    assert not await harness.stores.registry.contains(
+        project, "gitlab", "group", resource.external_id
+    )
+    step = await store.next_step(execution_id)
+    assert step is not None and (step.seq, step.status) == (1, "running")  # rien d'écrit
+
+
+async def test_an_execution_cannot_succeed_while_a_step_is_not_succeeded(harness: Harness) -> None:
+    project = await new_project(harness)
+    execution_id, lease = await running_execution(harness, project)
+    store = harness.stores.executions
+    await store.reserve_idempotency(lease, 1)
+    await store.complete_step(lease, 1, {}, [], [])  # les étapes 2 et 3 restent `pending`
+    with pytest.raises(InvalidTransition):
+        await store.finish(lease, "succeeded")
+    execution = await store.get(project, execution_id)
+    assert execution is not None and execution.state == "running"
+    plan = await harness.stores.plans.get(project, execution.plan_id)
+    assert plan is not None and plan.status == "dev_approved"  # le plan n'est pas « executed »
+    await store.finish(lease, "blocked")  # l'échec reste possible
 
 
 async def test_transitions_from_unexpected_states_are_refused(harness: Harness) -> None:
@@ -382,7 +436,7 @@ async def test_registry_and_audit_are_scoped_by_project(harness: Harness) -> Non
     await harness.stores.audit.append(audit(b, tool="y"))
     assert [e.tool for e in await harness.stores.audit.list_for_project(a)] == ["x"]
     assert await harness.stores.registry.list_for_project(b) == []
-    assert not await harness.stores.registry.contains("gitlab", "group", "absent")
+    assert not await harness.stores.registry.contains(a, "gitlab", "group", "absent")
 
 
 async def test_the_audit_log_refuses_an_invalid_entry_and_writes_nothing(harness: Harness) -> None:
@@ -390,3 +444,16 @@ async def test_the_audit_log_refuses_an_invalid_entry_and_writes_nothing(harness
     with pytest.raises(StoreError):
         await harness.stores.audit.append(audit(project, duration_ms=TOO_LONG))
     assert await harness.stores.audit.list_for_project(project) == []
+
+
+# --- Bornes -----------------------------------------------------------------------------------
+
+
+async def test_the_project_cap_holds_under_concurrent_creation(harness: Harness) -> None:
+    projects = harness.bounded_projects(3)
+    results = await asyncio.gather(
+        *(projects.create(f"p{i}") for i in range(10)), return_exceptions=True
+    )
+    created = [r for r in results if not isinstance(r, BaseException)]
+    refused = [r for r in results if isinstance(r, CapacityExceeded)]
+    assert (len(created), len(refused)) == (3, 7)  # aucune autre erreur, aucun dépassement

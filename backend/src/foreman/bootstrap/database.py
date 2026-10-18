@@ -7,7 +7,7 @@ import asyncio
 import logging
 from typing import Protocol
 
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from foreman.core.store import StoreError
@@ -59,7 +59,7 @@ class DatabaseLifecycle:
                 await asyncio.to_thread(upgrade_head, self._url)
                 await seed_dev_identity(self._engine)
                 return
-            except (DBAPIError, StoreError, OSError) as exc:
+            except (SQLAlchemyError, StoreError, OSError) as exc:
                 # Ni message ni trace : ils pourraient contenir l'adresse de la base.
                 log.warning(
                     "base indisponible (%s), tentative %d/%d",

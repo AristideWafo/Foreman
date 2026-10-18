@@ -221,6 +221,13 @@ class AuditEntry:
     duration_ms: int | None = None
 
 
+def ensure_audit_scope(entries: Sequence[AuditEntry], project_id: UUID, execution_id: UUID) -> None:
+    """Une étape n'écrit que l'audit de SON projet et de SON exécution (sinon `StoreError`)."""
+    for entry in entries:
+        if entry.project_id != project_id or entry.execution_id not in (None, execution_id):
+            raise StoreError("audit invalide")
+
+
 class ExecutionStore(Protocol):
     async def get(self, project_id: UUID, execution_id: UUID) -> ExecutionRecord | None: ...
 
@@ -250,11 +257,15 @@ class ExecutionStore(Protocol):
     ) -> None:
         """UNE transaction : étape réussie, clé terminée, ressources au registre, audit.
 
-        Lève `StaleLease`, `InvalidTransition`, `DuplicateResource` ou `StoreError` : rien d'écrit.
+        Chaque entrée d'audit doit appartenir à cette exécution (même projet, même exécution si
+        elle est renseignée) : sinon `StoreError`. Lève `StaleLease`, `InvalidTransition`,
+        `DuplicateResource` ou `StoreError` : rien d'écrit.
         """
         ...
 
-    async def finish(self, lease: Lease, state: Literal["succeeded", "blocked"]) -> None: ...
+    async def finish(self, lease: Lease, state: Literal["succeeded", "blocked"]) -> None:
+        """`succeeded` exige que toutes les étapes le soient (`InvalidTransition` sinon)."""
+        ...
 
 
 # --- Registre et audit ------------------------------------------------------------------------
@@ -273,7 +284,11 @@ class ResourceRecord:
 
 
 class ResourceRegistry(Protocol):
-    async def contains(self, provider: str, resource_type: str, external_id: str) -> bool: ...
+    async def contains(
+        self, project_id: UUID, provider: str, resource_type: str, external_id: str
+    ) -> bool:
+        """Vrai seulement si la ressource est au registre DE CE PROJET (jamais d'un autre)."""
+        ...
 
     async def list_for_project(self, project_id: UUID) -> list[ResourceRecord]: ...
 
