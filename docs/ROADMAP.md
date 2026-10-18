@@ -12,9 +12,10 @@ Source : `dev platform .md` (décisions D1 à D15, scénarios S1 à S12, étapes
 | Étape | État |
 | --- | --- |
 | ~~Phase 0 — squelette du dépôt~~ | terminée |
-| ~~Semaine 1 — squelette de bout en bout~~ | code et déploiement terminés ; **reste à vérifier** : flux SSE derrière Traefik (#105), authentification en ligne (#106), protection de `prod` (#22) |
-| Semaine 2 — scénario S1 | **en cours** (démarrée le 2026-10-18) |
-| Semaines 3 à 6, essai jetable, fournisseurs réels, scénarios d'échec, évaluation | à venir |
+| ~~Semaine 1 — squelette de bout en bout~~ | code et déploiement terminés ; authentification en ligne vérifiée (#106) ; **reste à vérifier** : flux SSE derrière Traefik (#105) |
+| Semaine 2 — scénario S1 | code fusionné dans `prod` (0.5.0 à 0.6.0) : persistance PostgreSQL, gateway, moteur, approbation, cartes ; **reste à vérifier** sur env-perso : #127 (persistance après redéploiement), #32 (carte vue) ; #27 et #31 : critères à aligner |
+| Semaine 3 — scénario S2 | **en cours** : liste des projets et `persistence` dans `/healthz` fusionnés (0.8.0, #150) ; reste le journal d'événements persisté puis la clarification (voir `docs/plans/semaine-3.md`) |
+| Semaines 4 à 6, essai jetable, fournisseurs réels, scénarios d'échec, évaluation | à venir |
 
 ## ~~Phase 0 — Squelette du dépôt (terminée)~~
 
