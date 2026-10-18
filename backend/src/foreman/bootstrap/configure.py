@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from foreman.bootstrap.adapters import build_gateway
 from foreman.bootstrap.database import DatabaseLifecycle, Lifecycle, NoLifecycle
 from foreman.config.env import (
     DEFAULT_ENVIRONMENT,
@@ -14,6 +15,7 @@ from foreman.config.env import (
     ENV_LOG_LEVEL,
 )
 from foreman.core.catalog import Catalog
+from foreman.core.gateway.port import Gateway
 from foreman.core.ports import EventLog, ProjectStore
 from foreman.core.store import Stores
 from foreman.core.turn import TurnService
@@ -49,6 +51,7 @@ class App:
     stores: Stores = field(default_factory=_memory_stores)
     lifecycle: Lifecycle = field(default_factory=NoLifecycle)
     catalog: Catalog | None = None  # chargé par `configure` ; absent dans certains tests
+    gateway: Gateway | None = None  # seul chemin vers les outils ; consommé par le moteur (C2)
 
 
 def configure(profile: Profile) -> App:
@@ -58,7 +61,7 @@ def configure(profile: Profile) -> App:
     #    brouillon hors staging, dossier absent) arrête le démarrage avec un message clair.
     environment = os.environ.get(ENV_ENVIRONMENT, DEFAULT_ENVIRONMENT)
     catalog = load_catalog(environment=environment)
-    # 3. Adaptateurs (un seul endroit : voir adapters.py quand il existera)
+    # 3. Adaptateurs de connecteurs : bootstrap/adapters.py (seul endroit qui importe integrations)
     provider = ReplayProvider.s01(catalog_dir_from_env())
     events = InMemoryEventLog()  # le chat reste en mémoire cette semaine
     projects: ProjectStore
@@ -83,4 +86,5 @@ def configure(profile: Profile) -> App:
         stores=stores,
         lifecycle=lifecycle,
         catalog=catalog,
+        gateway=build_gateway(catalog, stores),
     )

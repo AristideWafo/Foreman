@@ -237,7 +237,9 @@ class ExecutionStore(Protocol):
         """Vide si une autre instance tient un bail valide. Chaque prise incrémente le jeton."""
         ...
 
-    async def renew(self, lease: Lease, ttl_s: int = LEASE_TTL_S) -> bool: ...
+    async def renew(self, lease: Lease, ttl_s: int = LEASE_TTL_S) -> bool:
+        """Faux si le bail n'est plus le nôtre ou a expiré (il se reprend par `claim_lease`)."""
+        ...
 
     async def next_step(self, execution_id: UUID) -> StepRecord | None:
         """Première étape non réussie (point de reprise)."""
@@ -288,6 +290,12 @@ class ResourceRegistry(Protocol):
         self, project_id: UUID, provider: str, resource_type: str, external_id: str
     ) -> bool:
         """Vrai seulement si la ressource est au registre DE CE PROJET (jamais d'un autre)."""
+        ...
+
+    async def exists_elsewhere(
+        self, project_id: UUID, provider: str, resource_type: str, external_id: str
+    ) -> bool:
+        """Vrai si la ressource est au registre d'un AUTRE projet (un seul maître)."""
         ...
 
     async def list_for_project(self, project_id: UUID) -> list[ResourceRecord]: ...

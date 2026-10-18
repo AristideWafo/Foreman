@@ -72,6 +72,8 @@ class ToolAdapter(Protocol):
       est déclarée dans la définition de l'outil).
     - La gateway garantit qu'une même clé n'est utilisée que pour l'appel identique de l'étape
       du plan : un adaptateur peut donc rejouer sans comparer les paramètres.
+    - Une même clé peut être rejouée tant que le moteur n'a pas enregistré la réussite de l'étape
+      (panne entre l'appel et `complete_step`) : l'idempotence est REQUISE de l'adaptateur.
     - Aucun appel bloquant : un adaptateur réel déporte son travail hors de la boucle asynchrone.
     - Lève `AdapterError` (ou `PermissionMissing`) ; toute autre exception est un défaut.
     """

@@ -349,9 +349,10 @@ class InMemoryExecutionStore:
             e = self._held(lease)
         except StaleLease:
             return False
-        if e.state != "running":
-            return False
-        e.lease_expires_at = self._s.clock() + timedelta(seconds=ttl_s)
+        now = self._s.clock()
+        if e.state != "running" or e.lease_expires_at is None or e.lease_expires_at < now:
+            return False  # un bail expiré se reprend (`claim_lease`), il ne se renouvelle pas
+        e.lease_expires_at = now + timedelta(seconds=ttl_s)
         return True
 
     async def next_step(self, execution_id: UUID) -> StepRecord | None:
@@ -429,6 +430,12 @@ class InMemoryResourceRegistry:
     ) -> bool:
         found = self._s.resources.get((provider, resource_type, external_id))
         return found is not None and found.project_id == project_id
+
+    async def exists_elsewhere(
+        self, project_id: UUID, provider: str, resource_type: str, external_id: str
+    ) -> bool:
+        found = self._s.resources.get((provider, resource_type, external_id))
+        return found is not None and found.project_id != project_id
 
     async def list_for_project(self, project_id: UUID) -> list[ResourceRecord]:
         return [r for r in self._s.resources.values() if r.project_id == project_id]

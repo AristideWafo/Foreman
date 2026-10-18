@@ -144,6 +144,7 @@ class PostgresExecutionStore:
                 t.executions.c.state == "running",
                 t.executions.c.lease_owner == lease.owner,
                 t.executions.c.lease_epoch == lease.epoch,
+                t.executions.c.lease_expires_at >= sa.func.now(),
             )
             .values(
                 lease_expires_at=sa.func.now()

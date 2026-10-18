@@ -218,6 +218,15 @@ async def test_a_lease_is_taken_only_after_expiry_and_the_old_holder_is_fenced(
     assert await store.renew(lease_b)
 
 
+async def test_an_expired_lease_cannot_be_renewed_but_can_be_reclaimed(harness: Harness) -> None:
+    project = await new_project(harness)
+    execution_id, lease = await running_execution(harness, project)
+    await harness.expire_lease(lease)
+    assert not await harness.stores.executions.renew(lease)  # personne ne l'a reprise : refusé
+    again = await harness.stores.executions.claim_lease(execution_id, "w1")
+    assert again is not None and await harness.stores.executions.renew(again)
+
+
 async def test_the_holder_can_reclaim_its_own_lease_with_a_new_token(harness: Harness) -> None:
     project = await new_project(harness)
     execution_id, lease = await running_execution(harness, project)
@@ -300,6 +309,9 @@ async def test_complete_step_records_step_resources_and_audit_together(harness: 
     assert not await harness.stores.registry.contains(
         stranger, "gitlab", "group", resource.external_id
     )
+    other = harness.stores.registry  # une ressource n'a qu'un maître : les autres projets la voient
+    assert await other.exists_elsewhere(stranger, "gitlab", "group", resource.external_id)
+    assert not await other.exists_elsewhere(project, "gitlab", "group", resource.external_id)
     listed = await harness.stores.registry.list_for_project(project)
     assert [(r.external_id, r.origin, r.execution_id) for r in listed] == [
         (resource.external_id, "created", execution_id)

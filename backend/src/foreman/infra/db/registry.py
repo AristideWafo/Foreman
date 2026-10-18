@@ -34,6 +34,25 @@ class PostgresResourceRegistry:
             log_failure("registry.contains", exc)
             raise StoreError("stockage indisponible") from None
 
+    async def exists_elsewhere(
+        self, project_id: UUID, provider: str, resource_type: str, external_id: str
+    ) -> bool:
+        statement = sa.select(
+            sa.exists().where(
+                t.managed_resources.c.project_id != project_id,
+                t.managed_resources.c.provider == provider,
+                t.managed_resources.c.resource_type == resource_type,
+                t.managed_resources.c.external_id == external_id,
+                t.managed_resources.c.deleted_at.is_(None),
+            )
+        )
+        try:
+            async with self._engine.connect() as conn:
+                return bool((await conn.execute(statement)).scalar_one())
+        except SQLAlchemyError as exc:
+            log_failure("registry.exists_elsewhere", exc)
+            raise StoreError("stockage indisponible") from None
+
     async def list_for_project(self, project_id: UUID) -> list[ResourceRecord]:
         statement = (
             sa.select(*t.managed_resources.c)
