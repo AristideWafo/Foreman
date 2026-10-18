@@ -6,7 +6,7 @@
 | `security.yml` | PR, `prod`, hebdo | CodeQL (prod/hebdo), revue des dépendances (PR), `pip-audit`, `pnpm audit`, gitleaks |
 | `build.yml` | `prod`, tags `v*` | Image construite une fois, scan Trivy, signature, SBOM, provenance |
 | `deploy.yml` | après Build sur `prod`, manuel | Déploiement automatique vers l'environnement `env-perso` ; redéploiement manuel d'un SHA |
-| `release-please.yml` | `main` | PR de version et changelog |
+| `release-please.yml` | `prod` | PR de version et changelog |
 | `evals.yml` | hebdo, manuel | Scénarios avec le vrai modèle, jamais bloquants |
 
 ## Règles
