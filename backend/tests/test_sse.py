@@ -14,7 +14,7 @@ import uvicorn
 
 from foreman.bootstrap.configure import App, Profile
 from foreman.core.events import MessageData
-from foreman.core.ports import Provider
+from foreman.core.ports import ConversationMessage, Provider
 from foreman.core.turn import TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
@@ -54,7 +54,7 @@ async def serve(
         queue_size=queue_size or 100, max_subscribers_per_project=max_subscribers_per_project
     )
     projects = InMemoryProjectStore()
-    turns = TurnService(provider, log, make_planner())
+    turns = TurnService(provider, log, make_planner(), projects)
     app = create_app(App(profile=Profile.WEB, projects=projects, events=log, turns=turns))
     # Socket réservé avant le démarrage : les connexions attendent dans le backlog, sans sondage.
     sock = socket.socket()
@@ -73,7 +73,7 @@ async def serve(
 
 @pytest.fixture
 async def server() -> AsyncIterator[Server]:
-    async for s in serve(ReplayProvider.s01(catalog_dir_from_env())):
+    async for s in serve(ReplayProvider.from_dir(catalog_dir_from_env())):
         yield s
 
 
@@ -252,7 +252,7 @@ async def test_subscribers_are_removed_when_the_client_disconnects(server: Serve
 
 
 class NoProvider:
-    async def complete(self, messages: Sequence[str]) -> Any:
+    async def complete(self, messages: Sequence[ConversationMessage]) -> Any:
         raise AssertionError("aucun tour dans ce test")
 
 
@@ -296,7 +296,7 @@ async def data_frames(frames: AsyncIterator[Frame]) -> AsyncIterator[Frame]:
 
 async def test_too_many_streams_on_a_project_get_an_opaque_503() -> None:
     async for server in serve(
-        ReplayProvider.s01(catalog_dir_from_env()), max_subscribers_per_project=2
+        ReplayProvider.from_dir(catalog_dir_from_env()), max_subscribers_per_project=2
     ):
         async with server.client() as client:
             project = await server.new_project(client)
@@ -313,7 +313,7 @@ async def test_too_many_streams_on_a_project_get_an_opaque_503() -> None:
 
 
 async def test_an_absurdly_long_last_event_id_is_ignored_not_a_500() -> None:
-    async for server in serve(ReplayProvider.s01(catalog_dir_from_env())):
+    async for server in serve(ReplayProvider.from_dir(catalog_dir_from_env())):
         async with server.client() as client:
             project = await server.new_project(client)
             url = f"/api/projects/{project}/events"

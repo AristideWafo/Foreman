@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 from harness import APPROVER, Harness
 
-from foreman.core.events import EventData, MessageData
+from foreman.core.events import ClarificationQuestion, EventData, MessageData
 from foreman.core.ports import CapacityExceeded
 from foreman.core.store import (
     MAX_AUDIT_DURATION_MS,
@@ -498,6 +498,28 @@ async def test_a_second_log_rereads_the_history_and_continues_at_the_next_seq(
     assert [e.seq for e in await reopened.read_after(project, 2)] == [3]
     assert (await reopened.append(project, turn, message("quatre"))).seq == 4
     assert await reopened.read_after(await new_project(harness), 0) == []  # autre projet : vide
+
+
+async def test_open_questions_are_read_back_by_a_second_store(harness: Harness) -> None:
+    project = await new_project(harness)
+    questions = [
+        ClarificationQuestion(
+            id="q1-1",
+            field="environment",
+            prompt="Quel environnement ?",
+            options=["staging"],
+            status="answered",
+            answer="staging",
+        ),
+        ClarificationQuestion(id="q1-2", field="stack", prompt="Quelle stack ?", status="open"),
+    ]
+    await harness.projects.set_open_questions(project, questions)
+
+    reopened = harness.reopen_projects()  # redémarrage : nouveau processus, même base
+    assert list(await reopened.get_open_questions(project)) == questions
+    assert list(await reopened.get_open_questions(await new_project(harness))) == []
+    with pytest.raises(UnknownProject):
+        await reopened.set_open_questions(uuid4(), questions)
 
 
 async def test_concurrent_appends_stay_contiguous_and_reach_the_subscriber_in_order(

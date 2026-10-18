@@ -150,7 +150,10 @@ export interface paths {
         put?: never;
         /**
          * Answer Question
-         * @description Répond à une question de clarification ou la reporte (logique à venir : 501).
+         * @description Répond à une question de clarification (202, relance un tour) ou la reporte (200).
+         *
+         *     La réponse doit être l'une des options de la question ; le message du tour est produit
+         *     par le serveur à partir de ce choix. Un refus ne lance aucun tour ni ne cite la saisie.
          */
         post: operations["answer_question_api_projects__project_id__questions__question_id__post"];
         delete?: never;

@@ -69,7 +69,7 @@ def configure(profile: Profile) -> App:
     environment = os.environ.get(ENV_ENVIRONMENT, DEFAULT_ENVIRONMENT)
     catalog = load_catalog(environment=environment)
     # 3. Adaptateurs de connecteurs : bootstrap/adapters.py (seul endroit qui importe integrations)
-    provider = ReplayProvider.s01(catalog_dir_from_env())
+    provider = ReplayProvider.from_dir(catalog_dir_from_env())
     events: EventLog
     projects: ProjectStore
     lifecycle: Lifecycle
@@ -94,7 +94,7 @@ def configure(profile: Profile) -> App:
         profile=profile,
         projects=projects,
         events=events,
-        turns=TurnService(provider, events, Planner(catalog, stores.plans)),
+        turns=TurnService(provider, events, Planner(catalog, stores.plans), projects),
         stores=stores,
         lifecycle=lifecycle,
         persistence=persistence,

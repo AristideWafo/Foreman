@@ -46,7 +46,6 @@ MAX_STEPS: Final = 20
 MAX_PLAN_BYTES: Final = 64 * 1024
 MAX_KEY_CHARS: Final = 300
 PLAN_TTL: Final = timedelta(hours=24)
-DEFAULT_ENVIRONMENT: Final = "staging"
 FALLBACK_LEVEL: Final = 2
 EXECUTION_ID_PLACEHOLDER: Final = "{execution_id}"  # substitué à l'approbation
 _PLACEHOLDER: Final = re.compile(r"\{([^{}]*)\}")
@@ -265,10 +264,14 @@ def _expected_name(params: Mapping[str, JsonValue], title: str) -> str:
 
 
 def build_content(draft: Draft, project_id: UUID, catalog: Catalog) -> tuple[PlanContent, str]:
-    """Contenu canonique et hash, ou `InvalidPlan`. Pure : rien n'est lu ni écrit."""
-    environment = draft.environment or DEFAULT_ENVIRONMENT
+    """Contenu canonique et hash, ou `InvalidPlan`. Pure : rien n'est lu ni écrit.
+
+    Un plan sans `environment` est refusé : l'agent doit le demander (`ask_user`), le serveur ne
+    suppose jamais un environnement.
+    """
+    environment = draft.environment
     matrix = catalog.policy
-    if environment not in matrix.autonomy.environments or not draft.steps:
+    if environment is None or environment not in matrix.autonomy.environments or not draft.steps:
         raise InvalidPlan
     steps: list[PlanStepContent] = []
     tools: list[ToolDefinition] = []
@@ -426,6 +429,10 @@ class Planner:
         self._catalog = catalog
         self._plans = plans
         self._clock = clock
+
+    @property
+    def catalog(self) -> Catalog:
+        return self._catalog
 
     async def propose(self, project_id: UUID, draft: Draft) -> tuple[PlanRecord, PlanContent]:
         """Valide, hache puis persiste. Un plan invalide n'écrit rien (`InvalidPlan`)."""

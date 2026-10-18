@@ -15,6 +15,7 @@ from foreman.infra.replay_provider import ReplayProvider
 from foreman.integrations.dns.simulated import SimulatedDns
 from foreman.integrations.gitlab.simulated import SimulatedGitLab
 from foreman.integrations.server.simulated import SimulatedServer
+from support import user
 
 ROOT_PARENT = 1000
 GROUP: dict[str, JsonValue] = {
@@ -189,7 +190,7 @@ async def test_dns_lists_the_wildcard_from_the_referentiel_and_never_writes() ->
 async def test_the_recorded_s01_plan_runs_on_the_fakes_and_obeys_the_tool_schemas() -> None:
     """Chaque étape enregistrée valide le schéma de son outil et s'exécute sur son fake."""
     catalog = load_catalog(catalog_dir_from_env(), environment="staging")
-    reply = await ReplayProvider.s01(catalog_dir_from_env()).complete(["bonjour"])
+    reply = await ReplayProvider.from_dir(catalog_dir_from_env()).complete(user("bonjour"))
     plan = ProposePlanArguments.model_validate(reply.tool_calls[0].arguments)
     adapters = as_adapters()
     gitlab = adapters["gitlab"]

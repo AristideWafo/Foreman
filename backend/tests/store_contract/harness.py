@@ -24,6 +24,10 @@ class Harness(Protocol):
         """Un second journal sur la même « base » : c'est ce que voit un redéploiement."""
         ...
 
+    def reopen_projects(self) -> ProjectStore:
+        """Un second dépôt de projets sur la même « base » : ce que voit un redémarrage."""
+        ...
+
     def bounded_projects(self, max_projects: int) -> ProjectStore:
         """Un dépôt de projets avec une borne, sur la même « base » que le banc."""
         ...
@@ -54,6 +58,9 @@ class MemoryHarness:
     def reopen_events(self) -> EventLog:
         return self.events  # la mémoire n'a pas de second processus : même journal
 
+    def reopen_projects(self) -> ProjectStore:
+        return self.projects  # la mémoire n'a pas de second processus : même dépôt
+
     def bounded_projects(self, max_projects: int) -> ProjectStore:
         return InMemoryProjectStore(max_projects=max_projects)
 
@@ -70,6 +77,9 @@ class PostgresHarness:
 
     def reopen_events(self) -> EventLog:
         return PostgresEventLog(self.engine)
+
+    def reopen_projects(self) -> ProjectStore:
+        return PostgresProjectStore(self.engine, max_projects=1_000)
 
     def bounded_projects(self, max_projects: int) -> ProjectStore:
         return PostgresProjectStore(self.engine, max_projects=max_projects)
