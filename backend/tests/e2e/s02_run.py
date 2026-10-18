@@ -12,7 +12,7 @@ import httpx
 from s01_run import _wait_for
 
 from foreman.bootstrap.configure import App, Profile, configure
-from foreman.core.events import AnyEvent
+from foreman.core.events import AnyEvent, ClarificationQuestion
 from foreman.surfaces.web.app import create_app
 
 USER_MESSAGE = "Prépare le projet Safe Eat : GitLab puis déploiement."
@@ -23,6 +23,7 @@ class S2Run:
     state: App
     project_id: UUID
     after_ask: list[AnyEvent]  # flux observé après le seul tour 1
+    questions_after_ask: list[ClarificationQuestion]  # questions persistées à ce moment
     answer_status: int  # code HTTP de la route de réponse
     events: list[AnyEvent]  # flux final
 
@@ -42,6 +43,7 @@ async def run_s02() -> S2Run:
         await client.post(f"/api/projects/{project_id}/messages", json={"text": USER_MESSAGE})
         await asked
         after_ask = await state.events.read_after(project_id, 0)
+        questions_after_ask = list(await state.projects.get_open_questions(project_id))
 
         planned = asyncio.create_task(
             _wait_for(state.events, project_id, "turn_status", "status", "completed")
@@ -53,4 +55,4 @@ async def run_s02() -> S2Run:
         )
         await planned
     events = await state.events.read_after(project_id, 0)
-    return S2Run(state, project_id, after_ask, answer.status_code, events)
+    return S2Run(state, project_id, after_ask, questions_after_ask, answer.status_code, events)
