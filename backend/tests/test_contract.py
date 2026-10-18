@@ -320,7 +320,8 @@ def test_approval_routes_are_declared_but_not_implemented_yet(client: TestClient
     )
     assert approve.status_code == 501
     assert approve.json() == {"error": "not_implemented"}
-    assert client.get(f"/api/projects/{OTHER}/plans/{PLAN}").status_code == 501
+    unknown = client.get(f"/api/projects/{OTHER}/plans/{PLAN}")  # route réelle depuis C1
+    assert (unknown.status_code, unknown.json()) == (404, {"error": "not_found"})
     assert client.get(f"/api/projects/{OTHER}/executions/{PLAN}").status_code == 501
 
 

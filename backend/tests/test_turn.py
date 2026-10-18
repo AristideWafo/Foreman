@@ -11,6 +11,7 @@ from foreman.core.turn import TurnInProgress, TurnRequest, TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog
 from foreman.infra.replay_provider import ReplayProvider
+from support import make_planner
 
 USER_TEXT_MARKER = "mot-de-passe-de-l-utilisateur"
 ERROR_MARKER = "secret-interne postgres://user:pass@db"
@@ -20,7 +21,12 @@ class FakeProvider:
     """Fake nommé : répond « ok » et propose un plan valide d'une étape."""
 
     async def complete(self, messages: Sequence[str]) -> ModelReply:
-        plan = {"title": "Plan", "summary": "Résumé", "steps": [{"title": "Étape"}]}
+        step = {
+            "title": "Lister le DNS",
+            "tool": "dns.list_records",
+            "params": {"environment": "staging"},
+        }
+        plan = {"title": "Plan", "summary": "Résumé", "steps": [step]}
         return ModelReply(text="ok", tool_calls=(ToolCall("propose_plan", plan),))
 
 
@@ -55,7 +61,7 @@ class GatedProvider:
 async def play(provider: Provider, message: str = "salut") -> list[dict[str, Any]]:
     log = InMemoryEventLog()
     project_id = uuid4()
-    service = TurnService(provider, log)
+    service = TurnService(provider, log, make_planner())
     request = TurnRequest(user_id="u", project_id=project_id, message=message)
     await service.run(request, service.begin(project_id))
     return [e.model_dump(mode="json") for e in await log.read_after(project_id, 0)]
@@ -78,7 +84,7 @@ async def test_turn_emits_the_contract_sequence_with_contiguous_seq() -> None:
     assert events[4]["data"] == {"status": "completed"}
 
 
-async def test_the_replayed_s01_turn_proposes_a_seven_step_pending_plan() -> None:
+async def test_the_replayed_s01_turn_proposes_a_hashed_eight_step_pending_plan() -> None:
     events = await play(ReplayProvider.s01(catalog_dir_from_env()), "Crée Safe Eat")
     assert types(events) == ["message", "turn_status", "message", "card", "turn_status"]
     assert events[3]["data"]["kind"] == "plan"
@@ -86,7 +92,10 @@ async def test_the_replayed_s01_turn_proposes_a_seven_step_pending_plan() -> Non
         "Créer le groupe safe-eat",
         "Créer le sous-groupe backend",
     ]
-    assert [s["status"] for s in events[3]["data"]["steps"]] == ["pending"] * 7
+    assert [s["status"] for s in events[3]["data"]["steps"]] == ["pending"] * 8
+    card = events[3]["data"]
+    assert card["status"] == "proposed" and card["approvable"] is True
+    assert card["plan_hash"].startswith("sha256:") and card["plan_id"]
 
 
 async def test_provider_exception_never_reaches_the_events() -> None:
@@ -109,12 +118,12 @@ async def test_unknown_tool_is_reported_and_never_executed() -> None:
 async def test_invalid_plan_arguments_produce_no_card() -> None:
     events = await play(InvalidPlanProvider())
     assert "card" not in types(events)
-    assert events[3]["data"]["code"] == "internal_error"
+    assert events[3]["data"]["code"] == "invalid_plan"
 
 
 async def test_only_one_turn_at_a_time_per_project_and_the_guard_is_released() -> None:
     provider, log = GatedProvider(), InMemoryEventLog()
-    service = TurnService(provider, log)
+    service = TurnService(provider, log, make_planner())
     project_id, other_id = uuid4(), uuid4()
 
     first = service.begin(project_id)
@@ -138,7 +147,7 @@ async def test_silent_provider_times_out_and_frees_the_project() -> None:
     """Sans délai, un fournisseur muet laisserait le projet en 409 pour toujours."""
     log = InMemoryEventLog()
     project_id = uuid4()
-    service = TurnService(GatedProvider(), log, provider_timeout_s=0.05)
+    service = TurnService(GatedProvider(), log, make_planner(), provider_timeout_s=0.05)
     turn = service.run(
         TurnRequest(user_id="u", project_id=project_id, message="salut"),
         service.begin(project_id),

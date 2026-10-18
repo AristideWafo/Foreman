@@ -8,6 +8,7 @@ from jsonschema import Draft202012Validator
 from pydantic import JsonValue
 
 from foreman.core.ports import AdapterError, ForeignResource, ToolAdapter
+from foreman.core.references import resolve_params
 from foreman.core.turn import ProposePlanArguments
 from foreman.infra.file_catalog import catalog_dir_from_env, load_catalog
 from foreman.infra.replay_provider import ReplayProvider
@@ -195,13 +196,18 @@ async def test_the_recorded_s01_plan_runs_on_the_fakes_and_obeys_the_tool_schema
     assert isinstance(gitlab, SimulatedGitLab)
     server = adapters["server"]
     assert isinstance(server, SimulatedServer)
+    outputs: dict[int, dict[str, JsonValue]] = {}
     for seq, step in enumerate(plan.steps, start=1):
         assert step.tool is not None and step.params is not None
         definition = catalog.tools[step.tool]
-        Draft202012Validator(definition.input).validate(dict(step.params))
-        outcome = await adapters[definition.connector].execute(step.tool, step.params, f"k{seq}")
+        params = resolve_params(
+            step.params, outputs, seq
+        )  # les `$from` visent des étapes antérieures
+        Draft202012Validator(definition.input).validate(params)
+        outcome = await adapters[definition.connector].execute(step.tool, params, f"k{seq}")
         assert outcome.logs
         assert all(outcome.output[k] is not None for k in definition.output)
+        outputs[seq] = outcome.output
     assert {g.path for g in managed(gitlab.groups).values()} == {"safe-eat", "backend", "frontend"}
     assert {p.path for p in managed(gitlab.projects).values()} == {"safe-eat-api", "safe-eat-web"}
     assert server.projects[("staging", "safe-eat")].deployed is True

@@ -11,18 +11,17 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 from foreman.core.catalog import TOOL_NAME_PATTERN
 from foreman.core.events import (
     ERROR_MESSAGES,
-    CardStep,
     ErrorData,
     EventData,
     MessageData,
-    PlanCardData,
     TurnStatusData,
 )
+from foreman.core.planning import Draft, DraftStep, InvalidPlan, Planner
 from foreman.core.ports import EventLog, Provider, ToolCall
 
 logger = logging.getLogger(__name__)
 
-FailureCode = Literal["internal_error", "unknown_tool"]
+FailureCode = Literal["internal_error", "unknown_tool", "invalid_plan"]
 
 PROPOSE_PLAN = "propose_plan"
 DEFAULT_PROVIDER_TIMEOUT_S = 60.0
@@ -78,10 +77,12 @@ class TurnService:
         self,
         provider: Provider,
         events: EventLog,
+        planner: Planner,
         provider_timeout_s: float = DEFAULT_PROVIDER_TIMEOUT_S,
     ) -> None:
         self._provider = provider
         self._events = events
+        self._planner = planner
         self._provider_timeout_s = provider_timeout_s
         self._active: dict[UUID, UUID] = {}
 
@@ -143,19 +144,19 @@ class TurnService:
             logger.warning("unknown_tool project=%s turn=%s", project_id, turn_id)
             return "unknown_tool"
         try:
-            plan = ProposePlanArguments.model_validate(call.arguments)
-        except ValidationError:
+            arguments = ProposePlanArguments.model_validate(call.arguments)
+            draft = Draft(
+                title=arguments.title,
+                summary=arguments.summary,
+                steps=[DraftStep(s.title, s.tool, s.params or {}) for s in arguments.steps],
+                environment=arguments.environment,
+                stack=arguments.stack,
+                skills=arguments.skills,
+            )
+            # Valide, hache et persiste : un plan refusé n'écrit rien et n'émet aucune carte.
+            record, content = await self._planner.propose(project_id, draft)
+        except (ValidationError, InvalidPlan):
             logger.warning("invalid_plan project=%s turn=%s", project_id, turn_id)
-            return "internal_error"
-        card = PlanCardData(
-            card_id=uuid4().hex,
-            kind="plan",
-            title=plan.title,
-            summary=plan.summary,
-            steps=[
-                CardStep(step=i, title=step.title, status="pending")
-                for i, step in enumerate(plan.steps, start=1)
-            ],
-        )
-        await self._emit(project_id, turn_id, card)
+            return "invalid_plan"
+        await self._emit(project_id, turn_id, self._planner.card(record, content))
         return None
