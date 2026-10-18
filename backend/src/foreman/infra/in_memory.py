@@ -2,12 +2,42 @@
 
 import asyncio
 from collections import deque
-from datetime import UTC, datetime
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime, timedelta
+from typing import Literal
 from uuid import UUID, uuid4
 
 from foreman.core.events import AnyEvent, EventData, make_event
 from foreman.core.ports import CapacityExceeded
 from foreman.core.projects import Project
+from foreman.core.store import (
+    LEASE_TTL_S,
+    MAX_AUDIT_DURATION_MS,
+    ApprovalRefused,
+    ApprovalResult,
+    Approved,
+    AuditEntry,
+    CompletedReservation,
+    DuplicateResource,
+    ExecutionRecord,
+    ExecutionState,
+    InvalidTransition,
+    Lease,
+    NewPlan,
+    NewReservation,
+    NewResource,
+    OrphanReservation,
+    PlanRecord,
+    Reservation,
+    ResourceRecord,
+    StaleLease,
+    StepRecord,
+    StepStatus,
+    StoreError,
+    Stores,
+    steps_of,
+)
 
 MAX_PROJECTS = 100
 MAX_EVENTS_PER_PROJECT = 1_000
@@ -141,3 +171,275 @@ class InMemoryEventLog:
         for waited_project, count, waiter in self._waiters:
             if waited_project == project_id and count == current and not waiter.done():
                 waiter.set_result(None)
+
+
+# --- Moteur : plans, exécutions, registre, audit (mêmes règles que les dépôts PostgreSQL) ------
+
+Clock = Callable[[], datetime]
+_ACTIVE_STATES = ("running", "awaiting_permission", "awaiting_remediation")
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+@dataclass(slots=True)
+class _Step:
+    id: UUID
+    seq: int
+    tool: str
+    params: Mapping[str, object]
+    idempotency_key: str
+    status: StepStatus = "pending"
+    result: Mapping[str, object] | None = None
+
+
+@dataclass(slots=True)
+class _Execution:
+    id: UUID
+    plan_id: UUID
+    project_id: UUID
+    autonomy_level: int
+    steps: list[_Step]
+    state: ExecutionState = "running"
+    lease_owner: str | None = None
+    lease_expires_at: datetime | None = None
+    lease_epoch: int = 0
+
+
+@dataclass(slots=True)
+class _Plan:
+    record: PlanRecord
+    approval_id: UUID | None = None
+    execution_id: UUID | None = None
+
+
+@dataclass(slots=True)
+class MemoryState:
+    """État partagé des dépôts en mémoire (une « base » pour un processus)."""
+
+    clock: Clock = _utc_now
+    plans: dict[UUID, _Plan] = field(default_factory=dict)
+    executions: dict[UUID, _Execution] = field(default_factory=dict)
+    idempotency: dict[tuple[UUID, str], Mapping[str, object] | None] = field(default_factory=dict)
+    resources: dict[tuple[str, str, str], ResourceRecord] = field(default_factory=dict)
+    audit: list[AuditEntry] = field(default_factory=list)
+
+
+def _check_audit(entry: AuditEntry) -> None:
+    """Mêmes bornes que la table (`duration_ms` est un entier 32 bits)."""
+    if not entry.actor_kind:
+        raise StoreError("audit invalide")
+    if entry.duration_ms is not None and not 0 <= entry.duration_ms <= MAX_AUDIT_DURATION_MS:
+        raise StoreError("audit invalide")
+
+
+class InMemoryPlanStore:
+    def __init__(self, state: MemoryState) -> None:
+        self._s = state
+
+    async def create(self, plan: NewPlan) -> PlanRecord:
+        steps_of(plan.content)  # contenu valide
+        previous = [
+            p.record.version
+            for p in self._s.plans.values()
+            if p.record.project_id == plan.project_id
+        ]
+        record = PlanRecord(
+            id=uuid4(),
+            project_id=plan.project_id,
+            version=1 + max(previous, default=0),
+            content=plan.content,
+            content_hash=plan.content_hash,
+            skills_used=plan.skills_used,
+            status="proposed",
+            created_at=self._s.clock(),
+            expires_at=plan.expires_at,
+        )
+        self._s.plans[record.id] = _Plan(record)
+        return record
+
+    async def get(self, project_id: UUID, plan_id: UUID) -> PlanRecord | None:
+        found = self._s.plans.get(plan_id)
+        return found.record if found and found.record.project_id == project_id else None
+
+    async def approve(
+        self,
+        project_id: UUID,
+        plan_id: UUID,
+        plan_hash: str,
+        approver_id: UUID,
+        autonomy_level: int,
+    ) -> ApprovalResult:
+        entry = self._s.plans.get(plan_id)
+        if entry is None or entry.record.project_id != project_id:
+            return ApprovalRefused("not_found")
+        record = entry.record
+        if plan_hash != record.content_hash:
+            return ApprovalRefused("plan_hash_mismatch")
+        if record.status == "dev_approved" and entry.approval_id and entry.execution_id:
+            return Approved(entry.approval_id, entry.execution_id, created=False)
+        if record.status != "proposed" or record.expires_at <= self._s.clock():
+            return ApprovalRefused("plan_not_approvable")
+        if any(
+            e.project_id == project_id and e.state in _ACTIVE_STATES
+            for e in self._s.executions.values()
+        ):
+            return ApprovalRefused("execution_in_progress")
+        execution = _Execution(
+            id=uuid4(),
+            plan_id=plan_id,
+            project_id=project_id,
+            autonomy_level=autonomy_level,
+            steps=[
+                _Step(uuid4(), s.seq, s.tool, s.params, s.idempotency_key)
+                for s in steps_of(record.content)
+            ],
+        )
+        self._s.executions[execution.id] = execution
+        entry.record = replace(record, status="dev_approved")
+        entry.approval_id, entry.execution_id = uuid4(), execution.id
+        return Approved(entry.approval_id, execution.id, created=True)
+
+
+def _step_record(step: _Step) -> StepRecord:
+    return StepRecord(
+        step.id, step.seq, step.tool, step.params, step.idempotency_key, step.status, step.result
+    )
+
+
+class InMemoryExecutionStore:
+    def __init__(self, state: MemoryState) -> None:
+        self._s = state
+
+    async def get(self, project_id: UUID, execution_id: UUID) -> ExecutionRecord | None:
+        e = self._s.executions.get(execution_id)
+        if e is None or e.project_id != project_id:
+            return None
+        steps = [_step_record(s) for s in sorted(e.steps, key=lambda s: s.seq)]
+        return ExecutionRecord(e.id, e.plan_id, e.project_id, e.state, e.autonomy_level, steps)
+
+    async def claim_lease(
+        self, execution_id: UUID, owner: str, ttl_s: int = LEASE_TTL_S
+    ) -> Lease | None:
+        e = self._s.executions.get(execution_id)
+        now = self._s.clock()
+        if e is None or e.state != "running":
+            return None
+        free = e.lease_owner is None or e.lease_expires_at is None or e.lease_expires_at < now
+        if not (free or e.lease_owner == owner):
+            return None
+        e.lease_owner, e.lease_expires_at = owner, now + timedelta(seconds=ttl_s)
+        e.lease_epoch += 1
+        return Lease(e.id, owner, e.lease_epoch)
+
+    def _held(self, lease: Lease) -> _Execution:
+        e = self._s.executions.get(lease.execution_id)
+        if e is None or e.lease_owner != lease.owner or e.lease_epoch != lease.epoch:
+            raise StaleLease
+        return e
+
+    async def renew(self, lease: Lease, ttl_s: int = LEASE_TTL_S) -> bool:
+        try:
+            e = self._held(lease)
+        except StaleLease:
+            return False
+        if e.state != "running":
+            return False
+        e.lease_expires_at = self._s.clock() + timedelta(seconds=ttl_s)
+        return True
+
+    async def next_step(self, execution_id: UUID) -> StepRecord | None:
+        e = self._s.executions.get(execution_id)
+        if e is None:
+            return None
+        pending = [s for s in sorted(e.steps, key=lambda s: s.seq) if s.status != "succeeded"]
+        return _step_record(pending[0]) if pending else None
+
+    async def reserve_idempotency(self, lease: Lease, step_seq: int) -> Reservation:
+        e = self._held(lease)
+        step = next((s for s in e.steps if s.seq == step_seq), None)
+        if e.state != "running" or step is None or step.status not in ("pending", "running"):
+            raise InvalidTransition
+        key = (e.project_id, step.idempotency_key)
+        step.status = "running"  # l'étape est prise en charge, quelle que soit la réponse
+        if key in self._s.idempotency:
+            previous = self._s.idempotency[key]
+            return OrphanReservation() if previous is None else CompletedReservation(previous)
+        self._s.idempotency[key] = None
+        return NewReservation()
+
+    async def complete_step(
+        self,
+        lease: Lease,
+        step_seq: int,
+        result: Mapping[str, object],
+        created_resources: Sequence[NewResource],
+        audit: Sequence[AuditEntry],
+    ) -> None:
+        e = self._held(lease)
+        step = next((s for s in e.steps if s.seq == step_seq), None)
+        if e.state != "running" or step is None or step.status != "running":
+            raise InvalidTransition
+        # Tout est validé avant la première écriture : tout ou rien.
+        for entry in audit:
+            _check_audit(entry)
+        keys = [(r.provider, r.resource_type, r.external_id) for r in created_resources]
+        if len(set(keys)) != len(keys) or any(k in self._s.resources for k in keys):
+            raise DuplicateResource
+        for r in created_resources:
+            self._s.resources[(r.provider, r.resource_type, r.external_id)] = ResourceRecord(
+                id=uuid4(),
+                project_id=e.project_id,
+                execution_id=e.id,
+                provider=r.provider,
+                resource_type=r.resource_type,
+                external_id=r.external_id,
+                external_url=r.external_url,
+                origin="created",
+            )
+        self._s.audit.extend(audit)
+        self._s.idempotency[(e.project_id, step.idempotency_key)] = dict(result)
+        step.status, step.result = "succeeded", dict(result)
+
+    async def finish(self, lease: Lease, state: Literal["succeeded", "blocked"]) -> None:
+        e = self._held(lease)
+        if e.state != "running":
+            raise InvalidTransition
+        e.state = state
+        if state == "succeeded":
+            plan = self._s.plans[e.plan_id]
+            plan.record = replace(plan.record, status="executed")
+
+
+class InMemoryResourceRegistry:
+    def __init__(self, state: MemoryState) -> None:
+        self._s = state
+
+    async def contains(self, provider: str, resource_type: str, external_id: str) -> bool:
+        return (provider, resource_type, external_id) in self._s.resources
+
+    async def list_for_project(self, project_id: UUID) -> list[ResourceRecord]:
+        return [r for r in self._s.resources.values() if r.project_id == project_id]
+
+
+class InMemoryAuditLog:
+    def __init__(self, state: MemoryState) -> None:
+        self._s = state
+
+    async def append(self, entry: AuditEntry) -> None:
+        _check_audit(entry)
+        self._s.audit.append(entry)
+
+    async def list_for_project(self, project_id: UUID, limit: int = 200) -> list[AuditEntry]:
+        return [e for e in self._s.audit if e.project_id == project_id][:limit]
+
+
+def in_memory_stores(clock: Clock = _utc_now) -> tuple[MemoryState, Stores]:
+    state = MemoryState(clock=clock)
+    return state, Stores(
+        plans=InMemoryPlanStore(state),
+        executions=InMemoryExecutionStore(state),
+        registry=InMemoryResourceRegistry(state),
+        audit=InMemoryAuditLog(state),
+    )

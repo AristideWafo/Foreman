@@ -43,8 +43,12 @@ def create_app(app_state: App | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        yield
-        await tasks.shutdown()
+        await state.lifecycle.start()  # migrations puis amorçage (profil web avec base)
+        try:
+            yield
+        finally:
+            await tasks.shutdown()
+            await state.lifecycle.stop()
 
     api = FastAPI(title="Foreman", lifespan=lifespan)
     install_error_handlers(api)
