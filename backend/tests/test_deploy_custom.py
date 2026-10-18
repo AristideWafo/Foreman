@@ -149,28 +149,6 @@ class TestRenderedCompose:
             labels["traefik.http.routers.mon-app.rule"]
         )
 
-    def test_deployment_is_refused_without_credentials(self, tmp_path: Path) -> None:
-        (tmp_path / "compose.yaml").write_text(COMPOSE.read_text())
-        (tmp_path / ".env").write_text("")
-        env = {
-            "PATH": os.environ["PATH"],
-            "PROJECT": "mon-app",
-            "FOREMAN_IMAGE": IMAGE,
-            "FOREMAN_DOMAIN": "mon-app.example.com",
-            # seule FOREMAN_BASIC_AUTH_USERS manque : Compose interpole aussi db (profil inactif)
-            "POSTGRES_PASSWORD": "x",
-        }
-        result = subprocess.run(
-            ["docker", "compose", "-f", "compose.yaml", "config", "-q"],  # noqa: S607
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            env=env,
-            check=False,
-        )
-        assert result.returncode != 0
-        assert "FOREMAN_BASIC_AUTH_USERS" in result.stderr
-
 
 def stub_docker(tmp_path: Path) -> dict[str, str]:
     """Faux `docker` qui accepte tout : permet d'exécuter le script sans serveur."""

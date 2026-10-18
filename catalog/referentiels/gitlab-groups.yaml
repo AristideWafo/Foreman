@@ -1,0 +1,12 @@
+# Valeurs fictives : à remplacer par les groupes réels de l'organisation.
+root_group:
+  id: 1000
+  path: foreman-demo
+  web_url: https://gitlab.example.org/foreman-demo
+teams:
+  - {team: default, parent_group_id: 1000}
+conventions:
+  subgroups: [frontend, backend]
+  repositories:
+    backend: "{slug}-api"
+    frontend: "{slug}-web"

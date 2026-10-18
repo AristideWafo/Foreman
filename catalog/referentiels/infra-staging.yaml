@@ -1,0 +1,14 @@
+# Valeurs fictives : à remplacer par l'infrastructure réelle.
+environment: staging
+dns:
+  wildcard: "*.staging.example.org"
+  managed_externally: true          # l'agent ne crée aucun enregistrement DNS pour le staging
+  points_to: server-staging-1
+reverse_proxy:
+  kind: caddy
+  config_dir: /srv/platform/staging/_caddy
+servers:
+  - {name: server-staging-1, hosting_provider: ovh, capabilities: [docker_compose, caddy]}
+conventions:
+  project_dir: "/srv/platform/staging/{slug}"
+  compose_file: compose.yaml

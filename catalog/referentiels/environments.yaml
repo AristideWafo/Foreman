@@ -1,0 +1,6 @@
+# Valeurs fictives. Le staging est le seul environnement du PoC.
+environments:
+  staging:
+    max_level: 4
+    admin_approval_required: false
+    default_level: 2

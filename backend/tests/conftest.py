@@ -3,12 +3,21 @@
 import os
 import uuid
 from collections.abc import Callable, Iterator
+from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.engine import make_url
 
-from foreman.config.env import ENV_TEST_DATABASE_URL
+from foreman.config.env import ENV_CATALOG_DIR, ENV_TEST_DATABASE_URL
+
+CATALOG_DIR = Path(__file__).resolve().parents[2] / "catalog"
+
+
+@pytest.fixture(autouse=True)
+def catalog_dir_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Les tests tournent depuis `backend/` : on pointe vers le catalogue du dépôt."""
+    monkeypatch.setenv(ENV_CATALOG_DIR, os.fspath(CATALOG_DIR))
 
 
 def _admin_url() -> str:
