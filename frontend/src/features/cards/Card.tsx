@@ -1,6 +1,7 @@
 import type { CardData, ExecutionCardData } from "../../api/events";
 import { Card as UiCard, CardContent } from "@/components/ui/card";
 import type { StepLogs } from "../events/timeline";
+import { ClarificationCard } from "./ClarificationCard";
 import { ExecutionCard } from "./ExecutionCard";
 import { PlanCard } from "./PlanCard";
 
@@ -24,6 +25,8 @@ export function Card({
       return <PlanCard card={card} projectId={projectId} execution={execution} logs={logs} />;
     case "execution":
       return <ExecutionCard card={card} logs={logs} />;
+    case "clarification":
+      return <ClarificationCard card={card} projectId={projectId} />;
     default:
       return (
         <UiCard className="border border-dashed text-sm">

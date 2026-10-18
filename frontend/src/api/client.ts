@@ -12,6 +12,9 @@ type MessageAccepted =
 type ApprovalBody = components["schemas"]["ApprovalRequest"];
 type ApprovalAccepted = components["schemas"]["ApprovalAccepted"];
 
+type QuestionBody = components["schemas"]["QuestionAnswerRequest"];
+type QuestionAccepted = components["schemas"]["QuestionAccepted"];
+
 // `/healthz` est décrit dans l'OpenAPI comme `{ [clé]: string }` (sans champ nommé) : on en tire le type.
 type Health = paths["/healthz"]["get"]["responses"][200]["content"]["application/json"];
 
@@ -26,6 +29,7 @@ const ERROR_CODES: readonly ErrorCode[] = [
   "plan_hash_mismatch",
   "plan_not_approvable",
   "execution_in_progress",
+  "question_closed",
 ];
 
 /** Erreur d'API : seuls le statut et le code opaque du contrat sont conservés. */
@@ -109,6 +113,18 @@ export function approvePlan(
   );
 }
 
+/** Répond à une question de clarification (202) ou la reporte (200) : les deux sont des succès. */
+export function answerQuestion(
+  projectId: string,
+  questionId: string,
+  body: QuestionBody,
+): Promise<QuestionAccepted> {
+  return request<QuestionAccepted>(
+    `/api/projects/${encodeURIComponent(projectId)}/questions/${encodeURIComponent(questionId)}`,
+    jsonPost(body),
+  );
+}
+
 export function eventsUrl(projectId: string): string {
   return `/api/projects/${encodeURIComponent(projectId)}/events`;
 }
@@ -160,4 +176,42 @@ export function describeApprovalError(error: unknown): ApprovalFailure {
     return { message: "Ce plan ne peut pas être validé en l'état.", waitForCard: false };
   }
   return { message: "La validation a échoué. Réessayez dans un instant.", waitForCard: false };
+}
+
+/** Ce que le front fait après un refus sur une question : réessayer, ou attendre la carte réémise. */
+export interface QuestionFailure {
+  message: string;
+  /** `question_closed` et 404 : l'état a changé côté serveur, on attend la carte réémise. */
+  waitForCard: boolean;
+}
+
+/** Message utilisateur opaque pour la réponse à une question (aucun détail technique). */
+export function describeQuestionError(error: unknown): QuestionFailure {
+  const status = error instanceof ApiError ? error.status : 0;
+  const code = error instanceof ApiError ? error.code : null;
+  if (status === 501 || code === "not_implemented") {
+    return { message: "La réponse n'est pas encore disponible.", waitForCard: false };
+  }
+  if (code === "question_closed") {
+    return {
+      message: "Cette question n'est plus ouverte. La carte va être mise à jour.",
+      waitForCard: true,
+    };
+  }
+  if (code === "turn_in_progress") {
+    return {
+      message: "Une réponse est déjà en cours. Réessayez quand elle sera terminée.",
+      waitForCard: false,
+    };
+  }
+  if (status === 404) {
+    return {
+      message: "Cette question est introuvable. La carte va être mise à jour.",
+      waitForCard: true,
+    };
+  }
+  if (status === 422) {
+    return { message: "Cette réponse n'est pas acceptée.", waitForCard: false };
+  }
+  return { message: "L'envoi a échoué. Réessayez dans un instant.", waitForCard: false };
 }
