@@ -4,10 +4,22 @@ Source : `dev platform .md` (décisions D1 à D15, scénarios S1 à S12, étapes
 **(proposition)** ne viennent pas de la spec. Les tickets correspondants sont dans le projet GitHub
 « Foreman — PoC et v1 ».
 
-## Phase 0 — Squelette du dépôt (terminée)
+## Avancement
 
-PR #1 à #7 : couches imposées par import-linter, CI, sécurité, build signé, déploiement par digest,
-règles pour les agents. Aucune logique métier : `TurnService` et `/healthz` seulement.
+~~Barré~~ = terminé et vérifié. **En cours** = travail commencé. Les tickets portent la même information
+(étiquettes `statut:en-cours` et `statut:termine`).
+
+| Étape | État |
+| --- | --- |
+| ~~Phase 0 — squelette du dépôt~~ | terminée |
+| ~~Semaine 1 — squelette de bout en bout~~ | code et déploiement terminés ; **reste à vérifier** : flux SSE derrière Traefik (#105), authentification en ligne (#106), protection de `prod` (#22) |
+| Semaine 2 — scénario S1 | **en cours** (démarrée le 2026-10-18) |
+| Semaines 3 à 6, essai jetable, fournisseurs réels, scénarios d'échec, évaluation | à venir |
+
+## ~~Phase 0 — Squelette du dépôt (terminée)~~
+
+~~PR #1 à #7 : couches imposées par import-linter, CI, sécurité, build signé, déploiement par digest,
+règles pour les agents. Aucune logique métier : `TurnService` et `/healthz` seulement.~~
 
 ## Méthode
 
@@ -33,8 +45,8 @@ depuis le journal.
 
 | Étape | Contenu | Fin de l'étape |
 | --- | --- | --- |
-| **Semaine 1 — Squelette** | Chat dans le front, `POST` d'un message, faux agent derrière `Provider`, flux SSE d'événements typés, une carte affichée, déploiement automatique en staging. Figer l'OpenAPI et le schéma d'événements. | La carte apparaît sur l'URL de staging |
-| **Semaine 2 — S1** | Chemin nominal sur fakes : schéma SQL en migrations Alembic, registre des ressources, journal append-only, gateway minimale, moteur d'exécution (plan haché, étapes idempotentes), 3 Skills de départ. Cartes plan et exécution. | S1 vert en CI, cartes visibles |
+| ~~**Semaine 1 — Squelette**~~ | ~~Chat dans le front, `POST` d'un message, faux agent derrière `Provider`, flux SSE d'événements typés, une carte affichée, déploiement automatique en staging. Figer l'OpenAPI et le schéma d'événements.~~ **Reste :** vérifier le flux SSE derrière Traefik (#105), l'authentification en ligne (#106), protéger `prod` (#22). | ~~La carte apparaît sur l'URL de staging~~ (déployé ; vérification de la carte et du flux : #105) |
+| **Semaine 2 — S1** (**en cours**) | Chemin nominal sur fakes : schéma SQL en migrations Alembic, registre des ressources, journal append-only, gateway minimale, moteur d'exécution (plan haché, étapes idempotentes), 3 Skills de départ. Cartes plan et exécution. | S1 vert en CI, cartes visibles |
 | **Semaine 3 — S2** | Clarification : l'agent redemande les environnements manquants, questions ouvertes du projet, reprise de la conversation. Carte de clarification. | S2 vert en CI |
 | **Semaine 4 — S10** | Matrice YAML R1 à R10, rôles, niveaux d'autonomie, `approval_required` transmis à l'admin. Carte d'approbation. Authentification de développement avec rôles. | S10 vert en CI |
 | **Semaine 5 — S11** | Idempotence de bout en bout : même demande rejouée, aucune ressource en double (contraintes d'unicité, clés d'idempotence). | S11 vert en CI |
