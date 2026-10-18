@@ -16,6 +16,7 @@ from foreman.config.env import (
 )
 from foreman.core.catalog import Catalog
 from foreman.core.gateway.port import Gateway
+from foreman.core.planning import Planner
 from foreman.core.ports import EventLog, ProjectStore
 from foreman.core.store import Stores
 from foreman.core.turn import TurnService
@@ -82,7 +83,7 @@ def configure(profile: Profile) -> App:
         profile=profile,
         projects=projects,
         events=events,
-        turns=TurnService(provider, events),
+        turns=TurnService(provider, events, Planner(catalog, stores.plans)),
         stores=stores,
         lifecycle=lifecycle,
         catalog=catalog,

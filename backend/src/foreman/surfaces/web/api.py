@@ -2,11 +2,12 @@
 
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Query
 from fastapi.responses import StreamingResponse
+from pydantic import JsonValue
 
 from foreman.bootstrap.configure import App
 from foreman.core.events import AnyEvent
@@ -213,7 +214,19 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         "/projects/{project_id}/plans/{plan_id}", response_model=PlanView, responses=_ERRORS
     )
     async def get_plan(project_id: UUID, plan_id: UUID) -> PlanView:
-        raise ApiError(501, "not_implemented")
+        # Un plan d'un autre projet est introuvable (404), jamais interdit.
+        record = await app.stores.plans.get(project_id, plan_id)
+        if record is None:
+            raise ApiError(404, "not_found")
+        return PlanView(
+            id=record.id,
+            version=record.version,
+            status=record.status,
+            content_hash=record.content_hash,
+            content=cast(dict[str, JsonValue], dict(record.content)),
+            created_at=record.created_at,
+            expires_at=record.expires_at,
+        )
 
     @router.get(
         "/projects/{project_id}/executions/{execution_id}",

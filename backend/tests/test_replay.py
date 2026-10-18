@@ -13,6 +13,7 @@ from foreman.core.turn import ProposePlanArguments, TurnRequest, TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog
 from foreman.infra.replay_provider import RecordingInvalid, RecordingNotFound, ReplayProvider
+from support import make_planner
 
 
 def sha(text: str) -> str:
@@ -43,6 +44,7 @@ async def test_the_default_entry_replays_the_s01_plan() -> None:
         ("gitlab.create_project", "safe-eat-web"),
         ("server.apply_playbook", "bootstrap_project"),
         ("server.apply_playbook", "deploy_compose"),
+        ("server.healthcheck", None),
     ]
     assert plan.environment == "staging"
     assert plan.skills == [
@@ -102,7 +104,7 @@ async def test_a_missing_recording_is_a_typed_error_that_never_reaches_the_event
         write_recording(tmp_path, exchange(f"last_user_sha256: {sha('connu')}", "ok"))
     )
     log = InMemoryEventLog()
-    service = TurnService(provider, log)
+    service = TurnService(provider, log, make_planner())
     project_id = uuid4()
     request = TurnRequest(user_id="u", project_id=project_id, message="inconnu-secret-xyz")
     await service.run(request, service.begin(project_id))

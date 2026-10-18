@@ -20,6 +20,7 @@ from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
 from foreman.infra.replay_provider import ReplayProvider
 from foreman.surfaces.web.app import create_app
+from support import make_planner
 
 TIMEOUT = 10  # filet de sécurité : jamais atteint quand tout fonctionne
 
@@ -53,7 +54,7 @@ async def serve(
         queue_size=queue_size or 100, max_subscribers_per_project=max_subscribers_per_project
     )
     projects = InMemoryProjectStore()
-    turns = TurnService(provider, log)
+    turns = TurnService(provider, log, make_planner())
     app = create_app(App(profile=Profile.WEB, projects=projects, events=log, turns=turns))
     # Socket réservé avant le démarrage : les connexions attendent dans le backlog, sans sondage.
     sock = socket.socket()
@@ -143,7 +144,7 @@ async def test_a_turn_is_streamed_end_to_end_and_the_card_is_read(server: Server
     card = frames[3].data
     assert card is not None
     assert card["data"]["kind"] == "plan"
-    assert [s["status"] for s in card["data"]["steps"]] == ["pending"] * 7
+    assert [s["status"] for s in card["data"]["steps"]] == ["pending"] * 8
     assert card["turn_id"] == posted.json()["turn_id"]
 
 

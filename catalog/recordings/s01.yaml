@@ -1,6 +1,7 @@
 # Réponses enregistrées du modèle pour le scénario S1 (valeurs fictives).
 # Le choix se fait sur le sha256 du dernier message, jamais sur une regex.
-# Les identifiants de groupe (2000, 2001, 2002) sont ceux que produit SimulatedGitLab dans l'ordre.
+# Les groupes parents sont des références `$from` à la sortie d'une étape antérieure (jamais un
+# identifiant écrit en dur) : la gateway les résout au moment de l'exécution.
 version: 1
 exchanges:
   - when: {default: true}
@@ -20,19 +21,22 @@ exchanges:
                 params: {parent_group_id: 1000, name: "Safe Eat", path: safe-eat}
               - title: "Créer le sous-groupe backend"
                 tool: gitlab.create_group
-                params: {parent_group_id: 2000, name: Backend, path: backend}
+                params: {parent_group_id: {"$from": {step: 1, field: group_id}}, name: Backend, path: backend}
               - title: "Créer le sous-groupe frontend"
                 tool: gitlab.create_group
-                params: {parent_group_id: 2000, name: Frontend, path: frontend}
+                params: {parent_group_id: {"$from": {step: 1, field: group_id}}, name: Frontend, path: frontend}
               - title: "Créer le dépôt safe-eat-api"
                 tool: gitlab.create_project
-                params: {parent_group_id: 2001, name: safe-eat-api, path: safe-eat-api, boilerplate: go-api}
+                params: {parent_group_id: {"$from": {step: 2, field: group_id}}, name: safe-eat-api, path: safe-eat-api, boilerplate: go-api}
               - title: "Créer le dépôt safe-eat-web"
                 tool: gitlab.create_project
-                params: {parent_group_id: 2002, name: safe-eat-web, path: safe-eat-web, boilerplate: vue-web}
+                params: {parent_group_id: {"$from": {step: 3, field: group_id}}, name: safe-eat-web, path: safe-eat-web, boilerplate: vue-web}
               - title: "Préparer le serveur de staging"
                 tool: server.apply_playbook
                 params: {environment: staging, project: safe-eat, playbook: bootstrap_project, mode: apply}
               - title: "Déployer avec Docker Compose"
                 tool: server.apply_playbook
                 params: {environment: staging, project: safe-eat, playbook: deploy_compose, mode: apply}
+              - title: "Vérifier la santé du projet"
+                tool: server.healthcheck
+                params: {environment: staging, project: safe-eat}

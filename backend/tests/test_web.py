@@ -15,6 +15,7 @@ from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
 from foreman.infra.replay_provider import ReplayProvider
 from foreman.surfaces.web.app import create_app
+from support import make_planner
 
 
 class GatedProvider:
@@ -43,7 +44,7 @@ def build_app(
         profile=Profile.WEB,
         projects=projects or InMemoryProjectStore(),
         events=log,
-        turns=TurnService(provider, log),
+        turns=TurnService(provider, log, make_planner()),
     )
     return create_app(state), log
 
