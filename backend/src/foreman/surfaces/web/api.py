@@ -15,10 +15,14 @@ from foreman.core.projects import Project
 from foreman.core.turn import TurnInProgress, TurnRequest
 from foreman.surfaces.web.errors import ApiError
 from foreman.surfaces.web.schemas import (
+    ApprovalAccepted,
+    ApprovalRequest,
     CreateProjectRequest,
     ErrorResponse,
+    ExecutionView,
     MessageAccepted,
     MessageRequest,
+    PlanView,
 )
 from foreman.surfaces.web.tasks import TaskRegistry
 
@@ -171,5 +175,41 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             stream(project_id, cursor),
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @router.post(
+        "/projects/{project_id}/plans/{plan_id}/approvals",
+        status_code=201,
+        response_model=ApprovalAccepted,
+        responses={
+            **_ERRORS,
+            409: {
+                "model": ErrorResponse,
+                "description": (
+                    "`plan_hash_mismatch` (le hash ne correspond pas au plan), "
+                    "`plan_not_approvable` (déjà approuvé, expiré ou exécuté), "
+                    "`execution_in_progress`"
+                ),
+            },
+        },
+    )
+    async def approve_plan(
+        project_id: UUID, plan_id: UUID, body: ApprovalRequest
+    ) -> ApprovalAccepted:
+        """Le développeur valide son plan (staging) : l'approbation porte sur le hash affiché."""
+        raise ApiError(501, "not_implemented")
+
+    @router.get(
+        "/projects/{project_id}/plans/{plan_id}", response_model=PlanView, responses=_ERRORS
+    )
+    async def get_plan(project_id: UUID, plan_id: UUID) -> PlanView:
+        raise ApiError(501, "not_implemented")
+
+    @router.get(
+        "/projects/{project_id}/executions/{execution_id}",
+        response_model=ExecutionView,
+        responses=_ERRORS,
+    )
+    async def get_execution(project_id: UUID, execution_id: UUID) -> ExecutionView:
+        raise ApiError(501, "not_implemented")
 
     return router

@@ -1,8 +1,8 @@
-import type { PlanCardData, ProjectEvent } from "../../api/events";
+import type { CardData, ProjectEvent } from "../../api/events";
 
 export type TimelineItem =
   | { key: string; kind: "message"; role: "user" | "assistant"; text: string }
-  | { key: string; kind: "card"; card: PlanCardData }
+  | { key: string; kind: "card"; card: CardData }
   /** Activité d'un tour : réflexion en cours, puis outils utilisés (déduits des événements du contrat). */
   | { key: string; kind: "trace"; status: "running" | "done" | "error"; tools: string[] }
   | { key: string; kind: "error"; message: string };

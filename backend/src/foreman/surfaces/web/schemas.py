@@ -3,7 +3,15 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue
+
+from foreman.core.events import (
+    Budget,
+    ExecutionState,
+    ResourceRef,
+    Sha256,
+    StepStatus,
+)
 
 
 class CreateProjectRequest(BaseModel):
@@ -30,6 +38,9 @@ ErrorCode = Literal[
     "capacity_exceeded",
     "internal_error",
     "not_implemented",
+    "plan_hash_mismatch",
+    "plan_not_approvable",
+    "execution_in_progress",
 ]
 
 
@@ -37,3 +48,51 @@ class ErrorResponse(BaseModel):
     """Erreur opaque : un code, jamais le détail d'une exception ni la saisie de l'utilisateur."""
 
     error: ErrorCode
+
+
+class ApprovalRequest(BaseModel):
+    """Approbation d'un plan : elle porte sur le HASH affiché, pas sur « le dernier plan »."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    plan_hash: Sha256
+    decision: Literal["approved"]
+
+
+class ApprovalAccepted(BaseModel):
+    approval_id: UUID
+    execution_id: UUID
+
+
+PlanStatusView = Literal[
+    "proposed", "dev_approved", "admin_approved", "invalidated", "expired", "executed"
+]
+
+
+class PlanView(BaseModel):
+    id: UUID
+    version: Annotated[int, Field(ge=1)]
+    status: PlanStatusView
+    content_hash: Sha256
+    content: Annotated[dict[str, JsonValue], Field(description="Contenu canonique haché du plan")]
+    created_at: AwareDatetime
+    expires_at: AwareDatetime
+
+
+class ExecutionStepView(BaseModel):
+    seq: Annotated[int, Field(ge=1)]
+    title: Annotated[str, Field(max_length=200)]
+    tool: Annotated[str, Field(max_length=100)]
+    status: StepStatus
+    started_at: AwareDatetime | None = None
+    finished_at: AwareDatetime | None = None
+
+
+class ExecutionView(BaseModel):
+    id: UUID
+    plan_id: UUID
+    state: ExecutionState
+    autonomy_level: Annotated[int, Field(ge=1, le=4)]
+    budget_used: Budget
+    steps: Annotated[list[ExecutionStepView], Field(max_length=20)]
+    resources: Annotated[list[ResourceRef], Field(max_length=50)]

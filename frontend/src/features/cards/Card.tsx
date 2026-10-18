@@ -9,7 +9,7 @@ import {
   PlayCircleIcon,
 } from "@heroicons/react/24/outline";
 import type { ComponentType, SVGProps } from "react";
-import type { PlanCardData, StepStatus } from "../../api/events";
+import type { CardData, PlanCardData, StepStatus } from "../../api/events";
 import { Card as UiCard, CardContent } from "@/components/ui/card";
 import {
   Trace,
@@ -75,7 +75,7 @@ function PlanCard({ card }: { card: PlanCardData }) {
 }
 
 /** Carte générique : le rendu dépend de `kind`, avec repli pour les genres non pris en charge. */
-export function Card({ card }: { card: PlanCardData }) {
+export function Card({ card }: { card: CardData }) {
   switch (card.kind) {
     case "plan":
       return <PlanCard card={card} />;

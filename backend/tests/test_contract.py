@@ -30,6 +30,14 @@ def envelope(type_: str, data: dict[str, Any], **extra: Any) -> dict[str, Any]:
     }
 
 
+SHA = "sha256:" + "a" * 64
+STEP_META = {
+    "tool": "gitlab.create_group",
+    "tool_class": "write_registry",
+    "reversibility": "compensable",
+}
+
+# Format de la Semaine 1 : doit rester valide tel quel (les ajouts sont facultatifs).
 EXAMPLES = {
     "message": {"role": "user", "text": "Crée Safe Eat"},
     "card": {
@@ -45,12 +53,93 @@ EXAMPLES = {
 }
 
 
-@pytest.mark.parametrize(("type_", "data"), EXAMPLES.items())
+NEW_EXAMPLES = {
+    "card (plan complet, Semaine 2)": (
+        "card",
+        {
+            **EXAMPLES["card"],
+            "steps": [{"step": 1, "title": "Groupe", "status": "pending", **STEP_META}],
+            "plan_id": str(uuid4()),
+            "plan_hash": SHA,
+            "status": "proposed",
+            "environment": "staging",
+            "autonomy_level": 2,
+            "stack": {"backend": "go", "frontend": "react"},
+            "skills": [{"name": "gitlab-project-creation", "version": 1, "sha256": "b" * 64}],
+            "expected_resources": [
+                {"provider": "gitlab", "resource_type": "group", "name": "safe-eat"}
+            ],
+            "approvable": True,
+        },
+    ),
+    "card (exécution)": (
+        "card",
+        {
+            "card_id": "exec-1",
+            "kind": "execution",
+            "execution_id": str(uuid4()),
+            "plan_card_id": "c1",
+            "state": "running",
+            "autonomy_level": 2,
+            "steps": [{"step": 1, "title": "Groupe", "status": "running", **STEP_META}],
+            "budget": {
+                "tool_calls_used": 1,
+                "tool_calls_max": 60,
+                "elapsed_s": 3,
+                "max_minutes": 30,
+            },
+            "resources": [
+                {
+                    "provider": "gitlab",
+                    "resource_type": "group",
+                    "name": "safe-eat",
+                    "url": "https://gitlab.example.org/safe-eat",
+                }
+            ],
+            "result": {
+                "summary": "Projet créé",
+                "links": [{"label": "GitLab", "url": "https://gitlab.example.org/safe-eat"}],
+            },
+        },
+    ),
+    "execution_log": (
+        "execution_log",
+        {"card_id": "exec-1", "step": 7, "lines": ["TASK [compose up] changed"]},
+    ),
+    "error (plan invalide)": (
+        "error",
+        {"code": "invalid_plan", "message": ERROR_MESSAGES["invalid_plan"]},
+    ),
+}
+
+
+def assert_same_but_nulls(source: Any, dumped: Any) -> None:
+    """Le serveur sérialise aussi les champs vides (`null`) : seuls des `null` peuvent s'ajouter."""
+    if isinstance(source, dict):
+        assert isinstance(dumped, dict)
+        for key, value in dumped.items():
+            if key in source:
+                assert_same_but_nulls(source[key], value)
+            else:
+                assert value is None or value == [], key
+    elif isinstance(source, list):
+        assert len(source) == len(dumped)
+        for a, b in zip(source, dumped, strict=True):
+            assert_same_but_nulls(a, b)
+    else:
+        assert source == dumped
+
+
+@pytest.mark.parametrize(
+    ("type_", "data"),
+    [*EXAMPLES.items(), *NEW_EXAMPLES.values()],
+    ids=[*EXAMPLES, *NEW_EXAMPLES],
+)
 def test_every_event_type_validates_and_roundtrips(type_: str, data: dict[str, Any]) -> None:
     source = envelope(type_, data)
     event = ADAPTER.validate_python(source)
     dumped = json.loads(ADAPTER.dump_json(event))
-    assert dumped == {**source, "at": "2026-10-20T09:00:00Z"}
+    assert_same_but_nulls({**source, "at": "2026-10-20T09:00:00Z"}, dumped)
 
 
 @pytest.mark.parametrize(
@@ -68,6 +157,23 @@ def test_every_event_type_validates_and_roundtrips(type_: str, data: dict[str, A
             "card", {**EXAMPLES["card"], "steps": [{"step": 0, "title": "x", "status": "pending"}]}
         ),
         envelope("card", {**EXAMPLES["card"], "title": "x" * 201}),
+        envelope("card", {**EXAMPLES["card"], "kind": "tableau"}),  # kind inconnu
+        envelope("card", {**EXAMPLES["card"], "plan_hash": "sha256:court"}),
+        envelope("card", {**EXAMPLES["card"], "champ_inconnu": 1}),
+        envelope("card", {**NEW_EXAMPLES["card (exécution)"][1], "state": "inconnu"}),
+        envelope(
+            "card",
+            {
+                **NEW_EXAMPLES["card (exécution)"][1],
+                "result": {
+                    "summary": "x",
+                    "links": [{"label": "piège", "url": "javascript:alert(1)"}],
+                },
+            },
+        ),
+        envelope("execution_log", {"card_id": "c", "step": 1, "lines": ["x"] * 51}),
+        envelope("execution_log", {"card_id": "c", "step": 1, "lines": ["x" * 501]}),
+        envelope("error", {"code": "invalid_plan", "message": "Traceback (most recent call"}),
         envelope("message", {"role": "user", "text": "x" * 8001}),
     ],
 )
@@ -90,6 +196,7 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
             "MessageEvent",
             "CardEvent",
             "ExecutionStepEvent",
+            "ExecutionLogEvent",
             "TurnStatusEvent",
             "ErrorEvent",
         )
@@ -101,7 +208,17 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
         "/api/projects/{project_id}",
         "/api/projects/{project_id}/messages",
         "/api/projects/{project_id}/events",
+        "/api/projects/{project_id}/plans/{plan_id}",
+        "/api/projects/{project_id}/plans/{plan_id}/approvals",
+        "/api/projects/{project_id}/executions/{execution_id}",
     }
+    card = schemas["CardEvent"]["properties"]["data"]
+    assert card["discriminator"]["propertyName"] == "kind"
+    assert set(card["discriminator"]["mapping"]) == {"plan", "execution"}
+    assert (
+        "kind" in schemas["PlanCardData"]["required"]
+    )  # discriminant requis dans le schéma publié
+    assert "kind" in schemas["ExecutionCardData"]["required"]
     sse = spec["paths"]["/api/projects/{project_id}/events"]["get"]["responses"]["200"]
     assert "text/event-stream" in sse["content"]
 
@@ -171,3 +288,46 @@ def test_event_stream_documents_only_event_stream(client: TestClient) -> None:
     assert list(ok["content"]) == ["text/event-stream"]
     messages = spec["paths"]["/api/projects/{project_id}/messages"]["post"]["responses"]
     assert "409" in messages
+
+
+PLAN, OTHER = uuid4(), uuid4()
+
+
+def test_approval_routes_are_declared_but_not_implemented_yet(client: TestClient) -> None:
+    approve = client.post(
+        f"/api/projects/{OTHER}/plans/{PLAN}/approvals",
+        json={"plan_hash": SHA, "decision": "approved"},
+    )
+    assert approve.status_code == 501
+    assert approve.json() == {"error": "not_implemented"}
+    assert client.get(f"/api/projects/{OTHER}/plans/{PLAN}").status_code == 501
+    assert client.get(f"/api/projects/{OTHER}/executions/{PLAN}").status_code == 501
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"plan_hash": "sha256:court", "decision": "approved"},
+        {"plan_hash": SHA, "decision": "rejected"},  # S1 : seule l'approbation existe
+        {"plan_hash": SHA},
+        {"decision": "approved"},
+        {"plan_hash": SHA, "decision": "approved", "en_trop": 1},
+    ],
+)
+def test_approval_body_is_validated_and_the_422_is_opaque(
+    client: TestClient, body: dict[str, Any]
+) -> None:
+    response = client.post(f"/api/projects/{OTHER}/plans/{PLAN}/approvals", json=body)
+    assert response.status_code == 422
+    assert response.json() == {"error": "invalid_request"}
+
+
+def test_approval_conflicts_are_documented_with_their_codes(client: TestClient) -> None:
+    spec = client.get("/openapi.json").json()
+    responses = spec["paths"]["/api/projects/{project_id}/plans/{plan_id}/approvals"]["post"][
+        "responses"
+    ]
+    assert "409" in responses
+    for code in ("plan_hash_mismatch", "plan_not_approvable", "execution_in_progress"):
+        assert code in responses["409"]["description"]
+        assert code in spec["components"]["schemas"]["ErrorResponse"]["properties"]["error"]["enum"]

@@ -58,6 +58,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/executions/{execution_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Execution */
+        get: operations["get_execution_api_projects__project_id__executions__execution_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/messages": {
         parameters: {
             query?: never;
@@ -72,6 +89,43 @@ export interface paths {
          * @description Un seul tour à la fois par projet : un second message pendant un tour renvoie 409.
          */
         post: operations["post_message_api_projects__project_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Plan */
+        get: operations["get_plan_api_projects__project_id__plans__plan_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/plans/{plan_id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Plan
+         * @description Le développeur valide son plan (staging) : l'approbation porte sur le hash affiché.
+         */
+        post: operations["approve_plan_api_projects__project_id__plans__plan_id__approvals_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -99,6 +153,43 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ApprovalAccepted */
+        ApprovalAccepted: {
+            /**
+             * Approval Id
+             * Format: uuid
+             */
+            approval_id: string;
+            /**
+             * Execution Id
+             * Format: uuid
+             */
+            execution_id: string;
+        };
+        /**
+         * ApprovalRequest
+         * @description Approbation d'un plan : elle porte sur le HASH affiché, pas sur « le dernier plan ».
+         */
+        ApprovalRequest: {
+            /**
+             * Decision
+             * @constant
+             */
+            decision: "approved";
+            /** Plan Hash */
+            plan_hash: string;
+        };
+        /** Budget */
+        Budget: {
+            /** Elapsed S */
+            elapsed_s: number;
+            /** Max Minutes */
+            max_minutes: number;
+            /** Tool Calls Max */
+            tool_calls_max: number;
+            /** Tool Calls Used */
+            tool_calls_used: number;
+        };
         /** CardEvent */
         CardEvent: {
             /**
@@ -107,7 +198,8 @@ export interface components {
              * @description Horodatage avec fuseau (UTC)
              */
             at: string;
-            data: components["schemas"]["PlanCardData"];
+            /** Data */
+            data: components["schemas"]["PlanCardData"] | components["schemas"]["ExecutionCardData"];
             /**
              * Project Id
              * Format: uuid
@@ -138,6 +230,11 @@ export interface components {
         /** CardStep */
         CardStep: {
             /**
+             * Reversibility
+             * @default null
+             */
+            reversibility: ("reversible" | "compensable" | "irreversible" | "not_applicable") | null;
+            /**
              * Status
              * @enum {string}
              */
@@ -149,6 +246,16 @@ export interface components {
             step: number;
             /** Title */
             title: string;
+            /**
+             * Tool
+             * @default null
+             */
+            tool: string | null;
+            /**
+             * Tool Class
+             * @default null
+             */
+            tool_class: ("read" | "write_registry" | "write_foreign" | "destructive" | "control") | null;
         };
         /** CreateProjectRequest */
         CreateProjectRequest: {
@@ -164,7 +271,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "internal_error" | "unknown_tool";
+            code: "internal_error" | "unknown_tool" | "invalid_plan";
             /**
              * Message
              * @description Texte fixe dérivé de `code`, jamais une exception
@@ -216,9 +323,104 @@ export interface components {
              * Error
              * @enum {string}
              */
-            error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented";
+            error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented" | "plan_hash_mismatch" | "plan_not_approvable" | "execution_in_progress";
         };
-        Event: components["schemas"]["MessageEvent"] | components["schemas"]["CardEvent"] | components["schemas"]["ExecutionStepEvent"] | components["schemas"]["TurnStatusEvent"] | components["schemas"]["ErrorEvent"];
+        Event: components["schemas"]["MessageEvent"] | components["schemas"]["CardEvent"] | components["schemas"]["ExecutionStepEvent"] | components["schemas"]["ExecutionLogEvent"] | components["schemas"]["TurnStatusEvent"] | components["schemas"]["ErrorEvent"];
+        /**
+         * ExecutionCardData
+         * @description Carte d'exécution : réémise entière (remplacement par `card_id`) à chaque changement.
+         */
+        ExecutionCardData: {
+            /** Autonomy Level */
+            autonomy_level: number;
+            budget: components["schemas"]["Budget"];
+            /** Card Id */
+            card_id: string;
+            /**
+             * Execution Id
+             * Format: uuid
+             */
+            execution_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "execution";
+            /** Plan Card Id */
+            plan_card_id: string;
+            /**
+             * Resources
+             * @default []
+             */
+            resources: components["schemas"]["ResourceRef"][];
+            /** @default null */
+            result: components["schemas"]["ExecutionResult"] | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "running" | "awaiting_permission" | "awaiting_remediation" | "succeeded" | "partial" | "failed_compensated" | "blocked" | "degraded";
+            /** Steps */
+            steps: components["schemas"]["CardStep"][];
+        };
+        /**
+         * ExecutionLogData
+         * @description Lignes de journal d'une étape, déjà filtrées par la gateway (secrets masqués).
+         */
+        ExecutionLogData: {
+            /** Card Id */
+            card_id: string;
+            /** Lines */
+            lines: string[];
+            /** Step */
+            step: number;
+        };
+        /** ExecutionLogEvent */
+        ExecutionLogEvent: {
+            /**
+             * At
+             * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
+             */
+            at: string;
+            data: components["schemas"]["ExecutionLogData"];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /**
+             * Seq
+             * @description Strictement croissant, contigu à partir de 1, par projet
+             */
+            seq: number;
+            /**
+             * Turn Id
+             * Format: uuid
+             */
+            turn_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "execution_log";
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
+        };
+        /** ExecutionResult */
+        ExecutionResult: {
+            /**
+             * Links
+             * @default []
+             */
+            links: components["schemas"]["Link"][];
+            /** Summary */
+            summary: string;
+        };
         /** ExecutionStepData */
         ExecutionStepData: {
             /** Card Id */
@@ -269,6 +471,66 @@ export interface components {
              * @constant
              */
             v: 1;
+        };
+        /** ExecutionStepView */
+        ExecutionStepView: {
+            /** Finished At */
+            finished_at?: string | null;
+            /** Seq */
+            seq: number;
+            /** Started At */
+            started_at?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "succeeded" | "failed" | "compensated" | "skipped";
+            /** Title */
+            title: string;
+            /** Tool */
+            tool: string;
+        };
+        /** ExecutionView */
+        ExecutionView: {
+            /** Autonomy Level */
+            autonomy_level: number;
+            budget_used: components["schemas"]["Budget"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Plan Id
+             * Format: uuid
+             */
+            plan_id: string;
+            /** Resources */
+            resources: components["schemas"]["ResourceRef"][];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "running" | "awaiting_permission" | "awaiting_remediation" | "succeeded" | "partial" | "failed_compensated" | "blocked" | "degraded";
+            /** Steps */
+            steps: components["schemas"]["ExecutionStepView"][];
+        };
+        /** ExpectedResource */
+        ExpectedResource: {
+            /** Name */
+            name: string;
+            /** Provider */
+            provider: string;
+            /** Resource Type */
+            resource_type: string;
+        };
+        JsonValue: unknown;
+        /** Link */
+        Link: {
+            /** Label */
+            label: string;
+            /** Url */
+            url: string;
         };
         /** MessageAccepted */
         MessageAccepted: {
@@ -331,20 +593,101 @@ export interface components {
         };
         /** PlanCardData */
         PlanCardData: {
+            /**
+             * Approvable
+             * @description Décidé par le serveur d'après la matrice de droits
+             * @default null
+             */
+            approvable: boolean | null;
+            /**
+             * Autonomy Level
+             * @default null
+             */
+            autonomy_level: number | null;
             /** Card Id */
             card_id: string;
             /**
-             * Kind
-             * @default plan
-             * @constant
+             * Environment
+             * @default null
+             */
+            environment: string | null;
+            /**
+             * Expected Resources
+             * @default null
+             */
+            expected_resources: components["schemas"]["ExpectedResource"][] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             kind: "plan";
+            /**
+             * Plan Hash
+             * @default null
+             */
+            plan_hash: string | null;
+            /**
+             * Plan Id
+             * @default null
+             */
+            plan_id: string | null;
+            /**
+             * Skills
+             * @default null
+             */
+            skills: components["schemas"]["SkillRef"][] | null;
+            /**
+             * Stack
+             * @default null
+             */
+            stack: {
+                [key: string]: string;
+            } | null;
+            /**
+             * Status
+             * @default null
+             */
+            status: ("proposed" | "approved" | "executed") | null;
             /** Steps */
             steps: components["schemas"]["CardStep"][];
             /** Summary */
             summary: string;
             /** Title */
             title: string;
+        };
+        /** PlanView */
+        PlanView: {
+            /**
+             * Content
+             * @description Contenu canonique haché du plan
+             */
+            content: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Content Hash */
+            content_hash: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "dev_approved" | "admin_approved" | "invalidated" | "expired" | "executed";
+            /** Version */
+            version: number;
         };
         /** Project */
         Project: {
@@ -360,6 +703,29 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+        };
+        /** ResourceRef */
+        ResourceRef: {
+            /** Name */
+            name: string;
+            /** Provider */
+            provider: string;
+            /** Resource Type */
+            resource_type: string;
+            /**
+             * Url
+             * @default null
+             */
+            url: string | null;
+        };
+        /** SkillRef */
+        SkillRef: {
+            /** Name */
+            name: string;
+            /** Sha256 */
+            sha256: string;
+            /** Version */
+            version: number;
         };
         /** TurnStatusData */
         TurnStatusData: {
@@ -594,6 +960,65 @@ export interface operations {
             };
         };
     };
+    get_execution_api_projects__project_id__executions__execution_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionView"];
+                };
+            };
+            /** @description Introuvable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Pas encore implémenté */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     post_message_api_projects__project_id__messages_post: {
         parameters: {
             query?: never;
@@ -628,6 +1053,137 @@ export interface operations {
                 };
             };
             /** @description Un tour est déjà en cours pour ce projet (`turn_in_progress`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Pas encore implémenté */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_plan_api_projects__project_id__plans__plan_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanView"];
+                };
+            };
+            /** @description Introuvable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Pas encore implémenté */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    approve_plan_api_projects__project_id__plans__plan_id__approvals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalAccepted"];
+                };
+            };
+            /** @description Introuvable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `plan_hash_mismatch` (le hash ne correspond pas au plan), `plan_not_approvable` (déjà approuvé, expiré ou exécuté), `execution_in_progress` */
             409: {
                 headers: {
                     [name: string]: unknown;

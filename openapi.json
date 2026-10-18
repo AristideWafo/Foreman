@@ -1,6 +1,81 @@
 {
   "components": {
     "schemas": {
+      "ApprovalAccepted": {
+        "properties": {
+          "approval_id": {
+            "format": "uuid",
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "execution_id": {
+            "format": "uuid",
+            "title": "Execution Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "execution_id"
+        ],
+        "title": "ApprovalAccepted",
+        "type": "object"
+      },
+      "ApprovalRequest": {
+        "additionalProperties": false,
+        "description": "Approbation d'un plan : elle porte sur le HASH affich\u00e9, pas sur \u00ab le dernier plan \u00bb.",
+        "properties": {
+          "decision": {
+            "const": "approved",
+            "title": "Decision",
+            "type": "string"
+          },
+          "plan_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Plan Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_hash",
+          "decision"
+        ],
+        "title": "ApprovalRequest",
+        "type": "object"
+      },
+      "Budget": {
+        "additionalProperties": false,
+        "properties": {
+          "elapsed_s": {
+            "minimum": 0,
+            "title": "Elapsed S",
+            "type": "integer"
+          },
+          "max_minutes": {
+            "minimum": 0,
+            "title": "Max Minutes",
+            "type": "integer"
+          },
+          "tool_calls_max": {
+            "minimum": 0,
+            "title": "Tool Calls Max",
+            "type": "integer"
+          },
+          "tool_calls_used": {
+            "minimum": 0,
+            "title": "Tool Calls Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tool_calls_used",
+          "tool_calls_max",
+          "elapsed_s",
+          "max_minutes"
+        ],
+        "title": "Budget",
+        "type": "object"
+      },
       "CardEvent": {
         "additionalProperties": false,
         "properties": {
@@ -11,7 +86,22 @@
             "type": "string"
           },
           "data": {
-            "$ref": "#/components/schemas/PlanCardData"
+            "discriminator": {
+              "mapping": {
+                "execution": "#/components/schemas/ExecutionCardData",
+                "plan": "#/components/schemas/PlanCardData"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlanCardData"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionCardData"
+              }
+            ],
+            "title": "Data"
           },
           "project_id": {
             "format": "uuid",
@@ -55,6 +145,24 @@
       "CardStep": {
         "additionalProperties": false,
         "properties": {
+          "reversibility": {
+            "anyOf": [
+              {
+                "enum": [
+                  "reversible",
+                  "compensable",
+                  "irreversible",
+                  "not_applicable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reversibility"
+          },
           "status": {
             "enum": [
               "pending",
@@ -77,6 +185,38 @@
             "maxLength": 200,
             "title": "Title",
             "type": "string"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tool"
+          },
+          "tool_class": {
+            "anyOf": [
+              {
+                "enum": [
+                  "read",
+                  "write_registry",
+                  "write_foreign",
+                  "destructive",
+                  "control"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tool Class"
           }
         },
         "required": [
@@ -106,7 +246,8 @@
           "code": {
             "enum": [
               "internal_error",
-              "unknown_tool"
+              "unknown_tool",
+              "invalid_plan"
             ],
             "title": "Code",
             "type": "string"
@@ -186,7 +327,10 @@
               "turn_in_progress",
               "capacity_exceeded",
               "internal_error",
-              "not_implemented"
+              "not_implemented",
+              "plan_hash_mismatch",
+              "plan_not_approvable",
+              "execution_in_progress"
             ],
             "title": "Error",
             "type": "string"
@@ -203,6 +347,7 @@
           "mapping": {
             "card": "#/components/schemas/CardEvent",
             "error": "#/components/schemas/ErrorEvent",
+            "execution_log": "#/components/schemas/ExecutionLogEvent",
             "execution_step": "#/components/schemas/ExecutionStepEvent",
             "message": "#/components/schemas/MessageEvent",
             "turn_status": "#/components/schemas/TurnStatusEvent"
@@ -220,12 +365,211 @@
             "$ref": "#/components/schemas/ExecutionStepEvent"
           },
           {
+            "$ref": "#/components/schemas/ExecutionLogEvent"
+          },
+          {
             "$ref": "#/components/schemas/TurnStatusEvent"
           },
           {
             "$ref": "#/components/schemas/ErrorEvent"
           }
         ]
+      },
+      "ExecutionCardData": {
+        "additionalProperties": false,
+        "description": "Carte d'ex\u00e9cution : r\u00e9\u00e9mise enti\u00e8re (remplacement par `card_id`) \u00e0 chaque changement.",
+        "properties": {
+          "autonomy_level": {
+            "maximum": 4,
+            "minimum": 1,
+            "title": "Autonomy Level",
+            "type": "integer"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/Budget"
+          },
+          "card_id": {
+            "maxLength": 64,
+            "title": "Card Id",
+            "type": "string"
+          },
+          "execution_id": {
+            "format": "uuid",
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "execution",
+            "title": "Kind",
+            "type": "string"
+          },
+          "plan_card_id": {
+            "maxLength": 64,
+            "title": "Plan Card Id",
+            "type": "string"
+          },
+          "resources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceRef"
+            },
+            "maxItems": 50,
+            "title": "Resources",
+            "type": "array"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "state": {
+            "enum": [
+              "running",
+              "awaiting_permission",
+              "awaiting_remediation",
+              "succeeded",
+              "partial",
+              "failed_compensated",
+              "blocked",
+              "degraded"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/CardStep"
+            },
+            "maxItems": 20,
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "card_id",
+          "kind",
+          "execution_id",
+          "plan_card_id",
+          "state",
+          "autonomy_level",
+          "steps",
+          "budget"
+        ],
+        "title": "ExecutionCardData",
+        "type": "object"
+      },
+      "ExecutionLogData": {
+        "additionalProperties": false,
+        "description": "Lignes de journal d'une \u00e9tape, d\u00e9j\u00e0 filtr\u00e9es par la gateway (secrets masqu\u00e9s).",
+        "properties": {
+          "card_id": {
+            "maxLength": 64,
+            "title": "Card Id",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "maxLength": 500,
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Lines",
+            "type": "array"
+          },
+          "step": {
+            "minimum": 1,
+            "title": "Step",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "card_id",
+          "step",
+          "lines"
+        ],
+        "title": "ExecutionLogData",
+        "type": "object"
+      },
+      "ExecutionLogEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "Horodatage avec fuseau (UTC)",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ExecutionLogData"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "seq": {
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "turn_id": {
+            "format": "uuid",
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "execution_log",
+            "default": "execution_log",
+            "title": "Type",
+            "type": "string"
+          },
+          "v": {
+            "const": 1,
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "project_id",
+          "turn_id",
+          "at",
+          "data"
+        ],
+        "title": "ExecutionLogEvent",
+        "type": "object"
+      },
+      "ExecutionResult": {
+        "additionalProperties": false,
+        "properties": {
+          "links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Link"
+            },
+            "maxItems": 10,
+            "title": "Links",
+            "type": "array"
+          },
+          "summary": {
+            "maxLength": 500,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary"
+        ],
+        "title": "ExecutionResult",
+        "type": "object"
       },
       "ExecutionStepData": {
         "additionalProperties": false,
@@ -311,6 +655,183 @@
           "data"
         ],
         "title": "ExecutionStepEvent",
+        "type": "object"
+      },
+      "ExecutionStepView": {
+        "properties": {
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed",
+              "compensated",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          },
+          "tool": {
+            "maxLength": 100,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "title",
+          "tool",
+          "status"
+        ],
+        "title": "ExecutionStepView",
+        "type": "object"
+      },
+      "ExecutionView": {
+        "properties": {
+          "autonomy_level": {
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Autonomy Level",
+            "type": "integer"
+          },
+          "budget_used": {
+            "$ref": "#/components/schemas/Budget"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceRef"
+            },
+            "maxItems": 50,
+            "title": "Resources",
+            "type": "array"
+          },
+          "state": {
+            "enum": [
+              "running",
+              "awaiting_permission",
+              "awaiting_remediation",
+              "succeeded",
+              "partial",
+              "failed_compensated",
+              "blocked",
+              "degraded"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionStepView"
+            },
+            "maxItems": 20,
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "plan_id",
+          "state",
+          "autonomy_level",
+          "budget_used",
+          "steps",
+          "resources"
+        ],
+        "title": "ExecutionView",
+        "type": "object"
+      },
+      "ExpectedResource": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "maxLength": 50,
+            "title": "Provider",
+            "type": "string"
+          },
+          "resource_type": {
+            "maxLength": 50,
+            "title": "Resource Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "resource_type",
+          "name"
+        ],
+        "title": "ExpectedResource",
+        "type": "object"
+      },
+      "JsonValue": {},
+      "Link": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "maxLength": 100,
+            "title": "Label",
+            "type": "string"
+          },
+          "url": {
+            "maxLength": 500,
+            "pattern": "^https?://",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "url"
+        ],
+        "title": "Link",
         "type": "object"
       },
       "MessageAccepted": {
@@ -421,16 +942,146 @@
       "PlanCardData": {
         "additionalProperties": false,
         "properties": {
+          "approvable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "D\u00e9cid\u00e9 par le serveur d'apr\u00e8s la matrice de droits",
+            "title": "Approvable"
+          },
+          "autonomy_level": {
+            "anyOf": [
+              {
+                "maximum": 4,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Autonomy Level"
+          },
           "card_id": {
             "maxLength": 64,
             "title": "Card Id",
             "type": "string"
           },
+          "environment": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Environment"
+          },
+          "expected_resources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExpectedResource"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Resources"
+          },
           "kind": {
             "const": "plan",
-            "default": "plan",
             "title": "Kind",
             "type": "string"
+          },
+          "plan_hash": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Plan Hash"
+          },
+          "plan_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Plan Id"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SkillRef"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Skills"
+          },
+          "stack": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "maxProperties": 10,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stack"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "proposed",
+                  "approved",
+                  "executed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
           },
           "steps": {
             "items": {
@@ -453,11 +1104,72 @@
         },
         "required": [
           "card_id",
+          "kind",
           "title",
           "summary",
           "steps"
         ],
         "title": "PlanCardData",
+        "type": "object"
+      },
+      "PlanView": {
+        "properties": {
+          "content": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "description": "Contenu canonique hach\u00e9 du plan",
+            "title": "Content",
+            "type": "object"
+          },
+          "content_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "dev_approved",
+              "admin_approved",
+              "invalidated",
+              "expired",
+              "executed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "status",
+          "content_hash",
+          "content",
+          "created_at",
+          "expires_at"
+        ],
+        "title": "PlanView",
         "type": "object"
       },
       "Project": {
@@ -484,6 +1196,74 @@
           "created_at"
         ],
         "title": "Project",
+        "type": "object"
+      },
+      "ResourceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "maxLength": 50,
+            "title": "Provider",
+            "type": "string"
+          },
+          "resource_type": {
+            "maxLength": 50,
+            "title": "Resource Type",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "pattern": "^https?://",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          }
+        },
+        "required": [
+          "provider",
+          "resource_type",
+          "name"
+        ],
+        "title": "ResourceRef",
+        "type": "object"
+      },
+      "SkillRef": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "title": "Name",
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "sha256"
+        ],
+        "title": "SkillRef",
         "type": "object"
       },
       "TurnStatusData": {
@@ -808,6 +1588,86 @@
         "summary": "Stream Events"
       }
     },
+    "/api/projects/{project_id}/executions/{execution_id}": {
+      "get": {
+        "operationId": "get_execution_api_projects__project_id__executions__execution_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "execution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Execution Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Get Execution"
+      }
+    },
     "/api/projects/{project_id}/messages": {
       "post": {
         "description": "Un seul tour \u00e0 la fois par projet : un second message pendant un tour renvoie 409.",
@@ -897,6 +1757,187 @@
           }
         },
         "summary": "Post Message"
+      }
+    },
+    "/api/projects/{project_id}/plans/{plan_id}": {
+      "get": {
+        "operationId": "get_plan_api_projects__project_id__plans__plan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Get Plan"
+      }
+    },
+    "/api/projects/{project_id}/plans/{plan_id}/approvals": {
+      "post": {
+        "description": "Le d\u00e9veloppeur valide son plan (staging) : l'approbation porte sur le hash affich\u00e9.",
+        "operationId": "approve_plan_api_projects__project_id__plans__plan_id__approvals_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`plan_hash_mismatch` (le hash ne correspond pas au plan), `plan_not_approvable` (d\u00e9j\u00e0 approuv\u00e9, expir\u00e9 ou ex\u00e9cut\u00e9), `execution_in_progress`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Approve Plan"
       }
     },
     "/healthz": {
