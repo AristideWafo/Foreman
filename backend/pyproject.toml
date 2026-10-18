@@ -8,6 +8,9 @@ dependencies = [
   "pydantic>=2.9",
   "uvicorn>=0.32",
   "structlog>=24.4",
+  "sqlalchemy[asyncio]>=2.1.5",
+  "alembic>=1.20.0",
+  "psycopg[binary]>=3.3.6",
 ]
 
 [dependency-groups]
