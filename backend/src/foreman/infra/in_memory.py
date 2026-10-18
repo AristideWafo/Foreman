@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID, uuid4
 
-from foreman.core.events import AnyEvent, EventData, make_event
+from foreman.core.events import AnyEvent, ClarificationQuestion, EventData, make_event
 from foreman.core.ports import CapacityExceeded, ProjectStore
 from foreman.core.projects import Project
 from foreman.core.store import (
@@ -56,6 +56,7 @@ class InMemoryProjectStore:
     def __init__(self, max_projects: int = MAX_PROJECTS) -> None:
         self._max = max_projects
         self._projects: dict[UUID, Project] = {}
+        self._questions: dict[UUID, list[ClarificationQuestion]] = {}
 
     async def create(self, title: str) -> Project:
         if len(self._projects) >= self._max:
@@ -69,6 +70,16 @@ class InMemoryProjectStore:
 
     async def list(self) -> list[Project]:
         return list(reversed(self._projects.values()))
+
+    async def get_open_questions(self, project_id: UUID) -> Sequence[ClarificationQuestion]:
+        return list(self._questions.get(project_id, ()))
+
+    async def set_open_questions(
+        self, project_id: UUID, questions: Sequence[ClarificationQuestion]
+    ) -> None:
+        if project_id not in self._projects:
+            raise UnknownProject
+        self._questions[project_id] = list(questions)
 
 
 class InMemoryEventLog(SubscriberHub):

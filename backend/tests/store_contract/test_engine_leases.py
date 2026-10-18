@@ -107,6 +107,7 @@ async def approved_execution(
     draft = Draft(
         title="Groupes",
         summary="Deux groupes puis un contrôle",
+        environment="staging",
         steps=[
             DraftStep(
                 "Racine",

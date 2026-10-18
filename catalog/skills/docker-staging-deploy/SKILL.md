@@ -10,6 +10,8 @@ tools: [server.apply_playbook, server.healthcheck, dns.list_records]
 Mettre un projet en ligne sur le staging avec Docker Compose, derrière le wildcard DNS de l'équipe.
 
 # Instructions
+0. Si l'environnement ou la stack manquent (`referentiels/project-schema.yaml`), appeler `ask_user`
+   avant tout plan : ne jamais les deviner, ne proposer aucun plan tant que la réponse manque.
 1. Lire `referentiels/infra-staging.yaml` : serveur, répertoire du projet, fichier Compose.
 2. Vérifier avec `dns.list_records` que le wildcard du staging existe ; ne jamais créer d'enregistrement
    DNS en staging, le wildcard est géré en externe.

@@ -6,10 +6,10 @@ from uuid import uuid4
 
 import pytest
 
-from foreman.core.ports import ModelReply, Provider, ToolCall
+from foreman.core.ports import ConversationMessage, ModelReply, Provider, ToolCall
 from foreman.core.turn import TurnInProgress, TurnRequest, TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env
-from foreman.infra.in_memory import InMemoryEventLog
+from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
 from foreman.infra.replay_provider import ReplayProvider
 from support import make_planner
 
@@ -20,28 +20,28 @@ ERROR_MARKER = "secret-interne postgres://user:pass@db"
 class FakeProvider:
     """Fake nommé : répond « ok » et propose un plan valide d'une étape."""
 
-    async def complete(self, messages: Sequence[str]) -> ModelReply:
+    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply:
         step = {
             "title": "Lister le DNS",
             "tool": "dns.list_records",
             "params": {"environment": "staging"},
         }
-        plan = {"title": "Plan", "summary": "Résumé", "steps": [step]}
+        plan = {"title": "Plan", "summary": "Résumé", "environment": "staging", "steps": [step]}
         return ModelReply(text="ok", tool_calls=(ToolCall("propose_plan", plan),))
 
 
 class ExplodingProvider:
-    async def complete(self, messages: Sequence[str]) -> ModelReply:
+    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply:
         raise RuntimeError(ERROR_MARKER)
 
 
 class UnknownToolProvider:
-    async def complete(self, messages: Sequence[str]) -> ModelReply:
+    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply:
         return ModelReply(text="ok", tool_calls=(ToolCall("run_shell", {"cmd": "rm -rf /"}),))
 
 
 class InvalidPlanProvider:
-    async def complete(self, messages: Sequence[str]) -> ModelReply:
+    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply:
         return ModelReply(text="ok", tool_calls=(ToolCall("propose_plan", {"title": 1}),))
 
 
@@ -52,7 +52,7 @@ class GatedProvider:
         self.started = asyncio.Event()
         self.release = asyncio.Event()
 
-    async def complete(self, messages: Sequence[str]) -> ModelReply:
+    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply:
         self.started.set()
         await self.release.wait()
         return ModelReply(text="ok")
@@ -61,7 +61,7 @@ class GatedProvider:
 async def play(provider: Provider, message: str = "salut") -> list[dict[str, Any]]:
     log = InMemoryEventLog()
     project_id = uuid4()
-    service = TurnService(provider, log, make_planner())
+    service = TurnService(provider, log, make_planner(), InMemoryProjectStore())
     request = TurnRequest(user_id="u", project_id=project_id, message=message)
     await service.run(request, service.begin(project_id))
     return [e.model_dump(mode="json") for e in await log.read_after(project_id, 0)]
@@ -85,7 +85,7 @@ async def test_turn_emits_the_contract_sequence_with_contiguous_seq() -> None:
 
 
 async def test_the_replayed_s01_turn_proposes_a_hashed_eight_step_pending_plan() -> None:
-    events = await play(ReplayProvider.s01(catalog_dir_from_env()), "Crée Safe Eat")
+    events = await play(ReplayProvider.from_dir(catalog_dir_from_env()), "Crée Safe Eat")
     assert types(events) == ["message", "turn_status", "message", "card", "turn_status"]
     assert events[3]["data"]["kind"] == "plan"
     assert [s["title"] for s in events[3]["data"]["steps"]][:2] == [
@@ -108,6 +108,26 @@ async def test_provider_exception_never_reaches_the_events() -> None:
     assert USER_TEXT_MARKER not in failure_json
 
 
+class NoEnvironmentProvider:
+    """Propose un plan par ailleurs valide, mais sans `environment`."""
+
+    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply:
+        step = {
+            "title": "Lister le DNS",
+            "tool": "dns.list_records",
+            "params": {"environment": "staging"},
+        }
+        plan = {"title": "Plan", "summary": "Résumé", "steps": [step]}
+        return ModelReply(text="ok", tool_calls=(ToolCall("propose_plan", plan),))
+
+
+async def test_a_plan_without_environment_is_refused_as_invalid_plan() -> None:
+    events = await play(NoEnvironmentProvider())
+    assert types(events) == ["message", "turn_status", "message", "error", "turn_status"]
+    assert events[3]["data"]["code"] == "invalid_plan"  # pas de repli sur un environnement
+    assert events[4]["data"] == {"status": "failed"}
+
+
 async def test_unknown_tool_is_reported_and_never_executed() -> None:
     events = await play(UnknownToolProvider())
     assert types(events) == ["message", "turn_status", "message", "error", "turn_status"]
@@ -123,7 +143,7 @@ async def test_invalid_plan_arguments_produce_no_card() -> None:
 
 async def test_only_one_turn_at_a_time_per_project_and_the_guard_is_released() -> None:
     provider, log = GatedProvider(), InMemoryEventLog()
-    service = TurnService(provider, log, make_planner())
+    service = TurnService(provider, log, make_planner(), InMemoryProjectStore())
     project_id, other_id = uuid4(), uuid4()
 
     first = service.begin(project_id)
@@ -147,7 +167,9 @@ async def test_silent_provider_times_out_and_frees_the_project() -> None:
     """Sans délai, un fournisseur muet laisserait le projet en 409 pour toujours."""
     log = InMemoryEventLog()
     project_id = uuid4()
-    service = TurnService(GatedProvider(), log, make_planner(), provider_timeout_s=0.05)
+    service = TurnService(
+        GatedProvider(), log, make_planner(), InMemoryProjectStore(), provider_timeout_s=0.05
+    )
     turn = service.run(
         TurnRequest(user_id="u", project_id=project_id, message="salut"),
         service.begin(project_id),

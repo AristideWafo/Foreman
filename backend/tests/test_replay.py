@@ -11,9 +11,9 @@ import pytest
 
 from foreman.core.turn import ProposePlanArguments, TurnRequest, TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env
-from foreman.infra.in_memory import InMemoryEventLog
+from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
 from foreman.infra.replay_provider import RecordingInvalid, RecordingNotFound, ReplayProvider
-from support import make_planner
+from support import make_planner, user
 
 
 def sha(text: str) -> str:
@@ -31,7 +31,7 @@ def exchange(when: str, text: str) -> str:
 
 
 async def test_the_default_entry_replays_the_s01_plan() -> None:
-    reply = await ReplayProvider.s01(catalog_dir_from_env()).complete(["Crée Safe Eat"])
+    reply = await ReplayProvider.from_dir(catalog_dir_from_env()).complete(user("Crée Safe Eat"))
     assert [c.name for c in reply.tool_calls] == ["propose_plan"]
     plan = ProposePlanArguments.model_validate(reply.tool_calls[0].arguments)
     assert [
@@ -55,14 +55,14 @@ async def test_the_default_entry_replays_the_s01_plan() -> None:
 
 
 async def test_replay_is_deterministic_and_stateless() -> None:
-    provider = ReplayProvider.s01(catalog_dir_from_env())
-    first = await provider.complete(["a"])
-    second = await provider.complete(["autre message", "b"])
+    provider = ReplayProvider.from_dir(catalog_dir_from_env())
+    first = await provider.complete(user("a"))
+    second = await provider.complete(user("autre message", "b"))
     assert first == second
     pristine = copy.deepcopy(second)
     first.tool_calls[0].arguments["steps"][0]["tool"] = "pirate"  # type: ignore[index]
     # Un appelant ne peut pas altérer les réponses suivantes.
-    assert (await provider.complete(["a"])) == pristine
+    assert (await provider.complete(user("a"))) == pristine
 
 
 async def test_the_reply_is_chosen_on_the_sha256_of_the_last_message_only(tmp_path: Path) -> None:
@@ -72,8 +72,8 @@ async def test_the_reply_is_chosen_on_the_sha256_of_the_last_message_only(tmp_pa
         + exchange(f"last_user_sha256: {sha('merci')}", "de rien"),
     )
     provider = ReplayProvider(path)
-    assert (await provider.complete(["merci", "bonjour"])).text == "salut"
-    assert (await provider.complete(["bonjour", "merci"])).text == "de rien"
+    assert (await provider.complete(user("merci", "bonjour"))).text == "salut"
+    assert (await provider.complete(user("bonjour", "merci"))).text == "de rien"
 
 
 async def test_no_regex_and_no_near_match_selects_an_entry(tmp_path: Path) -> None:
@@ -81,9 +81,9 @@ async def test_no_regex_and_no_near_match_selects_an_entry(tmp_path: Path) -> No
     provider = ReplayProvider(path)
     for message in ("Bonjour", "bonjour ", "bon.*", ".*", ""):
         with pytest.raises(RecordingNotFound):
-            await provider.complete([message])
+            await provider.complete(user(message))
     with pytest.raises(RecordingNotFound):
-        await provider.complete([])
+        await provider.complete(user())
 
 
 async def test_a_specific_entry_wins_over_the_default(tmp_path: Path) -> None:
@@ -93,8 +93,8 @@ async def test_a_specific_entry_wins_over_the_default(tmp_path: Path) -> None:
         + exchange(f"last_user_sha256: {sha('x')}", "précis"),
     )
     provider = ReplayProvider(path)
-    assert (await provider.complete(["x"])).text == "précis"
-    assert (await provider.complete(["y"])).text == "par défaut"
+    assert (await provider.complete(user("x"))).text == "précis"
+    assert (await provider.complete(user("y"))).text == "par défaut"
 
 
 async def test_a_missing_recording_is_a_typed_error_that_never_reaches_the_events(
@@ -104,7 +104,7 @@ async def test_a_missing_recording_is_a_typed_error_that_never_reaches_the_event
         write_recording(tmp_path, exchange(f"last_user_sha256: {sha('connu')}", "ok"))
     )
     log = InMemoryEventLog()
-    service = TurnService(provider, log, make_planner())
+    service = TurnService(provider, log, make_planner(), InMemoryProjectStore())
     project_id = uuid4()
     request = TurnRequest(user_id="u", project_id=project_id, message="inconnu-secret-xyz")
     await service.run(request, service.begin(project_id))
@@ -167,7 +167,7 @@ async def test_an_entry_with_default_false_is_selected_by_its_hash(tmp_path: Pat
         + exchange("default: true", "par défaut"),
     )
     provider = ReplayProvider(path)
-    assert (await provider.complete(["x"])).text == "précis"
+    assert (await provider.complete(user("x"))).text == "précis"
 
 
 def test_a_symlinked_or_foreign_recording_is_refused(tmp_path: Path) -> None:

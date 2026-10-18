@@ -1,5 +1,6 @@
 """Projets en PostgreSQL et identités de développement."""
 
+from collections.abc import Sequence
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -8,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from foreman.core.events import ClarificationQuestion
 from foreman.core.ports import CapacityExceeded
 from foreman.core.projects import Project
 from foreman.core.store import (
@@ -16,6 +18,7 @@ from foreman.core.store import (
     DEV_USER_EMAIL,
     DEV_USER_ID,
     StoreError,
+    UnknownProject,
 )
 from foreman.infra.db import tables as t
 from foreman.infra.db.engine import log_failure
@@ -111,3 +114,31 @@ class PostgresProjectStore:
             log_failure("project.list", exc)
             raise StoreError("stockage indisponible") from None
         return [Project(id=r.id, title=r.name, created_at=r.created_at) for r in rows]
+
+    async def get_open_questions(self, project_id: UUID) -> Sequence[ClarificationQuestion]:
+        statement = sa.select(t.projects.c.open_questions).where(t.projects.c.id == project_id)
+        try:
+            async with self._engine.connect() as conn:
+                raw = (await conn.execute(statement)).scalar_one_or_none()
+        except SQLAlchemyError as exc:
+            log_failure("project.get_open_questions", exc)
+            raise StoreError("stockage indisponible") from None
+        return [ClarificationQuestion.model_validate(item) for item in raw or []]
+
+    async def set_open_questions(
+        self, project_id: UUID, questions: Sequence[ClarificationQuestion]
+    ) -> None:
+        statement = (
+            sa.update(t.projects)
+            .where(t.projects.c.id == project_id)
+            .values(open_questions=[q.model_dump(mode="json") for q in questions])
+            .returning(t.projects.c.id)
+        )
+        try:
+            async with self._engine.begin() as conn:
+                updated = (await conn.execute(statement)).one_or_none()
+        except SQLAlchemyError as exc:
+            log_failure("project.set_open_questions", exc)
+            raise StoreError("stockage indisponible") from None
+        if updated is None:
+            raise UnknownProject

@@ -81,6 +81,7 @@ def test_the_shipped_catalog_loads_every_s1_tool_skill_and_referentiel() -> None
         "infra-staging",
         "environments",
         "boilerplates",
+        "project-schema",
     }
     for tool in catalog.tools.values():
         if tool.tool_class == "write_registry":

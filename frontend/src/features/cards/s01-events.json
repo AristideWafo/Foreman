@@ -125,7 +125,7 @@
         {
           "name": "gitlab-project-creation",
           "version": 1,
-          "sha256": "sha256:a104d93a6eca59bc8ca9ddeb4abdaaf9bc322b1b07997493acb95b1d94dbece4"
+          "sha256": "sha256:0bf151f71687a768eaba0c021e66839b929471072b5052090b5ddf377746a403"
         },
         {
           "name": "go-backend-standard",
@@ -135,7 +135,7 @@
         {
           "name": "docker-staging-deploy",
           "version": 1,
-          "sha256": "sha256:f0e909121c1953e7382003ee3c18979099442d20d3b4069cac16b9c88e1fbcff"
+          "sha256": "sha256:33544267d63ab814cdaffa49fdcc96fdd9c05ccb07d211a2ec4e990d4c92a620"
         }
       ],
       "expected_resources": [
@@ -280,7 +280,7 @@
         {
           "name": "gitlab-project-creation",
           "version": 1,
-          "sha256": "sha256:a104d93a6eca59bc8ca9ddeb4abdaaf9bc322b1b07997493acb95b1d94dbece4"
+          "sha256": "sha256:0bf151f71687a768eaba0c021e66839b929471072b5052090b5ddf377746a403"
         },
         {
           "name": "go-backend-standard",
@@ -290,7 +290,7 @@
         {
           "name": "docker-staging-deploy",
           "version": 1,
-          "sha256": "sha256:f0e909121c1953e7382003ee3c18979099442d20d3b4069cac16b9c88e1fbcff"
+          "sha256": "sha256:33544267d63ab814cdaffa49fdcc96fdd9c05ccb07d211a2ec4e990d4c92a620"
         }
       ],
       "expected_resources": [

@@ -15,7 +15,7 @@ from foreman.core.execution.cards import execution_card
 from foreman.core.ports import CapacityExceeded
 from foreman.core.projects import Project
 from foreman.core.store import ApprovalRefused
-from foreman.core.turn import TurnInProgress, TurnRequest
+from foreman.core.turn import QuestionRefused, TurnInProgress, TurnRequest
 from foreman.surfaces.web.errors import ApiError
 from foreman.surfaces.web.schemas import (
     ApprovalAccepted,
@@ -253,12 +253,35 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         },
     )
     async def answer_question(
-        project_id: UUID, question_id: str, body: QuestionAnswerRequest
+        project_id: UUID, question_id: str, body: QuestionAnswerRequest, response: Response
     ) -> QuestionAccepted:
-        """Répond à une question de clarification ou la reporte (logique à venir : 501)."""
+        """Répond à une question de clarification (202, relance un tour) ou la reporte (200).
+
+        La réponse doit être l'une des options de la question ; le message du tour est produit
+        par le serveur à partir de ce choix. Un refus ne lance aucun tour ni ne cite la saisie.
+        """
         if await app.projects.get(project_id) is None:
             raise ApiError(404, "not_found")
-        raise ApiError(501, "not_implemented")
+        try:
+            outcome = await app.turns.resolve_question(
+                WEB_USER_ID, project_id, question_id, body.decision, body.value
+            )
+        except QuestionRefused as refused:
+            if refused.reason == "not_found":
+                raise ApiError(404, "not_found") from None
+            if refused.reason == "invalid_value":
+                raise ApiError(422, "invalid_request") from None
+            raise ApiError(409, refused.reason) from None
+        if outcome.turn is None:
+            response.status_code = 200  # report : rien à rejouer
+        else:
+            request, turn_id = outcome.turn
+            try:
+                tasks.spawn(app.turns.run(request, turn_id))
+            except BaseException:
+                app.turns.release(project_id, turn_id)
+                raise
+        return QuestionAccepted(question_id=outcome.question_id, status=outcome.status)
 
     @router.get(
         "/projects/{project_id}/plans/{plan_id}", response_model=PlanView, responses=_ERRORS

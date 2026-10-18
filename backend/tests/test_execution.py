@@ -138,6 +138,7 @@ async def test_an_adapter_defect_blocks_the_execution_without_leaking_details(
     draft = Draft(
         title="Groupes",
         summary="Trois groupes",
+        environment="staging",
         steps=[
             DraftStep(
                 "Racine",
@@ -238,6 +239,7 @@ async def test_the_lease_is_renewed_during_a_long_call() -> None:
     draft = Draft(
         title="Groupe",
         summary="Un groupe",
+        environment="staging",
         steps=[
             DraftStep(
                 "Racine",
@@ -280,6 +282,7 @@ async def test_a_refused_approval_reissues_the_plan_card_from_the_stored_state()
     draft = Draft(
         title="Groupe",
         summary="Un groupe",
+        environment="staging",
         steps=[
             DraftStep(
                 "Racine",

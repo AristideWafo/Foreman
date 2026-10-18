@@ -2,12 +2,12 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import UUID
 
 from pydantic import JsonValue
 
-from foreman.core.events import AnyEvent, EventData
+from foreman.core.events import AnyEvent, ClarificationQuestion, EventData
 from foreman.core.projects import Project
 
 
@@ -27,10 +27,18 @@ class ModelReply:
     tool_calls: tuple[ToolCall, ...] = ()
 
 
-class Provider(Protocol):
-    """Fournisseur de modèle. Sans état entre requêtes."""
+@dataclass(frozen=True, slots=True)
+class ConversationMessage:
+    """Un message de l'historique envoyé au modèle (le dernier est celui du tour courant)."""
 
-    async def complete(self, messages: Sequence[str]) -> ModelReply: ...
+    role: Literal["user", "assistant"]
+    text: str
+
+
+class Provider(Protocol):
+    """Fournisseur de modèle. Sans état entre requêtes : l'historique vient de l'appelant."""
+
+    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply: ...
 
 
 class AdapterError(Exception):
@@ -92,6 +100,17 @@ class ProjectStore(Protocol):
 
     async def list(self) -> list[Project]:
         """Les projets, du plus récent au plus ancien (bornés par la capacité du magasin)."""
+        ...
+
+    async def get_open_questions(self, project_id: UUID) -> Sequence[ClarificationQuestion]:
+        """Questions de clarification du projet (ouvertes, répondues, reportées) ; `[]` si aucune
+        ou si le projet est inconnu. Relues après un redémarrage en mode PostgreSQL."""
+        ...
+
+    async def set_open_questions(
+        self, project_id: UUID, questions: Sequence[ClarificationQuestion]
+    ) -> None:
+        """Remplace les questions du projet. Lève `UnknownProject` si le projet n'existe pas."""
         ...
 
 

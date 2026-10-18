@@ -11,10 +11,10 @@ from pydantic import JsonValue
 
 from foreman.core.catalog import Catalog, SkillDocument, parse_skill
 from foreman.core.planning import Draft, DraftStep, Planner, build_content, content_hash
-from foreman.core.ports import ModelReply, ToolCall
+from foreman.core.ports import ConversationMessage, ModelReply, ToolCall
 from foreman.core.turn import TurnRequest, TurnService
 from foreman.infra.file_catalog import load_catalog
-from foreman.infra.in_memory import InMemoryEventLog, in_memory_stores
+from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
 
 CATALOG_ROOT = Path(__file__).resolve().parents[2] / "catalog"
 PROJECT = UUID("00000000-0000-4000-8000-000000000001")
@@ -34,6 +34,7 @@ def draft(
     return Draft(
         title=title,
         summary="Résumé",
+        environment="staging",
         steps=[DraftStep(step_title, "gitlab.create_group", params or ROOT_GROUP)],
         stack={"backend": "go-api", "frontend": "vue-web"},
         skills=skills,
@@ -80,12 +81,18 @@ class ProposalProvider:
     def __init__(self, arguments: dict[str, Any]) -> None:
         self._arguments = arguments
 
-    async def complete(self, messages: Sequence[str]) -> ModelReply:
+    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply:
         return ModelReply(text="ok", tool_calls=(ToolCall("propose_plan", self._arguments),))
 
 
 def proposal(*steps: dict[str, Any], skills: Sequence[str] = (SKILL,)) -> dict[str, Any]:
-    return {"title": "Plan", "summary": "Résumé", "steps": list(steps), "skills": list(skills)}
+    return {
+        "title": "Plan",
+        "summary": "Résumé",
+        "environment": "staging",
+        "steps": list(steps),
+        "skills": list(skills),
+    }
 
 
 def group(**extra: Any) -> dict[str, Any]:
@@ -101,7 +108,9 @@ async def turn(arguments: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[UU
     catalog = load_catalog(CATALOG_ROOT, environment="staging")
     state, stores = in_memory_stores()
     log = InMemoryEventLog()
-    service = TurnService(ProposalProvider(arguments), log, Planner(catalog, stores.plans))
+    service = TurnService(
+        ProposalProvider(arguments), log, Planner(catalog, stores.plans), InMemoryProjectStore()
+    )
     project_id = uuid4()
     await service.run(TurnRequest("u", project_id, "salut"), service.begin(project_id))
     events = [e.model_dump(mode="json") for e in await log.read_after(project_id, 0)]

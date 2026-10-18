@@ -9,7 +9,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from foreman.bootstrap.configure import App, Profile
-from foreman.core.ports import ModelReply, Provider
+from foreman.core.clarification import answer_text
+from foreman.core.events import ClarificationQuestion
+from foreman.core.ports import ConversationMessage, ModelReply, Provider
 from foreman.core.turn import TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
@@ -25,14 +27,14 @@ class GatedProvider:
         self.started = asyncio.Event()
         self.release = asyncio.Event()
 
-    async def complete(self, messages: Sequence[str]) -> ModelReply:
+    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply:
         self.started.set()
         await self.release.wait()
         return ModelReply(text="ok")
 
 
 class ExplodingProvider:
-    async def complete(self, messages: Sequence[str]) -> ModelReply:
+    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply:
         raise RuntimeError("secret-interne postgres://user:pass@db")
 
 
@@ -40,11 +42,12 @@ def build_app(
     provider: Provider, projects: InMemoryProjectStore | None = None
 ) -> tuple[FastAPI, InMemoryEventLog]:
     log = InMemoryEventLog()
+    store = projects or InMemoryProjectStore()
     state = App(
         profile=Profile.WEB,
-        projects=projects or InMemoryProjectStore(),
+        projects=store,
         events=log,
-        turns=TurnService(provider, log, make_planner()),
+        turns=TurnService(provider, log, make_planner(), store),
     )
     return create_app(state), log
 
@@ -75,7 +78,7 @@ def test_healthz_reports_the_version_from_the_environment(monkeypatch: pytest.Mo
 
 
 async def test_projects_are_listed_newest_first() -> None:
-    app, _ = build_app(ReplayProvider.s01(catalog_dir_from_env()))
+    app, _ = build_app(ReplayProvider.from_dir(catalog_dir_from_env()))
     async with http(app) as client:
         for title in ("premier", "second"):
             await client.post("/api/projects", json={"title": title})
@@ -84,7 +87,7 @@ async def test_projects_are_listed_newest_first() -> None:
 
 
 async def test_project_lifecycle_and_a_turn_through_the_api() -> None:
-    app, log = build_app(ReplayProvider.s01(catalog_dir_from_env()))
+    app, log = build_app(ReplayProvider.from_dir(catalog_dir_from_env()))
     async with http(app) as client:
         created = await client.post("/api/projects", json={"title": "Safe Eat"})
         assert created.status_code == 201
@@ -109,7 +112,7 @@ async def test_project_lifecycle_and_a_turn_through_the_api() -> None:
 
 
 async def test_unknown_project_is_an_opaque_404() -> None:
-    app, _ = build_app(ReplayProvider.s01(catalog_dir_from_env()))
+    app, _ = build_app(ReplayProvider.from_dir(catalog_dir_from_env()))
     async with http(app) as client:
         missing = f"/api/projects/{uuid4()}"
         for response in (
@@ -121,7 +124,7 @@ async def test_unknown_project_is_an_opaque_404() -> None:
 
 
 async def test_message_validation_does_not_echo_the_input() -> None:
-    app, _ = build_app(ReplayProvider.s01(catalog_dir_from_env()))
+    app, _ = build_app(ReplayProvider.from_dir(catalog_dir_from_env()))
     async with http(app) as client:
         project = (await client.post("/api/projects")).json()
         secret = "mot-de-passe-" + "x" * 4000
@@ -175,7 +178,7 @@ async def test_provider_failure_through_the_api_leaks_nothing() -> None:
 
 async def test_project_cap_is_a_503() -> None:
     app, _ = build_app(
-        ReplayProvider.s01(catalog_dir_from_env()), InMemoryProjectStore(max_projects=1)
+        ReplayProvider.from_dir(catalog_dir_from_env()), InMemoryProjectStore(max_projects=1)
     )
     async with http(app) as client:
         assert (await client.post("/api/projects")).status_code == 201
@@ -234,18 +237,54 @@ def test_unknown_api_path_is_a_404_for_every_method_even_with_the_spa(
         assert response.json() == {"error": "not_found"}, method
 
 
-async def test_question_route_is_an_opaque_501_and_404_without_echoing_the_input() -> None:
-    app, _ = build_app(ReplayProvider.s01(catalog_dir_from_env()))
-    secret = "valeur-saisie-par-lutilisateur"  # noqa: S105
-    body = {"decision": "answer", "value": secret}
+class RecordingProvider:
+    """Compte les appels et garde le dernier message reçu."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.last = ""
+
+    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply:
+        self.calls += 1
+        self.last = messages[-1].text
+        return ModelReply(text="ok")
+
+
+async def test_answering_a_question_is_refused_without_echo_and_starts_no_turn() -> None:
+    provider, store = RecordingProvider(), InMemoryProjectStore()
+    app, log = build_app(provider, store)
+    secret = "valeur-hors-options"  # noqa: S105
     async with http(app) as client:
-        project = (await client.post("/api/projects")).json()
-        known = await client.post(f"/api/projects/{project['id']}/questions/q1", json=body)
-        unknown = await client.post(f"/api/projects/{uuid4()}/questions/q1", json=body)
-        invalid = await client.post(
-            f"/api/projects/{project['id']}/questions/q1", json={"decision": "answer"}
+        mine = UUID((await client.post("/api/projects")).json()["id"])
+        other = UUID((await client.post("/api/projects")).json()["id"])
+        question = ClarificationQuestion(
+            id="q1-1", field="environment", prompt="Où ?", options=["staging"], status="open"
         )
-    assert (known.status_code, known.json()) == (501, {"error": "not_implemented"})
-    assert (unknown.status_code, unknown.json()) == (404, {"error": "not_found"})
-    assert (invalid.status_code, invalid.json()) == (422, {"error": "invalid_request"})
-    assert secret not in known.text + unknown.text
+        await store.set_open_questions(mine, [question])
+        url = f"/api/projects/{mine}/questions/q1-1"
+        foreign = await client.post(
+            f"/api/projects/{other}/questions/q1-1", json={"decision": "answer", "value": "staging"}
+        )
+        outside = await client.post(url, json={"decision": "answer", "value": secret})
+        assert provider.calls == 0  # aucun refus n'a lancé de tour
+
+        subscription = log.subscribe(mine)
+        accepted = await client.post(url, json={"decision": "answer", "value": "staging"})
+        async with asyncio.timeout(5):
+            while event := await subscription.next():
+                if event.type == "turn_status" and event.data.status == "completed":
+                    break
+        subscription.close()
+        again = await client.post(url, json={"decision": "answer", "value": "staging"})
+
+    assert (foreign.status_code, foreign.json()) == (404, {"error": "not_found"})
+    assert (outside.status_code, outside.json()) == (422, {"error": "invalid_request"})
+    assert secret not in outside.text
+    assert (accepted.status_code, accepted.json()) == (
+        202,
+        {"question_id": "q1-1", "status": "answered"},
+    )
+    assert (again.status_code, again.json()) == (409, {"error": "question_closed"})
+    assert provider.calls == 1
+    assert provider.last == answer_text("environment", "staging")  # texte produit par la route
+    assert [q.status for q in await store.get_open_questions(mine)] == ["answered"]
