@@ -3,7 +3,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from foreman.core.events import (
     Budget,
@@ -43,6 +43,7 @@ ErrorCode = Literal[
     "plan_hash_mismatch",
     "plan_not_approvable",
     "execution_in_progress",
+    "question_closed",
 ]
 
 
@@ -50,6 +51,26 @@ class ErrorResponse(BaseModel):
     """Erreur opaque : un code, jamais le détail d'une exception ni la saisie de l'utilisateur."""
 
     error: ErrorCode
+
+
+class QuestionAnswerRequest(BaseModel):
+    """Réponse à une question de clarification, ou report (`defer`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    decision: Literal["answer", "defer"]
+    value: Annotated[str | None, Field(min_length=1, max_length=500)] = None
+
+    @model_validator(mode="after")
+    def _answer_needs_a_value(self) -> "QuestionAnswerRequest":
+        if self.decision == "answer" and self.value is None:
+            raise ValueError("value requis pour answer")
+        return self
+
+
+class QuestionAccepted(BaseModel):
+    question_id: Annotated[str, Field(max_length=64)]
+    status: Literal["answered", "deferred"]
 
 
 class ApprovalRequest(BaseModel):

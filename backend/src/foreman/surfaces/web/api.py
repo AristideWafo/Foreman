@@ -27,6 +27,8 @@ from foreman.surfaces.web.schemas import (
     MessageAccepted,
     MessageRequest,
     PlanView,
+    QuestionAccepted,
+    QuestionAnswerRequest,
 )
 from foreman.surfaces.web.tasks import TaskRegistry
 
@@ -229,6 +231,34 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         else:
             response.status_code = 200  # rejeu idempotent : mêmes identifiants
         return ApprovalAccepted(approval_id=result.approval_id, execution_id=result.execution_id)
+
+    @router.post(
+        "/projects/{project_id}/questions/{question_id}",
+        status_code=202,
+        response_model=QuestionAccepted,
+        responses={
+            **_ERRORS,
+            200: {
+                "model": QuestionAccepted,
+                "description": "Question reportée (`decision: defer`)",
+            },
+            404: {
+                "model": ErrorResponse,
+                "description": "Introuvable, y compris une question d'un autre projet",
+            },
+            409: {
+                "model": ErrorResponse,
+                "description": "`turn_in_progress` ou `question_closed` (déjà répondue)",
+            },
+        },
+    )
+    async def answer_question(
+        project_id: UUID, question_id: str, body: QuestionAnswerRequest
+    ) -> QuestionAccepted:
+        """Répond à une question de clarification ou la reporte (logique à venir : 501)."""
+        if await app.projects.get(project_id) is None:
+            raise ApiError(404, "not_found")
+        raise ApiError(501, "not_implemented")
 
     @router.get(
         "/projects/{project_id}/plans/{plan_id}", response_model=PlanView, responses=_ERRORS
