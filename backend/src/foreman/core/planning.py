@@ -191,21 +191,59 @@ def render_key(template: str, project_id: UUID, seq: int, params: Mapping[str, J
     return _PLACEHOLDER.sub(replace, template)
 
 
+_NUMERIC: Final = {"integer", "number"}
+
+
+def _output_types(declared: object) -> set[str]:
+    """Types JSON d'un champ de sortie déclaré par le catalogue (`integer`, `{enum: [...]}`...)."""
+    if isinstance(declared, str):
+        return {declared}
+    if isinstance(declared, dict) and isinstance(declared.get("enum"), list):
+        return {"string" if isinstance(v, str) else "number" for v in declared["enum"]}
+    return {"array"} if isinstance(declared, list) else set()
+
+
+def _accepts(declared: object, schema: object) -> bool:
+    """Le paramètre accepte-t-il une valeur du type de sortie déclaré ? Un paramètre énuméré ou
+    sans type n'accepte aucune référence (la valeur ne serait pas garantie)."""
+    if not isinstance(schema, dict) or "enum" in schema or "const" in schema:
+        return False
+    kind = schema.get("type")
+    accepted = {kind} if isinstance(kind, str) else set(kind) if isinstance(kind, list) else set()
+    produced = _output_types(declared)
+    if "number" in accepted:
+        accepted |= _NUMERIC
+    return bool(produced) and produced <= accepted
+
+
 def _check_params(
     tool: ToolDefinition,
     params: Mapping[str, JsonValue],
     seq: int,
     earlier: Sequence[ToolDefinition],
 ) -> None:
-    """Références valides (étape antérieure, champ de sa sortie) et schéma respecté.
+    """Références valides et schéma respecté.
 
-    Une valeur qui est une référence n'est pas contrôlée par le schéma ici : la gateway valide les
-    paramètres résolus au moment de l'exécution.
+    Une référence est la valeur ENTIÈRE d'un paramètre (jamais imbriquée), vise une étape
+    antérieure et un champ de sa sortie dont le type convient au paramètre : un refus ici évite
+    un échec en cours d'exécution. Le schéma du paramètre n'est pas appliqué à la valeur résolue
+    (la gateway le fait à l'exécution) ; les autres paramètres le sont.
     """
-    for step, field in (ref for value in params.values() for ref in _walk(value)):
+    properties = tool.input.get("properties")
+    skipped: set[str] = set()
+    for key, value in params.items():
+        found = _walk(value)
+        if not found:
+            continue
+        if not is_reference(value):
+            raise InvalidPlan  # référence imbriquée dans une liste ou un objet
+        step, field = found[0]
         if not 1 <= step < seq or field not in earlier[step - 1].output:
             raise InvalidPlan
-    skipped = _reference_keys(params)
+        schema = properties.get(key) if isinstance(properties, dict) else None
+        if not _accepts(earlier[step - 1].output[field], schema):
+            raise InvalidPlan
+        skipped.add(key)
     problems = [
         error
         for error in Draft202012Validator(tool.input).iter_errors(dict(params))
@@ -294,6 +332,8 @@ def build_content(draft: Draft, project_id: UUID, catalog: Catalog) -> tuple[Pla
         policy_sha256=catalog.policy_sha256,
     )
     canonical = content.canonical()
+    if _has_nul(canonical):
+        raise InvalidPlan  # PostgreSQL refuse \u0000 : mieux vaut un plan invalide qu'une panne
     try:
         size = len(canonical_json(canonical))
     except ValueError:  # NaN ou infini
@@ -301,6 +341,16 @@ def build_content(draft: Draft, project_id: UUID, catalog: Catalog) -> tuple[Pla
     if size > MAX_PLAN_BYTES:
         raise InvalidPlan
     return content, content_hash(canonical)
+
+
+def _has_nul(value: object) -> bool:
+    if isinstance(value, str):
+        return "\x00" in value
+    if isinstance(value, dict):
+        return any(_has_nul(k) or _has_nul(v) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_has_nul(v) for v in value)
+    return False
 
 
 def _skills(names: Sequence[str], catalog: Catalog) -> list[PlanSkillContent]:

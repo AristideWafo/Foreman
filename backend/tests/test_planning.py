@@ -21,6 +21,7 @@ PROJECT = UUID("00000000-0000-4000-8000-000000000001")
 SKILL = "gitlab-project-creation"
 ROOT_GROUP: dict[str, JsonValue] = {"parent_group_id": 1000, "name": "Safe Eat", "path": "safe-eat"}
 FROM_STEP_1: dict[str, JsonValue] = {"$from": {"step": 1, "field": "group_id"}}
+NESTED: dict[str, JsonValue] = {"a": {"$from": {"step": 1, "field": "web_url"}}}
 
 
 def draft(
@@ -123,6 +124,19 @@ async def turn(arguments: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[UU
         ),
         pytest.param(proposal(group(), skills=("skill-fantome",)), id="skill-inconnu"),
         pytest.param(proposal(group(tool_class="read")), id="classe-fournie-par-le-modele"),
+        pytest.param(
+            proposal(group(), subgroup({"$from": {"step": 1, "field": "web_url"}})),
+            id="chaine-dans-un-parametre-entier",
+        ),
+        pytest.param(
+            proposal(group(), {**subgroup(1), "params": {**ROOT_GROUP, "name": FROM_STEP_1}}),
+            id="entier-dans-un-parametre-chaine",
+        ),
+        pytest.param(
+            proposal(group(), {**subgroup(1), "params": {**ROOT_GROUP, "name": NESTED}}),
+            id="reference-imbriquee",
+        ),
+        pytest.param({**proposal(group()), "title": "plan\x00piege"}, id="caractere-nul"),
     ],
 )
 async def test_a_refused_plan_is_reported_and_nothing_is_stored(arguments: dict[str, Any]) -> None:
