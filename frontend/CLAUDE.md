@@ -25,6 +25,8 @@ et les primitives de chat (`MessageScroller`, `Message`, `Bubble`, `Trace`).
 continuer, à la racine du dépôt : `npx skills add shadcn/ui`. Il vérifie ensuite que le dossier existe et
 relit la skill. Aucun composant n'est écrit « de mémoire » sans elle.
 
+La CLI `shadcn` n'est pas une dépendance du projet (elle embarque `braces`, vulnérable) : on l'exécute avec `pnpm dlx shadcn@latest`, et le CSS `shadcn/tailwind.css` est copié dans `src/shadcn.css`.
+
 Règles de la skill, déjà appliquées ici :
 
 - On cherche dans le registre (`pnpm dlx shadcn@latest search`) et on lit la doc (`... docs <composant>`)
