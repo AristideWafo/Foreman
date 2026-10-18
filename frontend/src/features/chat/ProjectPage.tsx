@@ -129,19 +129,19 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   return (
     <>
       <PageHeader>{title}</PageHeader>
-      <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+      <div className="flex min-h-0 w-full flex-1 flex-col">
         {connection.status === "reconnecting" ? (
-          <p role="status" className="px-4 pt-3 text-sm">
+          <p role="status" className="mx-auto w-full max-w-3xl px-4 pt-3 text-sm">
             Connexion interrompue, reconnexion en cours…
           </p>
         ) : null}
         {connecting ? (
-          <p role="status" className="px-4 pt-3 text-sm">
+          <p role="status" className="mx-auto w-full max-w-3xl px-4 pt-3 text-sm">
             Connexion au projet…
           </p>
         ) : null}
         {!connecting && items.length === 0 ? (
-          <p className="px-4 pt-3 text-sm">
+          <p className="mx-auto w-full max-w-3xl px-4 pt-3 text-sm">
             Aucun message pour l'instant. Décrivez ce que vous voulez faire.
           </p>
         ) : null}
@@ -149,7 +149,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           <MessageScrollerProvider autoScroll>
             <MessageScroller aria-label="Conversation" role="log">
               <MessageScrollerViewport>
-                <MessageScrollerContent className="gap-4 px-4 py-4">
+                <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 px-4 py-4">
                   {items.map((item) => (
                     <MessageScrollerItem
                       key={item.key}
@@ -174,7 +174,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
             </MessageScroller>
           </MessageScrollerProvider>
         </div>
-        <div className="px-4 pb-4">
+        <div className="mx-auto w-full max-w-3xl px-4 pb-4">
           <MessageInput
             value={draft}
             onChange={setDraft}
