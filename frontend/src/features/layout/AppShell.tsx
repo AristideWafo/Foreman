@@ -11,13 +11,16 @@ export function AppShell() {
   const activeProjectId = match?.params.projectId ?? null;
   return (
     <TooltipProvider>
-      <SidebarProvider style={{ "--sidebar-width": "20rem" } as React.CSSProperties}>
+      <SidebarProvider
+        className="h-svh"
+        style={{ "--sidebar-width": "20rem" } as React.CSSProperties}
+      >
         <AppSidebar
           projects={projects}
           activeProjectId={activeProjectId}
           homeActive={activeProjectId === null}
         />
-        <SidebarInset>
+        <SidebarInset className="min-h-0 overflow-hidden">
           <Outlet />
         </SidebarInset>
       </SidebarProvider>

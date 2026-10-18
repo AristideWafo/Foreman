@@ -31,7 +31,7 @@ export function HomePage() {
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-10 px-4 py-8">
         <div className="flex flex-col items-center gap-2 text-center">
           <p className="flex items-center gap-2 text-sm font-medium">
-            <SparklesIcon className="size-4" aria-hidden="true" />
+            <SparklesIcon aria-hidden="true" />
             Bonjour
           </p>
           <h2 className="text-3xl font-semibold tracking-tight">Que voulez-vous faire ?</h2>

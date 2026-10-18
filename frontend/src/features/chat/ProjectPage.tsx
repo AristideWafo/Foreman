@@ -38,7 +38,7 @@ function TimelineEntry({ item }: { item: TimelineItem }) {
       return item.role === "user" ? (
         <Message align="end">
           <MessageContent>
-            <Bubble align="end">
+            <Bubble variant="secondary" align="end">
               <BubbleContent className="whitespace-pre-wrap">
                 <span className="sr-only">Vous : </span>
                 {item.text}
@@ -145,33 +145,35 @@ export function ProjectPage({ projectId }: { projectId: string }) {
             Aucun message pour l'instant. Décrivez ce que vous voulez faire.
           </p>
         ) : null}
-        <MessageScrollerProvider autoScroll>
-          <MessageScroller aria-label="Conversation" role="log">
-            <MessageScrollerViewport>
-              <MessageScrollerContent className="gap-4 px-4 py-4">
-                {items.map((item) => (
-                  <MessageScrollerItem
-                    key={item.key}
-                    messageId={item.key}
-                    scrollAnchor={item.kind === "message" && item.role === "user"}
-                    className="motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0"
-                  >
-                    <TimelineEntry item={item} />
-                  </MessageScrollerItem>
-                ))}
-                {awaitingServer ? (
-                  <MessageScrollerItem
-                    messageId="pending"
-                    className="motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0"
-                  >
-                    <TurnTrace status="running" tools={[]} />
-                  </MessageScrollerItem>
-                ) : null}
-              </MessageScrollerContent>
-            </MessageScrollerViewport>
-            <MessageScrollerButton />
-          </MessageScroller>
-        </MessageScrollerProvider>
+        <div className="min-h-0 flex-1">
+          <MessageScrollerProvider autoScroll>
+            <MessageScroller aria-label="Conversation" role="log">
+              <MessageScrollerViewport>
+                <MessageScrollerContent className="gap-4 px-4 py-4">
+                  {items.map((item) => (
+                    <MessageScrollerItem
+                      key={item.key}
+                      messageId={item.key}
+                      scrollAnchor={item.kind === "message" && item.role === "user"}
+                      className="motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0"
+                    >
+                      <TimelineEntry item={item} />
+                    </MessageScrollerItem>
+                  ))}
+                  {awaitingServer ? (
+                    <MessageScrollerItem
+                      messageId="pending"
+                      className="motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0"
+                    >
+                      <TurnTrace status="running" tools={[]} />
+                    </MessageScrollerItem>
+                  ) : null}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+              <MessageScrollerButton />
+            </MessageScroller>
+          </MessageScrollerProvider>
+        </div>
         <div className="px-4 pb-4">
           <MessageInput
             value={draft}

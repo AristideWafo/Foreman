@@ -62,7 +62,8 @@ shadcn ne se modifie que pour cela et pour les jetons de mouvement ci-dessous.
 2. Se justifie par le **nombre de clics** : une tâche courante se fait en **deux clics ou moins**
    (idéalement un champ + Entrée). Pas de modale quand une zone en ligne suffit, pas d'étape inutile.
 3. Reste **sobre** : peu d'éléments par écran, une seule action principale visible, pas de décoration.
-4. N'ajoute **aucun contrôle sans effet** (pièce jointe, option…) : on l'ajoute quand le serveur le gère.
+4. N'ajoute **aucun contrôle sans effet** (pièce jointe, option…) : on l'ajoute quand le serveur le gère. Une entrée de
+   navigation pour une page à venir est permise si elle est **désactivée** et signalée « bientôt » (voir `DESIGN.md`).
 
 ## Mouvement
 

@@ -1,9 +1,20 @@
-import { FolderIcon, HomeIcon, PlusIcon, ServerStackIcon } from "@heroicons/react/24/outline";
+import {
+  Cog6ToothIcon,
+  FolderIcon,
+  HomeIcon,
+  InformationCircleIcon,
+  PlusIcon,
+  ServerStackIcon,
+  UserCircleIcon,
+  UsersIcon,
+} from "@heroicons/react/24/outline";
+import type { ComponentType, SVGProps } from "react";
 import { Link } from "react-router-dom";
 import { LinkButton } from "@/components/LinkButton";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupAction,
   SidebarGroupContent,
@@ -12,7 +23,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
 
 export interface SidebarProject {
@@ -27,6 +37,39 @@ interface AppSidebarProps {
   homeActive: boolean;
 }
 
+type Icon = ComponentType<SVGProps<SVGSVGElement>>;
+
+// Même classes pour toutes les entrées du rail : icône centrée, donc alignée.
+const RAIL_BUTTON = "justify-center px-0";
+
+function RailItem({
+  label,
+  icon: IconComponent,
+  active = false,
+  to,
+}: {
+  label: string;
+  icon: Icon;
+  active?: boolean;
+  /** Sans `to`, l'entrée est désactivée : la page n'existe pas encore. */
+  to?: string;
+}) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip={{ children: to ? label : `${label} (bientôt)`, hidden: false }}
+        isActive={active}
+        disabled={!to}
+        className={RAIL_BUTTON}
+        render={to ? <Link to={to} /> : undefined}
+      >
+        <IconComponent />
+        <span className="sr-only">{label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
 /** Double barre latérale : rail d'icônes (navigation) + panneau (projets). */
 export function AppSidebar({ projects, activeProjectId, homeActive }: AppSidebarProps) {
   return (
@@ -34,56 +77,32 @@ export function AppSidebar({ projects, activeProjectId, homeActive }: AppSidebar
       <Sidebar collapsible="none" className="w-[calc(var(--sidebar-width-icon)+1px)]! border-r">
         <SidebarHeader>
           <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                className="md:h-8 md:p-0"
-                tooltip={{ children: "Foreman", hidden: false }}
-                render={<Link to="/" />}
-              >
-                <ServerStackIcon />
-                <span className="sr-only">Foreman</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            <RailItem label="Foreman" icon={ServerStackIcon} to="/" />
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupContent className="px-1.5 md:px-0">
+            <SidebarGroupContent>
               <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    tooltip={{ children: "Accueil", hidden: false }}
-                    isActive={homeActive}
-                    className="px-2.5 md:px-2"
-                    render={<Link to="/" />}
-                  >
-                    <HomeIcon />
-                    <span>Accueil</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    tooltip={{ children: "Projets", hidden: false }}
-                    isActive={!homeActive}
-                    className="px-2.5 md:px-2"
-                  >
-                    <FolderIcon />
-                    <span>Projets</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <RailItem label="Accueil" icon={HomeIcon} to="/" active={homeActive} />
+                <RailItem label="Projets" icon={FolderIcon} to="/" active={!homeActive} />
+                <RailItem label="Équipes" icon={UsersIcon} />
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+        <SidebarFooter>
+          <SidebarMenu>
+            <RailItem label="Informations" icon={InformationCircleIcon} />
+            <RailItem label="Paramètres" icon={Cog6ToothIcon} />
+            <RailItem label="Compte" icon={UserCircleIcon} />
+          </SidebarMenu>
+        </SidebarFooter>
       </Sidebar>
 
       <Sidebar collapsible="none" className="hidden min-w-0 flex-1 md:flex">
         <SidebarHeader className="gap-3 border-b p-4">
-          <div className="flex w-full items-center justify-between">
-            <span className="text-sm font-semibold">Foreman</span>
-            <SidebarTrigger />
-          </div>
+          <span className="text-sm font-semibold">Foreman</span>
           <LinkButton to="/" className="w-full">
             Nouveau projet
           </LinkButton>
