@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/AristideWafo/Foreman/compare/v0.4.0...v0.5.0) (2026-10-18)
+
+
+### Features
+
+* **persistance:** dépôts PostgreSQL et mémoire, migrations au démarrage, --with-db ([#26](https://github.com/AristideWafo/Foreman/issues/26), [#126](https://github.com/AristideWafo/Foreman/issues/126), [#127](https://github.com/AristideWafo/Foreman/issues/127)) ([79717c6](https://github.com/AristideWafo/Foreman/commit/79717c6974b27eb561d473982cfc5c7602841ff1))
+* **persistance:** ports et dépôts PostgreSQL et mémoire, migrations au démarrage, --with-db ([#137](https://github.com/AristideWafo/Foreman/issues/137)) ([0c61608](https://github.com/AristideWafo/Foreman/commit/0c6160894c702a1f23cfb583363b71032791e45b))
+
 ## [0.4.0](https://github.com/AristideWafo/Foreman/compare/v0.3.0...v0.4.0) (2026-10-18)
 
 
