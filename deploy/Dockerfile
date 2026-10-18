@@ -25,6 +25,8 @@ RUN useradd --system --uid 10001 --no-create-home foreman
 WORKDIR /app
 COPY --from=backend /app/.venv /app/.venv
 COPY --from=frontend /frontend/dist /app/static
+COPY backend/alembic.ini ./alembic.ini
+COPY backend/migrations ./migrations
 ARG APP_VERSION=dev
 ENV PATH="/app/.venv/bin:$PATH" FOREMAN_STATIC_DIR=/app/static PYTHONUNBUFFERED=1 FOREMAN_VERSION=$APP_VERSION
 USER 10001

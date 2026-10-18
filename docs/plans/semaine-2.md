@@ -42,7 +42,7 @@ fournisseurs réels, `environments`, `servers`, `connectors`, `permission_reques
 4. `execution_steps.idempotency_key` n'est plus unique : les étapes sont pré-insérées en `pending`
    (`UNIQUE(execution_id, seq)`) et la réservation passe par `step_idempotency(key PK, step_id, result)` avec
    `INSERT … ON CONFLICT DO NOTHING RETURNING`. Portée de la clé : `PRIMARY KEY (project_id, key)` (jamais
-   globale) et colonne `status` (`reserved` | `succeeded` | `failed`) pour distinguer réservé et terminé.
+   globale) et colonne `status` (`reserved` | `done`) pour distinguer réservé et terminé.
 5. `audit_events` : trigger `BEFORE UPDATE/DELETE` (par ligne) et trigger **distinct** `BEFORE TRUNCATE`
    (`FOR EACH STATEMENT`, seule forme valide pour `TRUNCATE`) ; colonnes `project_id`, `plan_id`,
    `step_seq`, `plan_hash`, `actor` ; pas de clé étrangère sur `execution_id`. Limite documentée : le rôle de
@@ -55,6 +55,16 @@ fournisseurs réels, `environments`, `servers`, `connectors`, `permission_reques
 9. États en anglais partout (base, API, événements).
 10. Les Skills sont tracées par `sha256` du contenu (le conteneur n'a pas de `.git`).
 11. Marquage du registre : `managed-by=foreman` (la spec dit `devplatform`).
+
+**Précisions issues de la revue du contrat.**
+12. Une réservation `reserved` sans résultat après une panne n'est pas rejouée à l'aveugle : `reserve_idempotency`
+    rend un résultat typé (nouvelle, déjà terminée avec son résultat, réservée sans résultat) et le moteur traite
+    ce dernier cas en `blocked`. Les dépôts filtrent toujours par `project_id` ; une ressource d'un autre projet
+    est absente (404), jamais interdite (403). L'horloge est `now()` côté base uniquement.
+13. L'approbation est une transaction unique : `UPDATE plans SET status='dev_approved' WHERE id=:id AND
+    status='proposed' AND expires_at > now()`, `INSERT approvals`, `INSERT executions` et étapes `pending`. Elle est
+    idempotente : un second appel avec le même hash sur un plan déjà `dev_approved` rend les mêmes `approval_id` et
+    `execution_id` ; un autre hash, un plan expiré ou exécuté est un refus typé.
 
 **Plan haché.** Contenu canonique `PlanContent` (Pydantic, `extra="forbid"`) : `schema, project_id, version, title,
 summary, environment, autonomy_level, stack, steps[{seq, title, tool, tool_version, tool_class, reversibility,
