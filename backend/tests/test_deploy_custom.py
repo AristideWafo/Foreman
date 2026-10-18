@@ -157,6 +157,8 @@ class TestRenderedCompose:
             "PROJECT": "mon-app",
             "FOREMAN_IMAGE": IMAGE,
             "FOREMAN_DOMAIN": "mon-app.example.com",
+            # seule FOREMAN_BASIC_AUTH_USERS manque : Compose interpole aussi db (profil inactif)
+            "POSTGRES_PASSWORD": "x",
         }
         result = subprocess.run(
             ["docker", "compose", "-f", "compose.yaml", "config", "-q"],  # noqa: S607
