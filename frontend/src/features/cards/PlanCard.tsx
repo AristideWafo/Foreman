@@ -1,28 +1,17 @@
 import { CheckIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
-import type { PlanCardData } from "../../api/events";
+import type { ExecutionCardData, PlanCardData } from "../../api/events";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  TraceCollapsible,
-  TraceCollapsibleContent,
-  TraceCollapsibleTrigger,
-  TraceLine,
-  TraceTitle,
-} from "@/components/ui/trace";
+import { CardHeading } from "@/components/CardHeading";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import type { StepLogs } from "../events/timeline";
+import { executionFacts } from "./ExecutionCard";
+import { ResourceList } from "./ResourceList";
 import { FactList } from "./FactList";
 import { StepList } from "./StepList";
 import { usePlanApproval } from "./usePlanApproval";
-import { planStatusLabel, shortHash } from "./vocabulary";
+import { executionStateLabel, planStatusLabel, shortHash } from "./vocabulary";
 
 /** Action « Valider le plan » : un clic. Recréée (`key`) à chaque carte réémise. */
 function ApprovePlan({
@@ -66,51 +55,46 @@ function ApprovePlan({
   );
 }
 
-/** Carte plan : ce que l'agent propose, et l'unique action « Valider le plan ». */
-export function PlanCard({ card, projectId }: { card: PlanCardData; projectId: string }) {
-  const done = card.steps.filter((s) => s.status === "succeeded").length;
+/**
+ * Carte plan : ce que l'agent propose, et l'unique action « Valider le plan ». Une fois le plan validé,
+ * l'exécution s'affiche dans cette même carte : mêmes étapes, statuts et journaux en direct.
+ */
+export function PlanCard({
+  card,
+  projectId,
+  execution,
+  logs = {},
+}: {
+  card: PlanCardData;
+  projectId: string;
+  execution?: ExecutionCardData;
+  logs?: StepLogs;
+}) {
+  const steps = execution?.steps ?? card.steps;
+  const done = steps.filter((s) => s.status === "succeeded").length;
   const { plan_id: planId, plan_hash: planHash } = card;
-  const canApprove = card.approvable === true && card.status === "proposed";
+  const canApprove = !execution && card.approvable === true && card.status === "proposed";
   const stack = Object.entries(card.stack ?? {});
   const skills = card.skills ?? [];
   const resources = card.expected_resources ?? [];
-  const status = planStatusLabel(card.status);
 
   return (
     <Card role="group" aria-label={`Plan : ${card.title}`} className="ring-0">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ClipboardDocumentListIcon aria-hidden="true" />
-          Plan : {card.title}
-        </CardTitle>
-        {status ? (
-          <CardAction>
-            <Badge variant="secondary">
-              <span className="sr-only">Statut du plan : </span>
-              {status}
-            </Badge>
-          </CardAction>
-        ) : null}
-        {card.summary ? (
-          <CardDescription className="whitespace-pre-wrap">{card.summary}</CardDescription>
-        ) : null}
-      </CardHeader>
+      <CardHeading
+        icon={<ClipboardDocumentListIcon aria-hidden="true" />}
+        title={`Plan : ${card.title}`}
+        badge={execution ? executionStateLabel(execution.state) : planStatusLabel(card.status)}
+        badgeLabel={execution ? "État de l'exécution" : "Statut du plan"}
+        live={Boolean(execution)}
+        description={card.summary}
+      />
       <CardContent className="flex flex-col gap-4">
-        <TraceCollapsible defaultOpen>
-          <TraceCollapsibleTrigger>
-            <TraceLine>
-              <TraceTitle>
-                Étapes : {done} sur {card.steps.length} terminées
-              </TraceTitle>
-            </TraceLine>
-          </TraceCollapsibleTrigger>
-          <TraceCollapsibleContent>
-            <StepList steps={card.steps} />
-          </TraceCollapsibleContent>
-        </TraceCollapsible>
+        <CollapsibleSection title={`Étapes : ${done} sur ${steps.length} terminées`}>
+          <StepList steps={steps} logs={logs} />
+        </CollapsibleSection>
         <div
           className="motion-safe:animate-in motion-safe:duration-300 motion-safe:fade-in-0 motion-safe:fill-mode-backwards"
-          style={{ animationDelay: `${card.steps.length * 120 + 200}ms` }}
+          style={{ animationDelay: `${steps.length * 120 + 200}ms` }}
         >
           <FactList
             facts={[
@@ -136,20 +120,7 @@ export function PlanCard({ card, projectId }: { card: PlanCardData; projectId: s
               },
               {
                 label: "Ressources attendues",
-                value:
-                  resources.length > 0 ? (
-                    <ul className="flex flex-col">
-                      {resources.map((r, index) => (
-                        <li key={`${index}:${r.provider}/${r.resource_type}/${r.name}`}>
-                          {r.name}
-                          <span className="text-xs text-muted-foreground">
-                            {" "}
-                            · {r.provider} · {r.resource_type}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null,
+                value: resources.length > 0 ? <ResourceList resources={resources} /> : null,
               },
               {
                 label: "Empreinte",
@@ -159,6 +130,7 @@ export function PlanCard({ card, projectId }: { card: PlanCardData; projectId: s
                   </code>
                 ) : null,
               },
+              ...(execution ? executionFacts(execution) : []),
             ]}
           />
         </div>

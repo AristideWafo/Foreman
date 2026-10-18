@@ -1,6 +1,13 @@
 import { describe, expect, test } from "vitest";
 import type { ProjectEvent } from "../../api/events";
-import { applyEvent, initialTimeline, parseEvent, type TimelineState } from "./timeline";
+import {
+  applyEvent,
+  foldExecutions,
+  initialTimeline,
+  parseEvent,
+  type TimelineItem,
+  type TimelineState,
+} from "./timeline";
 
 const base = { v: 1, project_id: "p", turn_id: "t", at: "2026-10-20T09:00:00Z" };
 
@@ -205,4 +212,22 @@ describe("timeline (sémantique du flux, contrat v1)", () => {
       status: "error",
     });
   });
+});
+
+test("foldExecutions : l'exécution est repliée dans la carte de son plan", () => {
+  const plan = {
+    key: "a",
+    kind: "card",
+    logs: {},
+    card: { kind: "plan", card_id: "p", steps: [] },
+  };
+  const run = {
+    key: "b",
+    kind: "card",
+    logs: { 1: ["ok"] },
+    card: { kind: "execution", card_id: "x", plan_card_id: "p", steps: [] },
+  };
+  const folded = foldExecutions([plan, run] as unknown as TimelineItem[]);
+  expect(folded).toHaveLength(1);
+  expect(folded[0]).toMatchObject({ key: "a", execution: { logs: { 1: ["ok"] } } });
 });

@@ -1,13 +1,8 @@
 import type { CardStep } from "../../api/events";
-import {
-  Trace,
-  TraceCollapsible,
-  TraceCollapsibleContent,
-  TraceCollapsibleTrigger,
-  TraceIcon,
-  TraceLine,
-  TraceTitle,
-} from "@/components/ui/trace";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { reveal } from "@/components/reveal";
+import { Trace } from "@/components/ui/trace";
+import type { StepLogs } from "../events/timeline";
 import { reversibilityLabel, stepStatus, toolClassLabel } from "./vocabulary";
 
 /** Détail d'une étape : outil, classe, réversibilité (champs facultatifs, `null` si absents). */
@@ -17,37 +12,53 @@ function stepMeta(step: CardStep): string {
     .join(" · ");
 }
 
-/** Étapes d'un plan ou d'une exécution : une ligne par étape, avec son statut (lu aux lecteurs d'écran). */
-export function StepList({ steps }: { steps: readonly CardStep[] }) {
+/** Journal filtré d'une étape : défilement interne, focalisable au clavier. */
+function LogBlock({ step, lines }: { step: number; lines: readonly string[] }) {
+  return (
+    <pre
+      role="log"
+      aria-label={`Journal de l'étape ${step}`}
+      tabIndex={0}
+      className="mt-1 max-h-40 overflow-auto rounded-md bg-muted p-2 font-mono text-xs wrap-break-word whitespace-pre-wrap text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      {lines.join("\n")}
+    </pre>
+  );
+}
+
+/**
+ * Étapes d'un plan ou d'une exécution : une ligne repliable par étape (détail de l'outil, puis son journal
+ * quand il arrive), avec son statut lu aux lecteurs d'écran.
+ */
+export function StepList({ steps, logs = {} }: { steps: readonly CardStep[]; logs?: StepLogs }) {
   return (
     <Trace>
       {steps.map((step, index) => {
         const status = stepStatus(String(step.status));
         const meta = stepMeta(step);
+        const lines = logs[step.step] ?? [];
+        const { className, style } = reveal(index, 120);
         return (
-          <TraceCollapsible
+          <CollapsibleSection
             key={step.step}
-            defaultOpen
-            className="motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0 motion-safe:slide-in-from-left-1 motion-safe:fill-mode-backwards"
-            style={{ animationDelay: `${index * 120}ms` }}
+            className={className}
+            style={style}
+            status={status.line === "pending" ? undefined : status.line}
+            icon={<status.Icon />}
+            title={
+              <>
+                <span className="font-mono">{step.step}.</span> {step.title}
+                <span className="sr-only"> : {status.label}</span>
+              </>
+            }
           >
-            <TraceCollapsibleTrigger disabled={!meta}>
-              <TraceLine status={status.line}>
-                <TraceIcon>
-                  <status.Icon />
-                </TraceIcon>
-                <TraceTitle>
-                  <span className="font-mono">{step.step}.</span> {step.title}
-                  <span className="sr-only"> : {status.label}</span>
-                </TraceTitle>
-              </TraceLine>
-            </TraceCollapsibleTrigger>
-            {meta ? (
-              <TraceCollapsibleContent>
-                <p className="font-mono text-xs">{meta}</p>
-              </TraceCollapsibleContent>
+            {meta || lines.length > 0 ? (
+              <>
+                {meta ? <p className="font-mono text-xs">{meta}</p> : null}
+                {lines.length > 0 ? <LogBlock step={step.step} lines={lines} /> : null}
+              </>
             ) : null}
-          </TraceCollapsible>
+          </CollapsibleSection>
         );
       })}
     </Trace>

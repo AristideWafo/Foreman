@@ -1,6 +1,6 @@
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { describeError, postMessage } from "../../api/client";
 import { LinkButton } from "@/components/LinkButton";
@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/message-scroller";
 import { Card } from "../cards/Card";
 import { useProjectEvents } from "../events/useProjectEvents";
-import type { TimelineItem } from "../events/timeline";
+import { foldExecutions, type TimelineItem } from "../events/timeline";
 import { useRecentProjects } from "../projects/useRecentProjects";
 import { MessageInput } from "./MessageInput";
 import { TurnTrace } from "./TurnTrace";
@@ -65,7 +65,14 @@ function TimelineEntry({ item, projectId }: { item: TimelineItem; projectId: str
     case "trace":
       return <TurnTrace status={item.status} tools={item.tools} />;
     case "card":
-      return <Card card={item.card} projectId={projectId} logs={item.logs} />;
+      return (
+        <Card
+          card={item.card}
+          projectId={projectId}
+          logs={item.execution?.logs ?? item.logs}
+          execution={item.execution?.card}
+        />
+      );
     case "error":
       return (
         <Alert variant="destructive">
@@ -79,7 +86,8 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { projects } = useRecentProjects();
-  const { items, turnRunning, connection, retry } = useProjectEvents(projectId);
+  const { items: events, turnRunning, connection, retry } = useProjectEvents(projectId);
+  const items = useMemo(() => foldExecutions(events), [events]);
   const visible = useStaggered(items, (previous) => (previous.kind === "trace" ? TRACE_MS : 450));
   const [draft, setDraft] = useState("");
   const firstMessage = useRef(readFirstMessage(location.state));
