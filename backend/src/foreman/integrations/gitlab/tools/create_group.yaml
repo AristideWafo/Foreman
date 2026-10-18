@@ -1,0 +1,24 @@
+tool: gitlab.create_group
+version: 1.0.0
+class: write_registry
+reversibility: compensable
+connector: gitlab
+input:
+  type: object
+  required: [parent_group_id, name, path]
+  properties:
+    parent_group_id: {type: integer}
+    name: {type: string, maxLength: 64}
+    path: {type: string, pattern: "^[a-z0-9][a-z0-9-]{1,40}$"}
+  additionalProperties: false
+output: {group_id: integer, web_url: string}
+idempotency:
+  key: "{project_id}:gitlab.group:{input.parent_group_id}:{input.path}"
+  strategy: lookup_then_create     # lecture puis création dans la même section critique
+registry:
+  resource_type: gitlab_group
+  external_id: group_id
+  marking: "mention managed-by=foreman dans la description du groupe"
+scope: {kind: create, parent: parent_group_id}
+redact: []
+timeout_s: 30

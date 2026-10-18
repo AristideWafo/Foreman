@@ -1,0 +1,17 @@
+tool: dns.list_records
+version: 1.0.0
+class: read
+reversibility: not_applicable
+connector: dns
+input:
+  type: object
+  required: [environment]
+  properties:
+    environment: {enum: [staging, production]}
+  additionalProperties: false
+output:
+  records:
+    - {name: string, type: string, target: string}
+scope: {kind: read}
+redact: []
+timeout_s: 15

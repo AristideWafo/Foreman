@@ -1,0 +1,29 @@
+tool: server.apply_playbook
+version: 1.0.0
+class: write_registry
+reversibility: per_playbook        # lue dans le manifeste du playbook
+connector: server
+input:
+  type: object
+  required: [environment, project, playbook, mode]
+  properties:
+    environment: {enum: [staging, production]}
+    project:     {type: string, pattern: "^[a-z0-9][a-z0-9-]{1,40}$"}
+    playbook:    {enum: [bootstrap_project, deploy_compose]}
+    mode:        {enum: [check, apply]}
+    extra_vars:  {type: object, properties: {}, additionalProperties: false}   # schéma propre à chaque playbook (vide en S1)
+  additionalProperties: false
+output:
+  run_id: string
+  status: {enum: [ok, changed, failed]}
+  changed_tasks: [string]
+idempotency:
+  key: "{execution_id}:{step_seq}:{input.playbook}"
+  on_conflict: return_previous_result
+registry:
+  resource_type: server_project
+  external_id: run_id
+  marking: "répertoire et services Compose du projet étiquetés managed-by=foreman"
+scope: {kind: update, target: project}
+redact: []
+timeout_s: 900

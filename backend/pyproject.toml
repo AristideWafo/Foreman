@@ -8,6 +8,8 @@ dependencies = [
   "pydantic>=2.9",
   "uvicorn>=0.32",
   "structlog>=24.4",
+  "pyyaml>=6.0.3",
+  "jsonschema>=4.26.0",
 ]
 
 [dependency-groups]
@@ -18,6 +20,8 @@ dev = [
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
   "ruff>=0.8",
+  "types-jsonschema>=4.26.0.20261006",
+  "types-pyyaml>=6.0.12.20260906",
 ]
 
 [build-system]
@@ -26,6 +30,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/foreman"]
+# Les définitions d'outils (YAML) voyagent avec le code : sans cela elles manquent dans l'image.
+include = ["src/foreman/**/*.py", "src/foreman/**/*.yaml"]
 
 [project.scripts]
 foreman = "foreman.surfaces.cli.main:main"
