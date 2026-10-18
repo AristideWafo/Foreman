@@ -231,10 +231,11 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
         "/api/projects/{project_id}/plans/{plan_id}",
         "/api/projects/{project_id}/plans/{plan_id}/approvals",
         "/api/projects/{project_id}/executions/{execution_id}",
+        "/api/projects/{project_id}/questions/{question_id}",
     }
     card = schemas["CardEvent"]["properties"]["data"]
     assert card["discriminator"]["propertyName"] == "kind"
-    assert set(card["discriminator"]["mapping"]) == {"plan", "execution"}
+    assert set(card["discriminator"]["mapping"]) == {"plan", "execution", "clarification"}
     assert (
         "kind" in schemas["PlanCardData"]["required"]
     )  # discriminant requis dans le schéma publié
@@ -403,3 +404,22 @@ def test_examples_cover_every_field_of_their_model(label: str) -> None:
     dumped = json.loads(event.data.model_dump_json())
     assert set(dumped) == set(type(event.data).model_fields)
     assert set(data) <= set(dumped)
+
+
+def test_clarification_card_rejects_out_of_bounds_input() -> None:
+    question = {
+        "id": "q1",
+        "field": "environment",
+        "prompt": "Quel environnement ?",
+        "status": "open",
+    }
+    card = {"card_id": "c", "kind": "clarification", "questions": [question]}
+    ADAPTER.validate_python(envelope("card", card))  # forme valide
+    for bad in (
+        {**card, "questions": [question] * 6},
+        {**card, "questions": [{**question, "options": ["a"] * 11}]},
+        {**card, "questions": [{**question, "prompt": "x" * 301}]},
+        {**card, "questions": [{**question, "inconnu": 1}]},
+    ):
+        with pytest.raises(ValidationError):
+            ADAPTER.validate_python(envelope("card", bad))

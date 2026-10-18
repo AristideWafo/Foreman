@@ -139,6 +139,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/questions/{question_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Question
+         * @description Répond à une question de clarification ou la reporte (logique à venir : 501).
+         */
+        post: operations["answer_question_api_projects__project_id__questions__question_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -206,7 +226,7 @@ export interface components {
              */
             at: string;
             /** Data */
-            data: components["schemas"]["PlanCardData"] | components["schemas"]["ExecutionCardData"];
+            data: components["schemas"]["PlanCardData"] | components["schemas"]["ExecutionCardData"] | components["schemas"]["ClarificationCardData"];
             /**
              * Project Id
              * Format: uuid
@@ -263,6 +283,49 @@ export interface components {
              * @default null
              */
             tool_class: ("read" | "write_registry" | "write_foreign" | "destructive" | "control") | null;
+        };
+        /**
+         * ClarificationCardData
+         * @description Carte de clarification : réémise entière (remplacement par `card_id`) à chaque réponse.
+         */
+        ClarificationCardData: {
+            /** Card Id */
+            card_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "clarification";
+            /** Questions */
+            questions: components["schemas"]["ClarificationQuestion"][];
+        };
+        /** ClarificationQuestion */
+        ClarificationQuestion: {
+            /**
+             * Answer
+             * @default null
+             */
+            answer: string | null;
+            /**
+             * Field
+             * @description Champ du plan visé
+             */
+            field: string;
+            /** Id */
+            id: string;
+            /**
+             * Options
+             * @description Choix proposés ; vide = réponse libre
+             * @default []
+             */
+            options: string[];
+            /** Prompt */
+            prompt: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "answered" | "deferred";
         };
         /** CreateProjectRequest */
         CreateProjectRequest: {
@@ -330,7 +393,7 @@ export interface components {
              * Error
              * @enum {string}
              */
-            error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented" | "plan_hash_mismatch" | "plan_not_approvable" | "execution_in_progress";
+            error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented" | "plan_hash_mismatch" | "plan_not_approvable" | "execution_in_progress" | "question_closed";
         };
         Event: components["schemas"]["MessageEvent"] | components["schemas"]["CardEvent"] | components["schemas"]["ExecutionStepEvent"] | components["schemas"]["ExecutionLogEvent"] | components["schemas"]["TurnStatusEvent"] | components["schemas"]["ErrorEvent"];
         /**
@@ -713,6 +776,29 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+        };
+        /** QuestionAccepted */
+        QuestionAccepted: {
+            /** Question Id */
+            question_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "answered" | "deferred";
+        };
+        /**
+         * QuestionAnswerRequest
+         * @description Réponse à une question de clarification, ou report (`defer`).
+         */
+        QuestionAnswerRequest: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "answer" | "defer";
+            /** Value */
+            value?: string | null;
         };
         /** ResourceRef */
         ResourceRef: {
@@ -1259,6 +1345,87 @@ export interface operations {
                 };
             };
             /** @description `plan_hash_mismatch` (hash différent de celui du plan), `plan_not_approvable` (expiré, invalidé ou exécuté), `execution_in_progress` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Pas encore implémenté */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    answer_question_api_projects__project_id__questions__question_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Question reportée (`decision: defer`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionAccepted"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionAccepted"];
+                };
+            };
+            /** @description Introuvable, y compris une question d'un autre projet */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `turn_in_progress` ou `question_closed` (déjà répondue) */
             409: {
                 headers: {
                     [name: string]: unknown;
