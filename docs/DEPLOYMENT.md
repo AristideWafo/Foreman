@@ -118,8 +118,12 @@ Si le mot de passe contient des caractères spéciaux, les encoder dans l'URL (`
   démarrent ensemble s'exécutent l'une après l'autre), puis insère l'utilisateur et l'équipe de développement
   (idempotent). Si la base n'est pas encore prête, elle réessaie 5 fois à 2 secondes d'intervalle avant d'échouer
   (Compose relance alors le conteneur).
-- Les projets, plans, approbations, exécutions, registre et audit sont en PostgreSQL et survivent à un redéploiement ;
-  le chat (événements) reste en mémoire et est vidé à chaque redémarrage.
+- Les projets, plans, approbations, exécutions, registre, audit **et le chat (journal d'événements)** sont en PostgreSQL
+  et survivent à un redéploiement. Détails, rétention et limites : [PERSISTENCE.md](PERSISTENCE.md). Deux points
+  d'exploitation :
+  - **un seul processus** : le direct (SSE) est diffusé en mémoire du processus ; ne lancez pas plusieurs réplicas de
+    `app` (ni `web` et `worker` séparés) sur la même base, le direct de l'un ne verrait pas les événements de l'autre ;
+  - **messages en clair** : le texte des échanges est stocké tel quel dans `project_events` (donc dans les dumps).
 - L'URL de la base n'est écrite dans aucun journal. La retirer du `.env` ramène l'application en mémoire.
 - Le service `app` ne démarre qu'une fois `db` sain (`depends_on: service_healthy`, ignoré sans `--with-db`).
 - **Contrôles de `deploy-custom.sh --with-db`** (valeurs jamais affichées) : Docker Compose 2.29 ou plus (limites `pids`) ;
@@ -139,6 +143,9 @@ Si le mot de passe contient des caractères spéciaux, les encoder dans l'URL (`
   docker compose -p <projet> exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > <fichier>.dump
   ```
 
+- **Migration `0002_event_log`** (journal du chat) : elle ajoute `project_events` et `projects.last_event_seq`, sans
+  réécriture de table ni verrou long. Le `pg_dump` automatique ci-dessus est donc pris **avant** elle ; **pas de retour
+  arrière d'image sans restaurer ce dump** (l'ancienne image ne reconnaît plus la révision `0002`).
 - **Retour arrière après une migration** : le retour arrière automatique du script ne restaure que l'image, jamais la base.
   Si le déploiement ajoute une migration Alembic, l'ancienne image **ne redémarre plus** (révision inconnue d'Alembic).
   Il faut restaurer le dump pris avant ce déploiement **avant** de relancer l'ancienne image. `pg_restore --clean` ne
@@ -155,8 +162,9 @@ Si le mot de passe contient des caractères spéciaux, les encoder dans l'URL (`
   (`dropdb` échoue tant que des connexions restent ouvertes : arrêter `app` d'abord, comme ci-dessus.)
 - Par SSH, `SSH_ORIGINAL_COMMAND` prime sur les arguments : les options (`--with-db`, `--dry-run`) doivent figurer dans la
   commande `deploy …` envoyée ; celles passées en argument au script sont ignorées.
-- Retour arrière d'une migration : jamais automatique. `downgrade()` supprime les tables (audit compris) ; ne le lancer
-  que sur une base de test.
+- Retour arrière d'une migration : jamais automatique. `downgrade()` supprime les tables (audit compris) ou le journal
+  du chat (`0002`) ; il est refusé quand elles contiennent des données, sauf `FOREMAN_ALLOW_DESTRUCTIVE_DOWNGRADE=1`.
+  Ne le lancer que sur une base de test.
 
 **Hypothèses à confirmer** (valeurs par défaut, toutes surchargeables dans `.env`) : réseau Traefik `traefik`,
 entrypoints `web` et `websecure`, résolveur de certificats `letsencrypt`, provider Docker de Traefik actif avec

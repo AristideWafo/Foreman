@@ -60,9 +60,27 @@ projects = sa.Table(
     sa.Column("locked_reason", sa.Text, nullable=True),
     sa.Column("created_by", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
+    # Dernier `seq` attribué dans `project_events` (0 = aucun événement) : voir infra/db/events.py.
+    sa.Column("last_event_seq", sa.Integer, nullable=False, server_default=sa.text("0")),
     sa.UniqueConstraint("team_id", "slug"),
     sa.CheckConstraint("char_length(name) <= 120", name="projects_name_len"),
     sa.CheckConstraint(_in("status", PROJECT_STATUSES), name="projects_status"),
+    sa.Index("ix_projects_created_at_desc", sa.text("created_at DESC")),
+)
+
+# Journal d'événements du chat (contrat figé v1) : `data` est la charge utile telle qu'émise.
+project_events = sa.Table(
+    "project_events",
+    metadata,
+    sa.Column("id", sa.BigInteger, sa.Identity(always=True), primary_key=True),
+    sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
+    sa.Column("seq", sa.Integer, nullable=False),
+    sa.Column("turn_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("type", sa.Text, nullable=False),
+    sa.Column("data", JSONB, nullable=False),
+    sa.Column("at", sa.DateTime(timezone=True), nullable=False),
+    sa.UniqueConstraint("project_id", "seq"),
+    sa.CheckConstraint("seq > 0", name="project_events_seq"),
 )
 
 plans = sa.Table(

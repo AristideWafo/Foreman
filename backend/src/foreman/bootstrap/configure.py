@@ -23,6 +23,7 @@ from foreman.core.ports import EventLog, ProjectStore
 from foreman.core.store import Stores
 from foreman.core.turn import TurnService
 from foreman.infra.db.engine import make_engine
+from foreman.infra.db.events import PostgresEventLog
 from foreman.infra.db.projects import PostgresProjectStore
 from foreman.infra.db.stores import postgres_stores
 from foreman.infra.file_catalog import catalog_dir_from_env, load_catalog
@@ -69,7 +70,7 @@ def configure(profile: Profile) -> App:
     catalog = load_catalog(environment=environment)
     # 3. Adaptateurs de connecteurs : bootstrap/adapters.py (seul endroit qui importe integrations)
     provider = ReplayProvider.s01(catalog_dir_from_env())
-    events = InMemoryEventLog()  # le chat reste en mémoire cette semaine
+    events: EventLog
     projects: ProjectStore
     lifecycle: Lifecycle
     persistence = "memory"
@@ -77,12 +78,14 @@ def configure(profile: Profile) -> App:
     if url and profile in _PERSISTENT_PROFILES:
         engine = make_engine(url)  # ne se connecte pas : les migrations viennent au démarrage
         projects = PostgresProjectStore(engine)
+        events = PostgresEventLog(engine)  # le chat survit au redémarrage
         stores = postgres_stores(engine)
         lifecycle = DatabaseLifecycle(url, engine)
         persistence = "postgres"
     else:
         memory_projects = InMemoryProjectStore()
         projects = memory_projects
+        events = InMemoryEventLog()
         stores = in_memory_stores(projects=memory_projects)[1]
         lifecycle = NoLifecycle()
     # 4. Services du cœur
