@@ -13,6 +13,7 @@ SCRIPT = DEPLOY / "deploy-custom.sh"
 COMPOSE = DEPLOY / "compose.custom.yaml"
 DIGEST = "sha256:" + "a" * 64
 IMAGE = f"ghcr.io/aristidewafo/foreman@{DIGEST}"
+AUTH = "admin:$apr1$sel$empreinte"  # empreinte factice (le `$` est littéral : pas de shell ici)
 
 
 def run_script(*args: str, ssh_command: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -91,6 +92,7 @@ class TestRenderedCompose:
             "FOREMAN_IMAGE": IMAGE,
             "FOREMAN_DOMAIN": "mon-app.example.com",
             "POSTGRES_PASSWORD": "test",
+            "FOREMAN_BASIC_AUTH_USERS": AUTH,
             "COMPOSE_PROFILES": profile,
         }
         out = subprocess.run(
@@ -129,3 +131,96 @@ class TestRenderedCompose:
         assert app["read_only"] is True
         assert app["cap_drop"] == ["ALL"]
         assert "ports" not in app
+
+    def test_the_whole_site_is_behind_basic_auth_except_healthz(self, tmp_path: Path) -> None:
+        labels = self.render(tmp_path)["services"]["app"]["labels"]
+        # `docker compose config` réécrit `$` en `$$` à l'affichage (sortie ré-analysable) ;
+        # la valeur réellement transmise à Traefik garde un seul `$`.
+        users = labels["traefik.http.middlewares.mon-app-auth.basicauth.users"]
+        assert users.replace("$$", "$") == AUTH
+        assert labels["traefik.http.middlewares.mon-app-auth.basicauth.removeheader"] == "true"
+        main = labels["traefik.http.routers.mon-app.middlewares"].split(",")
+        assert main[0] == "mon-app-auth"  # l'authentification passe avant tout le reste
+        health = labels["traefik.http.routers.mon-app-health.middlewares"].split(",")
+        assert "mon-app-auth" not in health
+        rule = labels["traefik.http.routers.mon-app-health.rule"]
+        assert "Path(`/healthz`)" in rule
+        assert int(labels["traefik.http.routers.mon-app-health.priority"]) > len(
+            labels["traefik.http.routers.mon-app.rule"]
+        )
+
+    def test_deployment_is_refused_without_credentials(self, tmp_path: Path) -> None:
+        (tmp_path / "compose.yaml").write_text(COMPOSE.read_text())
+        (tmp_path / ".env").write_text("")
+        env = {
+            "PATH": os.environ["PATH"],
+            "PROJECT": "mon-app",
+            "FOREMAN_IMAGE": IMAGE,
+            "FOREMAN_DOMAIN": "mon-app.example.com",
+        }
+        result = subprocess.run(
+            ["docker", "compose", "-f", "compose.yaml", "config", "-q"],  # noqa: S607
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+        assert result.returncode != 0
+        assert "FOREMAN_BASIC_AUTH_USERS" in result.stderr
+
+
+def stub_docker(tmp_path: Path) -> dict[str, str]:
+    """Faux `docker` qui accepte tout : permet d'exécuter le script sans serveur."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    docker = bin_dir / "docker"
+    docker.write_text("#!/usr/bin/env bash\nexit 0\n")
+    docker.chmod(0o755)
+    return {"PATH": f"{bin_dir}:{os.environ['PATH']}", "DEPLOY_ROOT": str(tmp_path / "opt")}
+
+
+def run_deploy(tmp_path: Path, env_file: str) -> subprocess.CompletedProcess[str]:
+    env = stub_docker(tmp_path)
+    project_dir = tmp_path / "opt" / "mon-app"
+    project_dir.mkdir(parents=True)
+    (project_dir / ".env").write_text(env_file)
+    return subprocess.run(  # noqa: S603
+        ["bash", str(SCRIPT), "mon-app", IMAGE],  # noqa: S607
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+
+BASE_ENV = "FOREMAN_DOMAIN=mon-app.example.com\n"
+
+
+@pytest.mark.parametrize(
+    "auth_line",
+    [
+        "",  # absent
+        "FOREMAN_BASIC_AUTH_USERS=admin:motdepasseenclair\n",
+        "FOREMAN_BASIC_AUTH_USERS=\n",
+        "FOREMAN_BASIC_AUTH_USERS='admin:$apr1$sel$ok,bob:motdepasseenclair'\n",
+    ],
+)
+def test_script_refuses_missing_or_plaintext_credentials(tmp_path: Path, auth_line: str) -> None:
+    result = run_deploy(tmp_path, BASE_ENV + auth_line)
+    assert result.returncode == 66
+    assert "FOREMAN_BASIC_AUTH_USERS" in result.stderr
+    assert not (tmp_path / "opt" / "mon-app" / ".current-image").exists()
+
+
+@pytest.mark.parametrize(
+    "auth_line",
+    [
+        "FOREMAN_BASIC_AUTH_USERS='admin:$apr1$sel$empreinte'\n",
+        'FOREMAN_BASIC_AUTH_USERS="admin:$2y$05$abcdefghijklmnopqrstuv,bob:{SHA}abc="\n',
+    ],
+)
+def test_script_accepts_hashed_credentials(tmp_path: Path, auth_line: str) -> None:
+    result = run_deploy(tmp_path, BASE_ENV + auth_line)
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "opt" / "mon-app" / ".current-image").read_text().strip() == IMAGE
