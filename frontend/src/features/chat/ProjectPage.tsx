@@ -20,7 +20,7 @@ import {
 import { Card } from "../cards/Card";
 import { useProjectEvents } from "../events/useProjectEvents";
 import { foldExecutions, type TimelineItem } from "../events/timeline";
-import { useRecentProjects } from "../projects/useRecentProjects";
+import { useProjects } from "../projects/useProjects";
 import { MessageInput } from "./MessageInput";
 import { TurnTrace } from "./TurnTrace";
 import { useStaggered } from "./useStaggered";
@@ -85,7 +85,7 @@ function TimelineEntry({ item, projectId }: { item: TimelineItem; projectId: str
 export function ProjectPage({ projectId }: { projectId: string }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { projects } = useRecentProjects();
+  const { projects } = useProjects();
   const { items: events, turnRunning, connection, retry } = useProjectEvents(projectId);
   const items = useMemo(() => foldExecutions(events), [events]);
   const visible = useStaggered(items, (previous) => (previous.kind === "trace" ? TRACE_MS : 450));

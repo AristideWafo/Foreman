@@ -65,6 +65,9 @@ class InMemoryProjectStore:
     async def get(self, project_id: UUID) -> Project | None:
         return self._projects.get(project_id)
 
+    async def list(self) -> list[Project]:
+        return list(reversed(self._projects.values()))
+
 
 class _Subscription:
     def __init__(self, log: "InMemoryEventLog", project_id: UUID, queue_size: int) -> None:

@@ -75,7 +75,12 @@ def create_app(app_state: App | None = None) -> FastAPI:
     @api.get("/healthz")
     async def healthz() -> dict[str, str]:
         version = os.environ.get(ENV_VERSION, "")[:32] or DEFAULT_VERSION
-        return {"status": "ok", "profile": state.profile.value, "version": version}
+        return {
+            "status": "ok",
+            "profile": state.profile.value,
+            "version": version,
+            "persistence": state.persistence,
+        }
 
     # Monté en dernier : les routes de l'API restent prioritaires sur la SPA.
     static_dir = os.environ.get(ENV_STATIC_DIR)

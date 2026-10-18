@@ -97,3 +97,17 @@ class PostgresProjectStore:
         return (
             None if row is None else Project(id=row.id, title=row.name, created_at=row.created_at)
         )
+
+    async def list(self) -> list[Project]:
+        statement = (
+            sa.select(t.projects.c.id, t.projects.c.name, t.projects.c.created_at)
+            .order_by(t.projects.c.created_at.desc(), t.projects.c.id)
+            .limit(self._max)
+        )
+        try:
+            async with self._engine.connect() as conn:
+                rows = (await conn.execute(statement)).all()
+        except SQLAlchemyError as exc:
+            log_failure("project.list", exc)
+            raise StoreError("stockage indisponible") from None
+        return [Project(id=r.id, title=r.name, created_at=r.created_at) for r in rows]

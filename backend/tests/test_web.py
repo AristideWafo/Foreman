@@ -68,9 +68,19 @@ async def wait_for_status(log: InMemoryEventLog, project_id: UUID, status: str) 
 def test_healthz_reports_the_version_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     client = TestClient(create_app())
     monkeypatch.setenv("FOREMAN_VERSION", "0.2.0")
-    assert client.get("/healthz").json() == {"status": "ok", "profile": "web", "version": "0.2.0"}
+    expected = {"status": "ok", "profile": "web", "persistence": "memory"}
+    assert client.get("/healthz").json() == {**expected, "version": "0.2.0"}
     monkeypatch.delenv("FOREMAN_VERSION")
-    assert client.get("/healthz").json() == {"status": "ok", "profile": "web", "version": "dev"}
+    assert client.get("/healthz").json() == {**expected, "version": "dev"}
+
+
+async def test_projects_are_listed_newest_first() -> None:
+    app, _ = build_app(ReplayProvider.s01(catalog_dir_from_env()))
+    async with http(app) as client:
+        for title in ("premier", "second"):
+            await client.post("/api/projects", json={"title": title})
+        listed = await client.get("/api/projects")
+    assert [p["title"] for p in listed.json()] == ["second", "premier"]
 
 
 async def test_project_lifecycle_and_a_turn_through_the_api() -> None:

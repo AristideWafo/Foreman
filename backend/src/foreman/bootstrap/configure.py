@@ -57,6 +57,7 @@ class App:
     gateway: Gateway | None = None  # seul chemin vers les outils ; consommé par le moteur
     approvals: ApprovalService | None = None
     engine: ExecutionEngine | None = None
+    persistence: str = "memory"  # « postgres » quand le stockage durable est branché
 
 
 def configure(profile: Profile) -> App:
@@ -71,12 +72,14 @@ def configure(profile: Profile) -> App:
     events = InMemoryEventLog()  # le chat reste en mémoire cette semaine
     projects: ProjectStore
     lifecycle: Lifecycle
+    persistence = "memory"
     url = os.environ.get(ENV_DATABASE_URL)
     if url and profile in _PERSISTENT_PROFILES:
         engine = make_engine(url)  # ne se connecte pas : les migrations viennent au démarrage
         projects = PostgresProjectStore(engine)
         stores = postgres_stores(engine)
         lifecycle = DatabaseLifecycle(url, engine)
+        persistence = "postgres"
     else:
         memory_projects = InMemoryProjectStore()
         projects = memory_projects
@@ -91,6 +94,7 @@ def configure(profile: Profile) -> App:
         turns=TurnService(provider, events, Planner(catalog, stores.plans)),
         stores=stores,
         lifecycle=lifecycle,
+        persistence=persistence,
         catalog=catalog,
         gateway=gateway,
         approvals=ApprovalService(catalog, stores, events),

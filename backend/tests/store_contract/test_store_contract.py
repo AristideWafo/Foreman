@@ -469,3 +469,9 @@ async def test_the_project_cap_holds_under_concurrent_creation(harness: Harness)
     created = [r for r in results if not isinstance(r, BaseException)]
     refused = [r for r in results if isinstance(r, CapacityExceeded)]
     assert (len(created), len(refused)) == (3, 7)  # aucune autre erreur, aucun dépassement
+
+
+async def test_projects_are_listed_newest_first(harness: Harness) -> None:
+    first = await harness.projects.create("premier")
+    second = await harness.projects.create("second")
+    assert [p.id for p in await harness.projects.list()] == [second.id, first.id]
