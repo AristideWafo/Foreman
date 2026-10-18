@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/AristideWafo/Foreman/compare/v0.5.0...v0.6.0) (2026-10-18)
+
+
+### Features
+
+* **gateway:** Tool Gateway minimale et matrice de politique (R1, R2, R6) ([760d243](https://github.com/AristideWafo/Foreman/commit/760d243a128471eb967f7a21d7a76e31b2913134))
+* **moteur:** exécution des plans approuvés, approbation et reprise (C2) ([5a6e90d](https://github.com/AristideWafo/Foreman/commit/5a6e90dc319a11b27347d10337e6bb3a5b730dca))
+* **planning:** plan haché, persisté et carte enrichie ([#28](https://github.com/AristideWafo/Foreman/issues/28), [#30](https://github.com/AristideWafo/Foreman/issues/30)) ([067aef0](https://github.com/AristideWafo/Foreman/commit/067aef0309dfc7949872c0680fbc9b7a9d7746c0))
+
+
+### Bug Fixes
+
+* **persistance:** points de la revue indépendante (registre, audit, succès, borne) ([f50e00e](https://github.com/AristideWafo/Foreman/commit/f50e00e43348852a2b69cf76acf54cc6f1f0cae5))
+
 ## [0.5.0](https://github.com/AristideWafo/Foreman/compare/v0.4.0...v0.5.0) (2026-10-18)
 
 
