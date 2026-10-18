@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0](https://github.com/AristideWafo/Foreman/compare/v0.3.0...v0.4.0) (2026-10-18)
+
+
+### Features
+
+* **adapters:** fakes nommés et modèle rejoué (P5) ([0bb6696](https://github.com/AristideWafo/Foreman/commit/0bb669665b0577b43224568be51e0e3474a5006e))
+* **adapters:** fakes nommés GitLab, serveur et DNS, et modèle rejoué ([#29](https://github.com/AristideWafo/Foreman/issues/29)) ([0dad38d](https://github.com/AristideWafo/Foreman/commit/0dad38dd758d7027b9aa9c507dd99efcd61c33f1))
+* **catalog:** Skills, référentiels, matrice minimale et définitions d'outils ([#30](https://github.com/AristideWafo/Foreman/issues/30), [#128](https://github.com/AristideWafo/Foreman/issues/128)) ([54ff935](https://github.com/AristideWafo/Foreman/commit/54ff9356e491654416327221b8c9c97e011aee17))
+* **catalog:** Skills, référentiels, matrice minimale et outils (P4) ([817d169](https://github.com/AristideWafo/Foreman/commit/817d16973d5ad3d0bd227e95ced7d99b002101ed))
+* **contrat:** contrat additif S1 (cartes plan et exécution, routes d'approbation) ([c9172eb](https://github.com/AristideWafo/Foreman/commit/c9172eb646d135847043898a266ddc81c5925829))
+* **db:** migrations Alembic du schéma S1 et PostgreSQL en CI ([#25](https://github.com/AristideWafo/Foreman/issues/25)) ([#133](https://github.com/AristideWafo/Foreman/issues/133)) ([c2c8767](https://github.com/AristideWafo/Foreman/commit/c2c8767f8ae78d1b97040a7e4546d04d2a5ef9f4))
+* **front:** cartes de plan et d'exécution, bouton « Valider le plan » ([#32](https://github.com/AristideWafo/Foreman/issues/32)) ([11bc49d](https://github.com/AristideWafo/Foreman/commit/11bc49d939d34847cfd300b8ff0e944de9ae0a09))
+* **front:** cartes de plan et d'exécution, bouton « Valider le plan » ([#32](https://github.com/AristideWafo/Foreman/issues/32)) ([ec8c630](https://github.com/AristideWafo/Foreman/commit/ec8c6306aad24f8bd845c85ca7d4bbd9162daada))
+
+
+### Bug Fixes
+
+* **catalog:** corrections de la revue (playbooks, schémas fermés, matrice, lecture sûre) ([51360b1](https://github.com/AristideWafo/Foreman/commit/51360b1904629079baad834814686153febc7cc9))
+* **contrat:** corrections de la revue indépendante (statuts de plan, approbation idempotente, ordre des événements) ([8568dbf](https://github.com/AristideWafo/Foreman/commit/8568dbf0f450f4abf0b1846c76700bc56fff39f5))
+
 ## [0.3.0](https://github.com/AristideWafo/Foreman/compare/v0.2.0...v0.3.0) (2026-10-18)
 
 
