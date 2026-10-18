@@ -79,4 +79,4 @@ jobs:
           IMAGE_REF: ${{ steps.image.outputs.ref }}
         run: |
           ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            "${DEPLOY_USER}@${DEPLOY_HOST}" "deploy ${DEPLOY_PROJECT} ${IMAGE_REF}"
+            "${DEPLOY_USER}@${DEPLOY_HOST}" "deploy --with-db ${DEPLOY_PROJECT} ${IMAGE_REF}"

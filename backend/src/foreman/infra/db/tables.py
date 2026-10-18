@@ -118,7 +118,7 @@ executions = sa.Table(
     sa.Column("project_id", UUID(as_uuid=True), nullable=False),
     sa.Column("state", sa.Text, nullable=False, server_default=sa.text("'running'")),
     sa.Column("autonomy_level", sa.Integer, nullable=False),
-    sa.Column("checkpoint", JSONB, nullable=True),
+    sa.Column("checkpoint", JSONB(none_as_null=True), nullable=True),
     sa.Column("budget_used", JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")),
     sa.Column("lease_owner", sa.Text, nullable=True),
     sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
@@ -148,8 +148,8 @@ execution_steps = sa.Table(
     sa.Column("params", JSONB, nullable=False),
     sa.Column("idempotency_key", sa.Text, nullable=False),
     sa.Column("status", sa.Text, nullable=False, server_default=sa.text("'pending'")),
-    sa.Column("result", JSONB, nullable=True),
-    sa.Column("error", JSONB, nullable=True),
+    sa.Column("result", JSONB(none_as_null=True), nullable=True),
+    sa.Column("error", JSONB(none_as_null=True), nullable=True),
     sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
     sa.UniqueConstraint("execution_id", "seq"),
@@ -167,7 +167,7 @@ step_idempotency = sa.Table(
     sa.Column("key", sa.Text, primary_key=True),
     sa.Column("step_id", UUID(as_uuid=True), nullable=False),
     sa.Column("status", sa.Text, nullable=False, server_default=sa.text("'reserved'")),
-    sa.Column("result", JSONB, nullable=True),
+    sa.Column("result", JSONB(none_as_null=True), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
     sa.ForeignKeyConstraint(
         ["step_id", "project_id"], ["execution_steps.id", "execution_steps.project_id"]
@@ -233,7 +233,7 @@ audit_events = sa.Table(
     sa.Column("tool_class", sa.Text, nullable=True),
     sa.Column("decision", sa.Text, nullable=True),
     sa.Column("rule_id", sa.Text, nullable=True),
-    sa.Column("params_redacted", JSONB, nullable=True),
-    sa.Column("result_redacted", JSONB, nullable=True),
+    sa.Column("params_redacted", JSONB(none_as_null=True), nullable=True),
+    sa.Column("result_redacted", JSONB(none_as_null=True), nullable=True),
     sa.Column("duration_ms", sa.Integer, nullable=True),
 )
