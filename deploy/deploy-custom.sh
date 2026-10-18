@@ -8,6 +8,7 @@
 #
 # Un seul argument positionnel = l'image ; le projet vaut alors $FOREMAN_PROJECT (défaut : foreman).
 # Cela garde la forme `deploy <image>` utilisée par .github/workflows/deploy.yml.
+# Par SSH, SSH_ORIGINAL_COMMAND prime : les options doivent être dans la commande `deploy ...`.
 #
 # Options : --with-db (PostgreSQL du projet), --dry-run (n'agit pas), -h/--help.
 # Entrées non fiables : tout est validé avant d'agir, rien n'est évalué.
@@ -22,9 +23,9 @@ COMPOSE_TEMPLATE="${COMPOSE_TEMPLATE:-${SCRIPT_DIR}/compose.custom.yaml}"
 PROJECT_RE='^[a-z0-9][a-z0-9-]{1,40}$'
 IMAGE_RE='^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$'
 
-die()  { echo "erreur : $*" >&2; exit "${2:-2}"; }
+die()  { echo "erreur : $1" >&2; exit "${2:-2}"; }
 info() { echo "==> $*"; }
-usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 # --- Arguments (SSH_ORIGINAL_COMMAND prime : c'est l'unique entrée d'une clé restreinte) ---
 if [[ -n "${SSH_ORIGINAL_COMMAND:-}" ]]; then
@@ -74,6 +75,14 @@ fi
 # --- Prérequis ----------------------------------------------------------------------------
 command -v docker >/dev/null || die "docker introuvable" 69
 docker compose version >/dev/null 2>&1 || die "docker compose (v2) introuvable" 69
+# `deploy.resources.limits.pids` (compose.custom.yaml) exige Compose >= 2.29.
+compose_version="$(docker compose version --short 2>/dev/null || true)"; compose_version="${compose_version#v}"
+if [[ "$compose_version" =~ ^([0-9]+)\.([0-9]+) ]]; then
+  (( BASH_REMATCH[1] > 2 || (BASH_REMATCH[1] == 2 && BASH_REMATCH[2] >= 29) )) \
+    || die "Docker Compose ${compose_version} trop ancien : 2.29 ou plus requis" 69
+else
+  die "version de Docker Compose illisible" 69
+fi
 [[ -f "$COMPOSE_TEMPLATE" ]] || die "modèle de compose introuvable : $COMPOSE_TEMPLATE" 66
 
 if [[ -e "$APP_DIR" && ( -L "$APP_DIR" || ! -d "$APP_DIR" ) ]]; then
@@ -111,9 +120,22 @@ docker network inspect "$TRAEFIK_NETWORK" >/dev/null 2>&1 \
 if [[ "$WITH_DB" -eq 1 ]]; then
   [[ -n "$(env_value POSTGRES_PASSWORD)" ]] || die "POSTGRES_PASSWORD absent de ${APP_DIR}/.env (requis avec --with-db)" 66
   # L'application doit viser le service « db » du compose ; sinon elle retomberait en mémoire sans erreur.
-  # La valeur n'est jamais affichée (elle contient le mot de passe).
-  [[ "$(env_value FOREMAN_DATABASE_URL)" =~ ^postgresql(\+psycopg)?://[^@/]+@db:[0-9]+/[A-Za-z0-9_]+$ ]] \
-    || die "FOREMAN_DATABASE_URL absent ou invalide dans ${APP_DIR}/.env (requis avec --with-db, hôte « db » : voir docs/DEPLOYMENT.md)" 66
+  # Compose lit le .env plus largement que `env_value` (export, indentation, ${VAR}, doublons) :
+  # on refuse tout ce qui rendrait les deux lectures divergentes. Les valeurs ne sont jamais affichées.
+  [[ "$(grep -cE '^[[:space:]]*(export[[:space:]]+)?FOREMAN_DATABASE_URL=' .env || true)" == "1" ]] \
+    || die "FOREMAN_DATABASE_URL doit apparaître exactement une fois dans ${APP_DIR}/.env, sous la forme NOM=valeur" 66
+  DB_URL="$(env_value FOREMAN_DATABASE_URL)"
+  db_url_re='^postgresql(\+psycopg)?://([^:@/]+):([^@/:$]+)@db:[0-9]+/([A-Za-z0-9_]+)$'
+  [[ "$DB_URL" =~ $db_url_re ]] \
+    || die "FOREMAN_DATABASE_URL invalide dans ${APP_DIR}/.env (postgresql://utilisateur:mot_de_passe@db:5432/base, sans \$ ; voir docs/DEPLOYMENT.md)" 66
+  # Cohérence avec POSTGRES_* (valeurs non affichées). Sans `%`, l'URL n'est pas encodée : comparaison directe.
+  if [[ "$DB_URL" != *%* ]]; then
+    url_user="${BASH_REMATCH[2]}"; url_password="${BASH_REMATCH[3]}"; url_db="${BASH_REMATCH[4]}"
+    pg_user="$(env_value POSTGRES_USER)"; pg_db="$(env_value POSTGRES_DB)"
+    [[ "$url_user" == "${pg_user:-foreman}" ]] || die "l'utilisateur de FOREMAN_DATABASE_URL diffère de POSTGRES_USER" 66
+    [[ "$url_password" == "$(env_value POSTGRES_PASSWORD)" ]] || die "le mot de passe de FOREMAN_DATABASE_URL diffère de POSTGRES_PASSWORD" 66
+    [[ "$url_db" == "${pg_db:-foreman}" ]] || die "la base de FOREMAN_DATABASE_URL diffère de POSTGRES_DB" 66
+  fi
   export COMPOSE_PROFILES="db"
 fi
 
@@ -132,6 +154,25 @@ compose config -q
 
 info "récupération de l'image"
 compose pull
+
+# Sauvegarde avant `up` (une migration peut empêcher l'ancienne image de redémarrer : voir docs/DEPLOYMENT.md).
+# Rien à sauvegarder au premier déploiement (le conteneur db n'existe pas encore).
+if [[ "$WITH_DB" -eq 1 ]] && compose ps --status running --services 2>/dev/null | grep -qx db; then
+  BACKUP_DIR="${DEPLOY_ROOT}/backups"
+  install -d -m 0700 "$BACKUP_DIR"
+  umask 077
+  tmp_dump="$(mktemp "${BACKUP_DIR}/.${PROJECT}.XXXXXX")"
+  info "sauvegarde de la base (pg_dump -Fc)"
+  # Les identifiants viennent de l'environnement du conteneur : aucun mot de passe en ligne de commande.
+  if compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > "$tmp_dump"; then
+    mv "$tmp_dump" "${BACKUP_DIR}/${PROJECT}-$(date +%Y%m%d-%H%M%S).dump"
+    # Rotation : on garde les 5 plus récentes.
+    ls -1t "${BACKUP_DIR}/${PROJECT}"-[0-9]*-[0-9]*.dump | tail -n +6 | xargs -r rm -f --
+  else
+    rm -f -- "$tmp_dump"
+    die "sauvegarde de la base échouée : déploiement abandonné" 70
+  fi
+fi
 
 info "démarrage (attente de la santé, délai ${WAIT_TIMEOUT}s)"
 if compose up -d --remove-orphans --wait --wait-timeout "$WAIT_TIMEOUT"; then
