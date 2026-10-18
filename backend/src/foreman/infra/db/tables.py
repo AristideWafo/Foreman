@@ -20,6 +20,7 @@ EXECUTION_STATES = (
     "degraded",
 )
 ACTIVE_EXECUTION_STATES = ("running", "awaiting_permission", "awaiting_remediation")
+PROJECT_STATUSES = ("draft", "active", "archived")
 STEP_STATUSES = ("pending", "running", "succeeded", "failed", "compensated", "skipped")
 
 
@@ -61,6 +62,7 @@ projects = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
     sa.UniqueConstraint("team_id", "slug"),
     sa.CheckConstraint("char_length(name) <= 120", name="projects_name_len"),
+    sa.CheckConstraint(_in("status", PROJECT_STATUSES), name="projects_status"),
 )
 
 plans = sa.Table(
@@ -79,6 +81,7 @@ plans = sa.Table(
     sa.UniqueConstraint("project_id", "version"),
     sa.UniqueConstraint("id", "content_hash"),
     sa.UniqueConstraint("id", "project_id"),
+    sa.CheckConstraint("version >= 1", name="plans_version"),
     sa.CheckConstraint(_in("status", PLAN_STATUSES), name="plans_status"),
 )
 
@@ -122,7 +125,9 @@ executions = sa.Table(
     sa.Column("lease_epoch", sa.BigInteger, nullable=False, server_default=sa.text("0")),
     sa.Column("started_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
     sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+    sa.UniqueConstraint("id", "project_id"),
     sa.ForeignKeyConstraint(["plan_id", "project_id"], ["plans.id", "plans.project_id"]),
+    sa.CheckConstraint("lease_epoch >= 0", name="executions_lease_epoch"),
     sa.CheckConstraint(_in("state", EXECUTION_STATES), name="executions_state"),
     sa.Index(
         "uq_executions_one_active_per_project",
@@ -136,7 +141,8 @@ execution_steps = sa.Table(
     "execution_steps",
     metadata,
     sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_UUID_DEFAULT),
-    sa.Column("execution_id", UUID(as_uuid=True), sa.ForeignKey("executions.id"), nullable=False),
+    sa.Column("execution_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("project_id", UUID(as_uuid=True), nullable=False),
     sa.Column("seq", sa.Integer, nullable=False),
     sa.Column("tool", sa.Text, nullable=False),
     sa.Column("params", JSONB, nullable=False),
@@ -147,6 +153,10 @@ execution_steps = sa.Table(
     sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
     sa.UniqueConstraint("execution_id", "seq"),
+    sa.UniqueConstraint("id", "project_id"),
+    sa.ForeignKeyConstraint(
+        ["execution_id", "project_id"], ["executions.id", "executions.project_id"]
+    ),
     sa.CheckConstraint(_in("status", STEP_STATUSES), name="execution_steps_status"),
 )
 
@@ -155,11 +165,15 @@ step_idempotency = sa.Table(
     metadata,
     sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), primary_key=True),
     sa.Column("key", sa.Text, primary_key=True),
-    sa.Column("step_id", UUID(as_uuid=True), sa.ForeignKey("execution_steps.id"), nullable=False),
+    sa.Column("step_id", UUID(as_uuid=True), nullable=False),
     sa.Column("status", sa.Text, nullable=False, server_default=sa.text("'reserved'")),
     sa.Column("result", JSONB, nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
+    sa.ForeignKeyConstraint(
+        ["step_id", "project_id"], ["execution_steps.id", "execution_steps.project_id"]
+    ),
     sa.CheckConstraint("status IN ('reserved','done')", name="step_idempotency_status"),
+    sa.CheckConstraint("status = 'reserved' OR result IS NOT NULL", name="step_idempotency_result"),
 )
 
 managed_resources = sa.Table(
@@ -167,8 +181,8 @@ managed_resources = sa.Table(
     metadata,
     sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_UUID_DEFAULT),
     sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
-    sa.Column("execution_id", UUID(as_uuid=True), sa.ForeignKey("executions.id"), nullable=True),
-    sa.Column("step_id", UUID(as_uuid=True), sa.ForeignKey("execution_steps.id"), nullable=True),
+    sa.Column("execution_id", UUID(as_uuid=True), nullable=True),
+    sa.Column("step_id", UUID(as_uuid=True), nullable=True),
     sa.Column("provider", sa.Text, nullable=False),
     sa.Column("resource_type", sa.Text, nullable=False),
     sa.Column("external_id", sa.Text, nullable=False),
@@ -178,6 +192,13 @@ managed_resources = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
     sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
     sa.UniqueConstraint("provider", "resource_type", "external_id"),
+    sa.UniqueConstraint("id", "project_id"),
+    sa.ForeignKeyConstraint(
+        ["execution_id", "project_id"], ["executions.id", "executions.project_id"]
+    ),
+    sa.ForeignKeyConstraint(
+        ["step_id", "project_id"], ["execution_steps.id", "execution_steps.project_id"]
+    ),
     sa.CheckConstraint("origin IN ('created','adopted')", name="managed_resources_origin"),
     sa.Index("ix_managed_resources_project_id", "project_id"),
 )
@@ -185,18 +206,20 @@ managed_resources = sa.Table(
 observed_state = sa.Table(
     "observed_state",
     metadata,
-    sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-    sa.Column(
-        "resource_id", UUID(as_uuid=True), sa.ForeignKey("managed_resources.id"), nullable=False
-    ),
+    sa.Column("id", sa.BigInteger, sa.Identity(always=True), primary_key=True),
+    sa.Column("resource_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("project_id", UUID(as_uuid=True), nullable=False),
     sa.Column("observed", JSONB, nullable=False),
     sa.Column("observed_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
+    sa.ForeignKeyConstraint(
+        ["resource_id", "project_id"], ["managed_resources.id", "managed_resources.project_id"]
+    ),
 )
 
 audit_events = sa.Table(
     "audit_events",
     metadata,
-    sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+    sa.Column("id", sa.BigInteger, sa.Identity(always=True), primary_key=True),
     sa.Column("at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
     sa.Column("project_id", UUID(as_uuid=True), nullable=True),
     sa.Column("plan_id", UUID(as_uuid=True), nullable=True),

@@ -2,7 +2,7 @@
 
 import os
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import pytest
 import sqlalchemy as sa
@@ -22,16 +22,29 @@ def _admin_url() -> str:
 
 
 @pytest.fixture
-def blank_database_url() -> Iterator[str]:
-    """URL d'une base vide, supprimée en fin de test (le test ne voit jamais l'URL d'origine)."""
+def new_database() -> Iterator[Callable[[], str]]:
+    """Fabrique de bases vides ; toutes sont supprimées en fin de test (même si des connexions
+    traînent). Le test ne voit jamais l'URL d'origine."""
     admin_url = _admin_url()
-    name = f"foreman_t_{uuid.uuid4().hex[:16]}"
+    names: list[str] = []
     engine = sa.create_engine(admin_url, isolation_level="AUTOCOMMIT", poolclass=sa.pool.NullPool)
-    with engine.connect() as conn:
-        conn.execute(sa.text(f'CREATE DATABASE "{name}"'))
+
+    def create() -> str:
+        name = f"foreman_t_{uuid.uuid4().hex[:16]}"
+        with engine.connect() as conn:
+            conn.execute(sa.text(f'CREATE DATABASE "{name}"'))
+        names.append(name)
+        return make_url(admin_url).set(database=name).render_as_string(hide_password=False)
+
     try:
-        yield make_url(admin_url).set(database=name).render_as_string(hide_password=False)
+        yield create
     finally:
         with engine.connect() as conn:
-            conn.execute(sa.text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+            for name in names:
+                conn.execute(sa.text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
         engine.dispose()
+
+
+@pytest.fixture
+def blank_database_url(new_database: Callable[[], str]) -> str:
+    return new_database()

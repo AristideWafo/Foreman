@@ -46,7 +46,8 @@ fournisseurs réels, `environments`, `servers`, `connectors`, `permission_reques
 5. `audit_events` : trigger `BEFORE UPDATE/DELETE` (par ligne) et trigger **distinct** `BEFORE TRUNCATE`
    (`FOR EACH STATEMENT`, seule forme valide pour `TRUNCATE`) ; colonnes `project_id`, `plan_id`,
    `step_seq`, `plan_hash`, `actor` ; pas de clé étrangère sur `execution_id`. Limite documentée : le rôle de
-   l'application possède la table et peut supprimer le trigger (rôles séparés en v1.0).
+   l'application possède la table, peut supprimer le trigger ou le neutraliser (`session_replication_role = replica`)
+   (rôles séparés en v1.0).
 6. `observed_state` : ajout de `id bigserial` (pas de clé primaire dans la spec).
 7. Bail : colonne `lease_epoch` incrémentée à chaque prise ; toute écriture d'une étape vérifie l'époque (un
    travailleur dont le bail a expiré ne peut plus écrire). Pas d'état « en file » : `running` avec bail nul ou expiré = à prendre. L'attente d'approbation est portée par
@@ -65,6 +66,16 @@ fournisseurs réels, `environments`, `servers`, `connectors`, `permission_reques
     status='proposed' AND expires_at > now()`, `INSERT approvals`, `INSERT executions` et étapes `pending`. Elle est
     idempotente : un second appel avec le même hash sur un plan déjà `dev_approved` rend les mêmes `approval_id` et
     `execution_id` ; un autre hash, un plan expiré ou exécuté est un refus typé.
+14. Isolation entre projets jusqu'au bout de la chaîne : `execution_steps` porte `project_id` (clé composite
+    `(execution_id, project_id)` vers `executions`), `step_idempotency` cite `(step_id, project_id)`,
+    `managed_resources` cite `(execution_id, project_id)` et `(step_id, project_id)` (MATCH SIMPLE : NULL permis pour
+    une ressource adoptée) et `observed_state` porte `project_id` avec `(resource_id, project_id)`.
+15. Le contenu d'un plan est immuable : un déclencheur `BEFORE UPDATE` sur `plans` refuse toute modification hors
+    `status` et `expires_at`.
+16. `downgrade()` refuse de supprimer un journal d'audit non vide sauf `FOREMAN_ALLOW_DESTRUCTIVE_DOWNGRADE=1`.
+    Bornes : `lease_epoch >= 0`, `plans.version >= 1`, `projects.status` dans `draft | active | archived`,
+    `step_idempotency` `done` exige un résultat ; identifiants de `audit_events` et `observed_state` en
+    `GENERATED ALWAYS AS IDENTITY`. Le verrou de migration est pris par interrogation bornée (60 s, erreur claire).
 
 **Plan haché.** Contenu canonique `PlanContent` (Pydantic, `extra="forbid"`) : `schema, project_id, version, title,
 summary, environment, autonomy_level, stack, steps[{seq, title, tool, tool_version, tool_class, reversibility,
@@ -161,7 +172,8 @@ bout. **Mutations** à vérifier : retirer la comparaison du hash, `ON CONFLICT`
 ## Risques et décisions du propriétaire
 
 - Volume de la semaine : le livrable A sécurise la persistance même si B glisse.
-- Rôle PostgreSQL propriétaire de l'audit : le trigger est contournable (rôles séparés en v1.0).
+- Rôle PostgreSQL propriétaire de l'audit : le trigger est contournable (suppression, `session_replication_role =
+  replica` ; rôles séparés en v1.0).
 - Le replay `default` répond S1 à toute demande en staging (démonstration assumée).
 - Au redémarrage le chat est vidé alors que plans et exécutions restent en base ; il n'y a pas de route de liste :
   le front retrouve un plan ou une exécution par identifiant (portés par les cartes).
