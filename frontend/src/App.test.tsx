@@ -12,6 +12,6 @@ test("l'accueil affiche le titre et le champ de demande", () => {
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  expect(screen.getByRole("heading", { name: "Foreman" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Que voulez-vous faire ?" })).toBeInTheDocument();
   expect(screen.getByRole("textbox", { name: "Votre demande" })).toBeInTheDocument();
 });

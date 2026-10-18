@@ -24,18 +24,21 @@ const event: Extract<ProjectEvent, { type: "card" }> = {
   },
 };
 
-test("la carte plan affiche titre, résumé et étapes avec leur statut", () => {
+test("la carte plan affiche titre, progression et étapes avec leur statut", () => {
   render(<Card card={event.data} />);
-  expect(screen.getByRole("heading", { name: "Déployer l'application" })).toBeInTheDocument();
+  expect(screen.getByText("Plan : Déployer l'application")).toBeInTheDocument();
+  expect(screen.getByText("1 sur 3 terminées")).toBeInTheDocument();
   expect(screen.getByText("Trois étapes pour la mise en ligne.")).toBeInTheDocument();
-  const steps = screen.getAllByRole("listitem");
-  expect(steps).toHaveLength(3);
-  // `step` est un indice qui commence à 1 (contrat v1) : on l'affiche tel quel.
-  expect(steps.map((s) => s.textContent?.match(/^\d+/)?.[0])).toEqual(["1", "2", "3"]);
-  expect(steps[0]).toHaveTextContent("Préparer le serveur");
-  expect(steps[0]).toHaveTextContent("Réussie");
-  expect(steps[1]).toHaveTextContent("En cours");
-  expect(steps[2]).toHaveTextContent("En attente");
+  // `step` est un indice qui commence à 1 (contrat v1) : on l'affiche tel quel ; le statut est lu aux lecteurs d'écran.
+  expect(screen.getByText(/Préparer le serveur/)).toHaveTextContent(
+    "1. Préparer le serveur : Réussie",
+  );
+  expect(screen.getByText(/Copier les fichiers/)).toHaveTextContent(
+    "2. Copier les fichiers : En cours",
+  );
+  expect(screen.getByText(/Redémarrer le service/)).toHaveTextContent(
+    "3. Redémarrer le service : En attente",
+  );
 });
 
 test("une carte de kind inconnu affiche le repli", () => {
@@ -48,7 +51,7 @@ test("un texte contenant du HTML est affiché littéralement", () => {
   const html = '<img src=x onerror="alert(1)"> <b>gras</b>';
   const card: PlanCardData = { ...event.data, title: html, summary: html };
   const { container } = render(<Card card={card} />);
-  expect(screen.getByRole("heading")).toHaveTextContent(html);
+  expect(screen.getByText(`Plan : ${html}`)).toBeInTheDocument();
   expect(container.querySelector("img")).toBeNull();
   expect(container.querySelector("b")).toBeNull();
 });

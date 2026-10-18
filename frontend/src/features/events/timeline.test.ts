@@ -113,4 +113,24 @@ describe("timeline (sémantique du flux, contrat v1)", () => {
     expect(parseEvent(raw(1))).not.toBeNull();
     expect(parseEvent("pas du json")).toBeNull();
   });
+
+  test("trace d'un tour : réflexion en cours, outil `propose_plan` ajouté par la carte, puis terminée", () => {
+    const status = (seq: number, value: "running" | "completed" | "failed"): ProjectEvent =>
+      ({ ...base, seq, type: "turn_status", data: { status: value } }) as ProjectEvent;
+    const trace = (state: TimelineState) => state.items.find((i) => i.kind === "trace");
+
+    const running = run([message(1), status(2, "running")]);
+    expect(trace(running)).toMatchObject({ status: "running", tools: [] });
+
+    const withPlan = run([card(3, "c1", "Plan")], running);
+    expect(trace(withPlan)).toMatchObject({ status: "running", tools: ["propose_plan"] });
+
+    const done = run([status(4, "completed")], withPlan);
+    expect(trace(done)).toMatchObject({ status: "done", tools: ["propose_plan"] });
+    expect(
+      run([status(4, "failed")], withPlan).items.find((i) => i.kind === "trace"),
+    ).toMatchObject({
+      status: "error",
+    });
+  });
 });

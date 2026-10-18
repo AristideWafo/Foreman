@@ -1,6 +1,14 @@
-import { PaperAirplaneIcon } from "@heroicons/react/24/solid";
+import { ArrowUpIcon } from "@heroicons/react/24/outline";
 import { useId } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupText,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
 
 interface MessageInputProps {
   value: string;
@@ -53,13 +61,13 @@ export function MessageInput({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-2">
+    <form onSubmit={onSubmit} className="flex flex-col gap-2">
       <label htmlFor={id} className="sr-only">
         {label}
       </label>
-      <div className="flex items-end gap-2">
+      <InputGroup>
         {/* readOnly plutôt que disabled : le champ garde le focus pendant un tour en cours. */}
-        <textarea
+        <InputGroupTextarea
           id={id}
           autoFocus
           rows={2}
@@ -71,24 +79,26 @@ export function MessageInput({
           placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
-          className="max-h-48 min-h-12 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 placeholder:text-slate-500 read-only:bg-slate-100 read-only:text-slate-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="max-h-48 min-h-12"
         />
-        <button
-          type="submit"
-          disabled={!canSend}
-          className="inline-flex h-12 shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
-        >
-          <PaperAirplaneIcon className="size-5" aria-hidden="true" />
-          <span className="max-sm:sr-only">{submitLabel}</span>
-        </button>
-      </div>
-      <p className="text-xs text-slate-600">
-        Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne.
-      </p>
+        <InputGroupAddon align="block-end">
+          <InputGroupText>Maj+Entrée : nouvelle ligne</InputGroupText>
+          <InputGroupButton
+            type="submit"
+            variant="default"
+            size="icon-sm"
+            disabled={!canSend}
+            className="ml-auto rounded-full"
+          >
+            <ArrowUpIcon />
+            <span className="sr-only">{submitLabel}</span>
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
       {error ? (
-        <p id={errorId} role="alert" className="text-sm font-medium text-red-700">
-          {error}
-        </p>
+        <Alert variant="destructive" id={errorId}>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       ) : null}
     </form>
   );

@@ -1,56 +1,76 @@
 import {
-  CheckCircleIcon,
-  ClockIcon,
-  ExclamationTriangleIcon,
-  MinusCircleIcon,
   ArrowPathIcon,
   ArrowUturnLeftIcon,
+  CheckCircleIcon,
+  ClipboardDocumentListIcon,
+  ClockIcon,
+  ExclamationCircleIcon,
+  MinusCircleIcon,
+  PlayCircleIcon,
 } from "@heroicons/react/24/outline";
 import type { ComponentType, SVGProps } from "react";
 import type { PlanCardData, StepStatus } from "../../api/events";
+import { Card as UiCard, CardContent } from "@/components/ui/card";
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceDescription,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "@/components/ui/trace";
 
-const STATUS: Record<StepStatus, { label: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }> =
-  {
-    pending: { label: "En attente", Icon: ClockIcon },
-    running: { label: "En cours", Icon: ArrowPathIcon },
-    succeeded: { label: "Réussie", Icon: CheckCircleIcon },
-    failed: { label: "Échouée", Icon: ExclamationTriangleIcon },
-    compensated: { label: "Annulée (compensée)", Icon: ArrowUturnLeftIcon },
-    skipped: { label: "Ignorée", Icon: MinusCircleIcon },
-  };
+type Icon = ComponentType<SVGProps<SVGSVGElement>>;
+type LineStatus = "running" | "error" | "pending" | undefined;
 
-function StepStatusBadge({ status }: { status: StepStatus }) {
-  // Un statut hors contrat s'affiche tel quel, sans icône spécifique.
-  const known = STATUS[status] as (typeof STATUS)[StepStatus] | undefined;
-  const Icon = known?.Icon ?? ClockIcon;
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-slate-600">
-      <Icon className="size-4" aria-hidden="true" />
-      {known?.label ?? String(status)}
-    </span>
-  );
-}
+const STATUS: Record<StepStatus, { label: string; Icon: Icon; line: LineStatus }> = {
+  pending: { label: "En attente", Icon: ClockIcon, line: "pending" },
+  running: { label: "En cours", Icon: PlayCircleIcon, line: "running" },
+  succeeded: { label: "Réussie", Icon: CheckCircleIcon, line: undefined },
+  failed: { label: "Échouée", Icon: ExclamationCircleIcon, line: "error" },
+  compensated: { label: "Annulée (compensée)", Icon: ArrowUturnLeftIcon, line: undefined },
+  skipped: { label: "Ignorée", Icon: MinusCircleIcon, line: undefined },
+};
 
 function PlanCard({ card }: { card: PlanCardData }) {
+  const done = card.steps.filter((s) => s.status === "succeeded").length;
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="text-base font-semibold text-slate-900">{card.title}</h3>
-      <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">{card.summary}</p>
-      <ol className="mt-3 space-y-2">
-        {card.steps.map((step) => (
-          <li
-            key={step.step}
-            className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm"
-          >
-            <span className="min-w-0 break-words text-slate-800">
-              <span className="mr-2 font-mono text-xs text-slate-500">{step.step}.</span>
-              {step.title}
-            </span>
-            <StepStatusBadge status={step.status} />
-          </li>
-        ))}
-      </ol>
-    </article>
+    <TraceCollapsible defaultOpen>
+      <TraceCollapsibleTrigger>
+        <TraceLine>
+          <TraceIcon>
+            <ClipboardDocumentListIcon />
+          </TraceIcon>
+          <TraceTitle>Plan : {card.title}</TraceTitle>
+          <TraceDescription>
+            {done} sur {card.steps.length} terminées
+          </TraceDescription>
+        </TraceLine>
+      </TraceCollapsibleTrigger>
+      <TraceCollapsibleContent>
+        {card.summary ? <p className="mb-2 text-sm whitespace-pre-wrap">{card.summary}</p> : null}
+        <Trace>
+          {card.steps.map((step) => {
+            // Un statut hors contrat s'affiche tel quel, sans icône spécifique.
+            const known = STATUS[step.status] as (typeof STATUS)[StepStatus] | undefined;
+            const StatusIcon = known?.Icon ?? ArrowPathIcon;
+            return (
+              <TraceLine key={step.step} status={known?.line}>
+                <TraceIcon>
+                  <StatusIcon />
+                </TraceIcon>
+                <TraceTitle>
+                  <span className="font-mono">{step.step}.</span> {step.title}
+                  <span className="sr-only"> : {known?.label ?? String(step.status)}</span>
+                </TraceTitle>
+              </TraceLine>
+            );
+          })}
+        </Trace>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
   );
 }
 
@@ -61,9 +81,9 @@ export function Card({ card }: { card: PlanCardData }) {
       return <PlanCard card={card} />;
     default:
       return (
-        <article className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-          Carte non prise en charge.
-        </article>
+        <UiCard className="border border-dashed text-sm">
+          <CardContent>Carte non prise en charge.</CardContent>
+        </UiCard>
       );
   }
 }
