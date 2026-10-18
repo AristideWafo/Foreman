@@ -232,3 +232,20 @@ def test_unknown_api_path_is_a_404_for_every_method_even_with_the_spa(
         response = client.request(method, "/api/inexistant")
         assert response.status_code == 404, method
         assert response.json() == {"error": "not_found"}, method
+
+
+async def test_question_route_is_an_opaque_501_and_404_without_echoing_the_input() -> None:
+    app, _ = build_app(ReplayProvider.s01(catalog_dir_from_env()))
+    secret = "valeur-saisie-par-lutilisateur"  # noqa: S105
+    body = {"decision": "answer", "value": secret}
+    async with http(app) as client:
+        project = (await client.post("/api/projects")).json()
+        known = await client.post(f"/api/projects/{project['id']}/questions/q1", json=body)
+        unknown = await client.post(f"/api/projects/{uuid4()}/questions/q1", json=body)
+        invalid = await client.post(
+            f"/api/projects/{project['id']}/questions/q1", json={"decision": "answer"}
+        )
+    assert (known.status_code, known.json()) == (501, {"error": "not_implemented"})
+    assert (unknown.status_code, unknown.json()) == (404, {"error": "not_found"})
+    assert (invalid.status_code, invalid.json()) == (422, {"error": "invalid_request"})
+    assert secret not in known.text + unknown.text

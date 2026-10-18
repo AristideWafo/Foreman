@@ -88,6 +88,7 @@
           "data": {
             "discriminator": {
               "mapping": {
+                "clarification": "#/components/schemas/ClarificationCardData",
                 "execution": "#/components/schemas/ExecutionCardData",
                 "plan": "#/components/schemas/PlanCardData"
               },
@@ -99,6 +100,9 @@
               },
               {
                 "$ref": "#/components/schemas/ExecutionCardData"
+              },
+              {
+                "$ref": "#/components/schemas/ClarificationCardData"
               }
             ],
             "title": "Data"
@@ -227,6 +231,103 @@
         "title": "CardStep",
         "type": "object"
       },
+      "ClarificationCardData": {
+        "additionalProperties": false,
+        "description": "Carte de clarification : r\u00e9\u00e9mise enti\u00e8re (remplacement par `card_id`) \u00e0 chaque r\u00e9ponse.",
+        "properties": {
+          "card_id": {
+            "maxLength": 64,
+            "title": "Card Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "clarification",
+            "title": "Kind",
+            "type": "string"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/ClarificationQuestion"
+            },
+            "maxItems": 5,
+            "title": "Questions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "card_id",
+          "kind",
+          "questions"
+        ],
+        "title": "ClarificationCardData",
+        "type": "object"
+      },
+      "ClarificationQuestion": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Answer"
+          },
+          "field": {
+            "description": "Champ du plan vis\u00e9",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Field",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "options": {
+            "default": [],
+            "description": "Choix propos\u00e9s ; vide = r\u00e9ponse libre",
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Options",
+            "type": "array"
+          },
+          "prompt": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "answered",
+              "deferred"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "field",
+          "prompt",
+          "status"
+        ],
+        "title": "ClarificationQuestion",
+        "type": "object"
+      },
       "CreateProjectRequest": {
         "additionalProperties": false,
         "properties": {
@@ -330,7 +431,8 @@
               "not_implemented",
               "plan_hash_mismatch",
               "plan_not_approvable",
-              "execution_in_progress"
+              "execution_in_progress",
+              "question_closed"
             ],
             "title": "Error",
             "type": "string"
@@ -1226,6 +1328,61 @@
         "title": "Project",
         "type": "object"
       },
+      "QuestionAccepted": {
+        "properties": {
+          "question_id": {
+            "maxLength": 64,
+            "title": "Question Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "answered",
+              "deferred"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question_id",
+          "status"
+        ],
+        "title": "QuestionAccepted",
+        "type": "object"
+      },
+      "QuestionAnswerRequest": {
+        "additionalProperties": false,
+        "description": "R\u00e9ponse \u00e0 une question de clarification, ou report (`defer`).",
+        "properties": {
+          "decision": {
+            "enum": [
+              "answer",
+              "defer"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "QuestionAnswerRequest",
+        "type": "object"
+      },
       "ResourceRef": {
         "additionalProperties": false,
         "properties": {
@@ -2038,6 +2195,116 @@
           }
         },
         "summary": "Approve Plan"
+      }
+    },
+    "/api/projects/{project_id}/questions/{question_id}": {
+      "post": {
+        "description": "R\u00e9pond \u00e0 une question de clarification ou la reporte (logique \u00e0 venir : 501).",
+        "operationId": "answer_question_api_projects__project_id__questions__question_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "question_id",
+            "required": true,
+            "schema": {
+              "title": "Question Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionAnswerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionAccepted"
+                }
+              }
+            },
+            "description": "Question report\u00e9e (`decision: defer`)"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable, y compris une question d'un autre projet"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`turn_in_progress` ou `question_closed` (d\u00e9j\u00e0 r\u00e9pondue)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Answer Question"
       }
     },
     "/healthz": {

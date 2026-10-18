@@ -8,8 +8,8 @@ le déclare faux pour les modèles émis par le serveur : c'est de la rigueur c�
 consigne de validation côté client) ; sans cela, aucun ajout ne serait réellement additif.
 
 Sémantique de `seq` : strictement croissant, contigu à partir de 1, par projet, livré dans l'ordre.
-Une carte (`card`) remplace la précédente de même `card_id`. Deux sortes de cartes (`kind`) : `plan`
-et `execution`.
+Une carte (`card`) remplace la précédente de même `card_id`. Trois sortes de cartes (`kind`) :
+`plan`, `execution` et `clarification` (ajout additif de la Semaine 3).
 
 Ordre et portée (Semaine 2) :
 - après l'approbation, la carte plan est RÉÉMISE (`status: dev_approved`, `approvable: false`)
@@ -156,7 +156,32 @@ class ExecutionCardData(_Model):
     result: ExecutionResult | None = None
 
 
-CardData = Annotated[PlanCardData | ExecutionCardData, Field(discriminator="kind")]
+QuestionStatus = Literal["open", "answered", "deferred"]
+
+
+class ClarificationQuestion(_Model):
+    id: Annotated[str, Field(min_length=1, max_length=64)]
+    field: Annotated[str, Field(min_length=1, max_length=50, description="Champ du plan visé")]
+    prompt: Annotated[str, Field(min_length=1, max_length=300)]
+    options: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=100)]],
+        Field(max_length=10, description="Choix proposés ; vide = réponse libre"),
+    ] = []
+    status: QuestionStatus
+    answer: Annotated[str | None, Field(max_length=500)] = None
+
+
+class ClarificationCardData(_Model):
+    """Carte de clarification : réémise entière (remplacement par `card_id`) à chaque réponse."""
+
+    card_id: Annotated[str, Field(max_length=64)]
+    kind: Literal["clarification"]
+    questions: Annotated[list[ClarificationQuestion], Field(max_length=5)]
+
+
+CardData = Annotated[
+    PlanCardData | ExecutionCardData | ClarificationCardData, Field(discriminator="kind")
+]
 
 
 class ExecutionStepData(_Model):
@@ -240,6 +265,7 @@ EventData = (
     MessageData
     | PlanCardData
     | ExecutionCardData
+    | ClarificationCardData
     | ExecutionStepData
     | ExecutionLogData
     | TurnStatusData
@@ -256,7 +282,7 @@ def make_event(seq: int, project_id: UUID, turn_id: UUID, data: EventData) -> An
     match data:
         case MessageData():
             return MessageEvent(seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data)
-        case PlanCardData() | ExecutionCardData():
+        case PlanCardData() | ExecutionCardData() | ClarificationCardData():
             return CardEvent(seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data)
         case ExecutionLogData():
             return ExecutionLogEvent(
