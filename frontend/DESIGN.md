@@ -107,11 +107,11 @@ l'action principale, `muted` pour le secondaire, `destructive` pour l'échec. Au
 ## Composants
 
 Composants partagés (`components/`) : `CardHeading` (en-tête de carte), `CollapsibleSection` (ligne repliable),
-`reveal` (apparition décalée). Cartes (`features/cards/`) : `StepList`, `FactList`, `ResourceList`.
+`reveal` (apparition décalée). Cartes (`features/cards/`) : `StepList`, `FactList`, `ResourceList`, `ClarificationCard`.
 
 Existants : shadcn (`Button`, `Card`, `Badge`, `Alert`, `Textarea`, `InputGroup`, `Sidebar`, `Tooltip`,
 `Separator`, `Collapsible`, `Skeleton`, `Sheet`, `ScrollArea`, `MessageScroller`, `Message`, `Bubble`,
-`Marker`, `Trace`) et applicatifs : `LinkButton`, `PageHeader`, `AppSidebar`, `MemoryModeBadge`. À créer au besoin :
+`Marker`, `Trace`, `ToggleGroup`) et applicatifs : `LinkButton`, `PageHeader`, `AppSidebar`, `MemoryModeBadge`. À créer au besoin :
 `BrandLogo` (logos svgl). Une carte = un composant par `kind` dans `features/cards/`, avec repli.
 
 ## Cartes de plan et d'exécution (Semaine 2)
@@ -136,6 +136,34 @@ d'outils utilisés sur le maximum, durée écoulée sur le maximum), niveau d'au
 `http(s)` ou texte seul), résultat (résumé et liens). Aucune action : tout est lecture.
 
 Le composant partagé `StepList` rend les étapes des deux cartes ; `ExternalLink` rend tout lien venu de l'API.
+
+## Carte de clarification (Semaine 3)
+
+Rendue depuis l'événement `card` de `kind = "clarification"` (remplacée par `card_id` à chaque réponse, jamais
+dupliquée). C'est une `Card` shadcn (`CardHeading` : icône `QuestionMarkCircleIcon`, titre « Clarification »,
+description « Précisez ces points pour que le plan soit complet. »). Les textes du modèle (`prompt`) et les options
+sont affichés comme **texte**, jamais comme HTML ; les options sont **imposées par le serveur**, le front n'en
+invente aucune.
+
+Une question = un `fieldset` (légende = la question, `text-sm`), puis :
+
+- **Ouverte, avec options** : un `ToggleGroup` (`outline`, choix unique, `flex-wrap`) ; l'option choisie porte
+  une coche `CheckIcon` (le sens ne repose pas sur la couleur). Deux boutons : **« Répondre »** (`Button` par
+  défaut, désactivé tant qu'aucune option n'est choisie) et **« Reporter »** (`Button` `outline`). Réponse en
+  **deux clics** (une option, « Répondre ») ; report en **un clic**.
+- **Ouverte, sans option** (le contrat dit « vide = réponse libre ») : un `Input` libellé par la question à la
+  place du groupe d'options, mêmes boutons.
+- **Répondue** : ligne `role="status"` « Réponse : _valeur_ » avec `CheckIcon`, plus de bouton.
+- **Reportée** : ligne `role="status"` « Reportée » avec `MinusCircleIcon`, plus de bouton.
+- **Envoi en cours** : boutons désactivés, `aria-busy`, libellé « Envoi en cours… ».
+- **Erreur** : `Alert` (`role="alert"`) en français, sans détail technique. `question_closed` (déjà répondue) et
+  404 : boutons désactivés jusqu'à ce que le serveur réémette la carte (le front ne devine pas l'état, ne
+  réessaie pas). `turn_in_progress` : message « Une réponse est déjà en cours », sans réessai automatique ; le
+  développeur peut recliquer. 422 : « Cette réponse n'est pas acceptée. ».
+
+Les questions sont indépendantes : chaque réponse relance un tour (202) ; pendant ce tour, les autres questions
+restent ouvertes et reprennent leur état normal à la carte réémise. Aucun contrôle sans effet : tout appelle
+`POST /api/projects/{id}/questions/{question_id}`.
 
 ## États d'un écran
 
