@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from typing import Protocol
 from uuid import UUID
 
+from pydantic import JsonValue
+
 from foreman.core.events import AnyEvent, EventData
 from foreman.core.projects import Project
 
@@ -29,6 +31,54 @@ class Provider(Protocol):
     """Fournisseur de modèle. Sans état entre requêtes."""
 
     async def complete(self, messages: Sequence[str]) -> ModelReply: ...
+
+
+class AdapterError(Exception):
+    """Un adaptateur a échoué. Le message est interne : la gateway ne le transmet pas tel quel."""
+
+
+class ForeignResource(AdapterError):
+    """La ressource visée existe mais n'est pas marquée `managed-by=foreman` : non adoptée."""
+
+
+class PermissionMissing(AdapterError):
+    """Le connecteur n'a pas le droit demandé (par exemple un jeton sans portée d'écriture)."""
+
+    def __init__(self, connector: str, scope: str) -> None:
+        super().__init__(f"permission manquante : {connector} / {scope}")
+        self.connector = connector
+        self.scope = scope
+
+
+@dataclass(frozen=True, slots=True)
+class AdapterResult:
+    """Résultat d'un outil : `output` suit le schéma de sortie de l'outil, `logs` est brut.
+
+    Les logs ne sont ni masqués ni tronqués ici : la gateway le fait avant toute sortie.
+    """
+
+    output: dict[str, JsonValue]
+    logs: list[str] = field(default_factory=list)
+
+
+class ToolAdapter(Protocol):
+    """Exécute UN outil d'un connecteur. Appelé uniquement par la gateway, après ses contrôles.
+
+    - `tool` est le nom complet du catalogue (`gitlab.create_group`) ; un outil que le connecteur
+      ne fournit pas lève `AdapterError`.
+    - `params` est déjà validé par le schéma de l'outil ; la sûreté ne repose pas sur lui.
+    - `idempotency_key` est la clé de l'étape : la rejouer ne produit aucun effet de plus et renvoie
+      le même résultat (la sémantique exacte, `lookup_then_create` ou `return_previous_result`,
+      est déclarée dans la définition de l'outil).
+    - La gateway garantit qu'une même clé n'est utilisée que pour l'appel identique de l'étape
+      du plan : un adaptateur peut donc rejouer sans comparer les paramètres.
+    - Aucun appel bloquant : un adaptateur réel déporte son travail hors de la boucle asynchrone.
+    - Lève `AdapterError` (ou `PermissionMissing`) ; toute autre exception est un défaut.
+    """
+
+    async def execute(
+        self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str
+    ) -> AdapterResult: ...
 
 
 class ProjectStore(Protocol):

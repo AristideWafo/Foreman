@@ -1,0 +1,32 @@
+# Matrice minimale du PoC (semaine 2) : R1, R2, R6 et refus par défaut.
+# Les règles R3 à R5 et R7 à R10 arrivent avec leurs scénarios.
+version: 1
+default: deny
+
+roles: [developer, team_admin, org_admin]
+
+autonomy:
+  org_ceiling: 3                      # l'org plafonne ; le staging peut dépasser via max_level
+  environments:
+    staging: {max_level: 4, admin_approval_required: false}
+
+classes:
+  read:           "Lecture seule, ressources existantes comprises"
+  write_registry: "Écriture sur une ressource du registre"
+  write_foreign:  "Écriture sur une ressource hors registre"
+  destructive:    "Suppression de données ou de ressource contenant des données"
+  control:        "Dialogue et pauses : ask_user, request_permission"
+
+budgets:                              # valeurs de départ
+  per_execution: {max_tool_calls: 60, max_minutes: 30, max_retries_per_step: 3, max_model_cost_eur: 2}
+
+rules:
+  - {id: R1-lecture,   match: {class: read},    min_level: 1, decision: allow}
+  - {id: R2-controle,  match: {class: control},               decision: allow}
+
+  - id: R6-ecriture-staging
+    match: {class: write_registry, env: staging, reversibility: [reversible, compensable]}
+    roles: [developer, team_admin, org_admin]
+    min_level: 2
+    requires: [plan_approved]
+    decision: allow_if

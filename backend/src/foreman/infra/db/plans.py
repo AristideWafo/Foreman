@@ -173,6 +173,7 @@ class PostgresPlanStore:
                 [
                     {
                         "execution_id": execution_id,
+                        "project_id": project_id,
                         "seq": s.seq,
                         "tool": s.tool,
                         "params": dict(s.params),

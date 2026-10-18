@@ -57,19 +57,90 @@ describe("timeline (sémantique du flux, contrat v1)", () => {
     expect(second?.kind === "card" && second.card.kind === "plan" && second.card.title).toBe("v2");
   });
 
-  test("execution_step : met à jour l'étape, et ignore une carte inconnue", () => {
-    const step = (seq: number, cardId: string): ProjectEvent =>
-      ({
-        ...base,
-        seq,
-        type: "execution_step",
-        data: { card_id: cardId, step: 1, status: "running" },
-      }) as ProjectEvent;
-    const state = run([card(1, "c1", "t"), step(2, "c1"), step(3, "inconnue")]);
-    const c = state.items[0];
-    expect(c?.kind === "card" && c.card.steps[0]?.status).toBe("running");
+  const execCard = (seq: number, cardId: string, extra: object = {}): ProjectEvent =>
+    ({
+      ...base,
+      seq,
+      type: "card",
+      data: {
+        card_id: cardId,
+        kind: "execution",
+        execution_id: "e",
+        plan_card_id: "plan",
+        state: "running",
+        autonomy_level: 1,
+        steps: [{ step: 1, title: "a", status: "pending" }],
+        budget: { tool_calls_used: 0, tool_calls_max: 5, elapsed_s: 0, max_minutes: 1 },
+        resources: [],
+        result: null,
+        ...extra,
+      },
+    }) as unknown as ProjectEvent;
+  const stepEvent = (seq: number, cardId: string): ProjectEvent =>
+    ({
+      ...base,
+      seq,
+      type: "execution_step",
+      data: { card_id: cardId, step: 1, status: "running" },
+    }) as ProjectEvent;
+  const logEvent = (seq: number, cardId: string, lines: unknown): ProjectEvent =>
+    ({
+      ...base,
+      seq,
+      type: "execution_log",
+      data: { card_id: cardId, step: 1, lines },
+    }) as ProjectEvent;
+  const cardAt = (state: TimelineState, index: number) => {
+    const item = state.items[index];
+    return item?.kind === "card" ? item : undefined;
+  };
+
+  test("execution_step vise la carte d'exécution ; carte plan ou inconnue : ignoré", () => {
+    const state = run([
+      card(1, "plan", "t"),
+      execCard(2, "exec"),
+      stepEvent(3, "exec"),
+      stepEvent(4, "plan"),
+      stepEvent(5, "inconnue"),
+    ]);
+    expect(cardAt(state, 0)?.card).toMatchObject({ kind: "plan", steps: [{ status: "pending" }] });
+    expect(cardAt(state, 1)?.card).toMatchObject({ steps: [{ status: "running" }] });
+    expect(state.items).toHaveLength(2);
+    expect(state.lastSeq).toBe(5);
+  });
+
+  test("execution_log : lignes ajoutées à la carte d'exécution, bornées, conservées quand la carte est réémise", () => {
+    const long = "x".repeat(600);
+    const state = run([
+      card(1, "plan", "t"),
+      execCard(2, "exec"),
+      logEvent(3, "exec", ["a", 42, long]),
+      logEvent(4, "exec", ["b"]),
+      logEvent(5, "plan", ["ignorée"]),
+      logEvent(6, "inconnue", ["ignorée"]),
+      logEvent(7, "exec", "pas un tableau"),
+      execCard(8, "exec", { state: "succeeded" }),
+    ]);
+    const exec = cardAt(state, 1);
+    expect(exec?.logs[1]).toEqual(["a", "x".repeat(500), "b"]);
+    expect(exec?.card).toMatchObject({ state: "succeeded" });
+    expect(cardAt(state, 0)?.logs).toEqual({});
+    expect(state.items).toHaveLength(2);
+  });
+
+  test("cartes plan et exécution de forme invalide : ignorées sans exception", () => {
+    const state = run([
+      card(1, "plan", "t"),
+      execCard(2, "exec", { budget: null }),
+      execCard(3, "exec2", { steps: "non" }),
+    ]);
     expect(state.items).toHaveLength(1);
     expect(state.lastSeq).toBe(3);
+  });
+
+  test("champs inconnus d'une carte : ignorés", () => {
+    const state = run([execCard(1, "exec", { futur: { a: 1 } })]);
+    expect(cardAt(state, 0)?.card).toMatchObject({ kind: "execution", state: "running" });
   });
 
   test("type inconnu : ignoré mais son seq est consommé (pas de faux trou)", () => {

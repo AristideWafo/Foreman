@@ -6,15 +6,23 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from foreman.bootstrap.database import DatabaseLifecycle, Lifecycle, NoLifecycle
-from foreman.config.env import DEFAULT_LOG_LEVEL, ENV_DATABASE_URL, ENV_LOG_LEVEL
+from foreman.config.env import (
+    DEFAULT_ENVIRONMENT,
+    DEFAULT_LOG_LEVEL,
+    ENV_DATABASE_URL,
+    ENV_ENVIRONMENT,
+    ENV_LOG_LEVEL,
+)
+from foreman.core.catalog import Catalog
 from foreman.core.ports import EventLog, ProjectStore
 from foreman.core.store import Stores
 from foreman.core.turn import TurnService
 from foreman.infra.db.engine import make_engine
 from foreman.infra.db.projects import PostgresProjectStore
 from foreman.infra.db.stores import postgres_stores
+from foreman.infra.file_catalog import catalog_dir_from_env, load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
-from foreman.infra.scripted_provider import ScriptedProvider
+from foreman.infra.replay_provider import ReplayProvider
 
 
 class Profile(StrEnum):
@@ -40,13 +48,18 @@ class App:
     turns: TurnService
     stores: Stores = field(default_factory=_memory_stores)
     lifecycle: Lifecycle = field(default_factory=NoLifecycle)
+    catalog: Catalog | None = None  # chargé par `configure` ; absent dans certains tests
 
 
 def configure(profile: Profile) -> App:
     # 1. Journalisation propre au processus
     logging.basicConfig(level=os.environ.get(ENV_LOG_LEVEL, DEFAULT_LOG_LEVEL))
-    # 2. Adaptateurs (un seul endroit : voir adapters.py quand il existera)
-    provider = ScriptedProvider()
+    # 2. Catalogue : synchrone, avant la boucle asynchrone. Une erreur (fichier invalide, Skill
+    #    brouillon hors staging, dossier absent) arrête le démarrage avec un message clair.
+    environment = os.environ.get(ENV_ENVIRONMENT, DEFAULT_ENVIRONMENT)
+    catalog = load_catalog(environment=environment)
+    # 3. Adaptateurs (un seul endroit : voir adapters.py quand il existera)
+    provider = ReplayProvider.s01(catalog_dir_from_env())
     events = InMemoryEventLog()  # le chat reste en mémoire cette semaine
     projects: ProjectStore
     lifecycle: Lifecycle
@@ -60,7 +73,7 @@ def configure(profile: Profile) -> App:
         projects = InMemoryProjectStore()
         stores = _memory_stores()
         lifecycle = NoLifecycle()
-    # 3. Services du cœur
+    # 4. Services du cœur
     return App(
         profile=profile,
         projects=projects,
@@ -68,4 +81,5 @@ def configure(profile: Profile) -> App:
         turns=TurnService(provider, events),
         stores=stores,
         lifecycle=lifecycle,
+        catalog=catalog,
     )

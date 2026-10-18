@@ -1,0 +1,12 @@
+# Valeurs fictives : modèles de projet par stack.
+boilerplates:
+  go-api:
+    kind: backend
+    language: go
+    repository: https://gitlab.example.org/foreman-demo/boilerplates/go-api
+  vue-web:
+    kind: frontend
+    language: typescript
+    repository: https://gitlab.example.org/foreman-demo/boilerplates/vue-web
+stacks:
+  go-vue: {backend: go-api, frontend: vue-web}

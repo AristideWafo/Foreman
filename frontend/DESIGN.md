@@ -41,8 +41,8 @@ Bulle de l'utilisateur : `Bubble` `secondary`. Réponse de l'agent : texte simpl
 
 À l'envoi d'un message, dans l'ordre : la bulle de l'utilisateur apparaît (fondu), puis une **trace** :
 « Réflexion en cours » (texte animé, `shimmer`), puis « Réflexion terminée » avec les **outils utilisés**
-(« Plan proposé »), puis le **plan**, rendu comme dans shadcn : une ligne repliable « Plan : titre — n sur m terminées » (`TraceCollapsible`)
-dont le contenu liste les étapes avec une icône de statut (horloge, en cours, validée, échec).
+(« Plan proposé »), puis la **carte plan** (voir « Cartes de plan et d'exécution ») dont les étapes ont une
+icône de statut (horloge, en cours, validée, échec).
 
 Limite du contrat v1 : le serveur n'envoie ni texte de raisonnement ni appel d'outil. La trace est déduite
 de `turn_status` et des cartes. Un vrai raisonnement ou des outils détaillés demandent de nouveaux types
@@ -77,6 +77,29 @@ Existants : shadcn (`Button`, `Card`, `Badge`, `Alert`, `Textarea`, `InputGroup`
 `Separator`, `Collapsible`, `Skeleton`, `Sheet`, `ScrollArea`, `MessageScroller`, `Message`, `Bubble`,
 `Marker`, `Trace`) et applicatifs : `LinkButton`, `PageHeader`, `AppSidebar`. À créer au besoin :
 `BrandLogo` (logos svgl). Une carte = un composant par `kind` dans `features/cards/`, avec repli.
+
+## Cartes de plan et d'exécution (Semaine 2)
+
+Deux cartes dans la conversation, rendues depuis les événements `card` (remplacées par `card_id`, jamais
+dupliquées). Ce sont des `Card` shadcn : titre + état en en-tête, contenu, action en pied. Tout texte de l'API
+est du **texte** (jamais HTML) ; un lien n'est cliquable que s'il est en `http(s)`.
+
+**Carte plan** : titre, résumé, badge de statut (proposé, validé, invalidé, expiré, exécuté) ; étapes (une
+`TraceLine` par étape, icône de statut, puis `outil · classe · réversibilité` en `text-xs`) ; une liste de
+définitions `text-xs`/`text-sm` : environnement, autonomie, stack, Skills (nom, version), ressources attendues,
+empreinte (`sha256:` + 12 caractères, `…`, en Geist Mono, valeur complète en infobulle native).
+Action unique : **« Valider le plan »** (`Button` par défaut), visible seulement si `approvable` et statut
+`proposed` : **un clic**. Pendant l'appel : bouton désactivé, `aria-busy`. Succès (201 ou 200) : ligne
+`role="status"` « Plan validé » et bouton retiré. Échec : `Alert` (`role="alert"`) en français, sans détail
+technique ; sur 409 ou 404 le bouton reste désactivé jusqu'à ce que le serveur réémette la carte plan
+(le front ne devine pas l'état). Tant que le serveur répond 501 : « La validation n'est pas encore disponible. »
+
+**Carte exécution** : titre « Exécution », badge d'état (`role="status"`), étapes dynamiques (mêmes lignes que le
+plan), journal (lignes en Geist Mono, `role="log"`, focalisable au clavier, défilement interne), budget (appels
+d'outils utilisés sur le maximum, durée écoulée sur le maximum), niveau d'autonomie, ressources créées (lien
+`http(s)` ou texte seul), résultat (résumé et liens). Aucune action : tout est lecture.
+
+Le composant partagé `StepList` rend les étapes des deux cartes ; `ExternalLink` rend tout lien venu de l'API.
 
 ## États d'un écran
 
