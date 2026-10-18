@@ -71,8 +71,9 @@ est affichée dans le front.
 - **Front-end : les tests sont facultatifs** (ils coûtent cher). Au minimum, vérifiez qu'une carte s'affiche
   (test de rendu léger, ou vérification notée dans la PR) pour prouver le critère de fin d'un scénario.
 - **Sécurité** : à chaque changement, vérifiez les règles de `AGENTS.md` (pas de secret en clair, erreurs
-  opaques, gateway comme seul chemin, aucun appel bloquant dans la boucle asynchrone). Pour `gateway/`,
-  `policy/` et `migrations/`, relecture propriétaire et revue indépendante par un agent (`CODEOWNERS` est désactivé pour l'instant : un seul contributeur).
+  opaques, gateway comme seul chemin, aucun appel bloquant dans la boucle asynchrone).
+  <!-- Désactivé sur demande du propriétaire (priorité à la livraison) : pour `gateway/`, `policy/` et `migrations/`,
+  relecture propriétaire et revue indépendante par un agent (`CODEOWNERS` est désactivé : un seul contributeur). -->
 - Pour le PoC et la v1, ne cherchez pas l'exhaustivité (couverture, audits poussés) : livrez, sans casser
   les couches ni les contrats.
 
