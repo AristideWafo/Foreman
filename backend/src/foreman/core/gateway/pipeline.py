@@ -74,6 +74,9 @@ DEFAULT_ROLE: Final = "developer"
 ACTOR_KIND: Final = "engine"
 MAX_TOOL_NAME_AUDIT: Final = 100
 MAX_EXTERNAL_ID: Final = 200
+# Un outil appelé avec `mode: check` ne crée rien : il n'inscrit aucune ressource au registre.
+DRY_RUN_PARAM: Final = "mode"
+DRY_RUN_VALUE: Final = "check"
 
 
 class _Refusal(Exception):
@@ -189,7 +192,11 @@ class ToolGateway:
         rule_id: str | None = None
         try:
             authorized = await self._authorize(call, trace)
-            await self._record_decision(call, trace, authorized, started)
+            try:
+                await self._record_decision(call, trace, authorized, started)
+            except BaseException:
+                self._budget.refund(call.execution_id)  # rien ne s'exécutera : appel non compté
+                raise
             return await self._execute(call, trace, authorized, started)
         except _Refusal as refusal:
             denial, rule_id = refusal.code, refusal.rule_id
@@ -402,8 +409,9 @@ class ToolGateway:
         """Ressources CRÉÉES par l'appel, lues sur la sortie brute (le masquage ne doit pas altérer
         l'identifiant). Une mise à jour (portée `update`) ne crée rien."""
         entry = tool.registry
-        if entry is None or tool.effective_scope(call.params).kind != "create":
-            return ()
+        creates = tool.effective_scope(call.params).kind == "create"
+        if entry is None or not creates or call.params.get(DRY_RUN_PARAM) == DRY_RUN_VALUE:
+            return ()  # lecture, mise à jour ou essai à blanc : rien n'est créé
         external_id = _identifier(output.get(entry.external_id, call.params.get(entry.external_id)))
         if external_id is None:
             raise CallFailed("invalid_output")
@@ -465,8 +473,9 @@ class ToolGateway:
             entry = _detached(entry)
         try:
             await self._stores.audit.append(entry)
-        except StoreError:
-            log.warning("gateway : audit non écrit (%s)", code)
+        except Exception as exc:
+            # Quelle que soit la panne : le refus tient, seul le type est journalisé.
+            log.warning("gateway : audit non écrit (%s, %s)", code, type(exc).__name__)
 
 
 def _detached(entry: AuditEntry) -> AuditEntry:

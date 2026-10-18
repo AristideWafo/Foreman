@@ -27,6 +27,12 @@ class CallBudget:
         self._max_tracked = max_tracked
         self._seen: OrderedDict[UUID, tuple[float, int]] = OrderedDict()
 
+    def refund(self, execution_id: UUID) -> None:
+        """Annule le comptage d'un appel qui n'a finalement pas eu lieu."""
+        seen = self._seen.get(execution_id)
+        if seen is not None and seen[1] > 0:
+            self._seen[execution_id] = (seen[0], seen[1] - 1)
+
     def consume(self, execution_id: UUID) -> bool:
         """Compte un appel. Faux (et rien n'est compté) si le budget est épuisé.
 

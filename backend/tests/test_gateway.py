@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import copy
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -17,7 +18,7 @@ from foreman.core.catalog import Catalog, PolicyMatrix, ToolClass, parse_policy
 from foreman.core.gateway.errors import DENIED_MESSAGE, FAILED_MESSAGE, CallDenied, CallFailed
 from foreman.core.gateway.pipeline import ToolGateway
 from foreman.core.gateway.port import GatewayCall
-from foreman.core.gateway.redact import MASK, filter_logs
+from foreman.core.gateway.redact import MASK, PATTERNS, filter_logs, mask_text, redact_value
 from foreman.core.policy.matrix import (
     Allow,
     AllowIf,
@@ -31,6 +32,7 @@ from foreman.core.references import resolve_params
 from foreman.core.store import (
     DEV_USER_ID,
     Approved,
+    AuditEntry,
     Lease,
     NewPlan,
     NewResource,
@@ -79,7 +81,8 @@ class LeakyAdapter:
             "group_id": 2000,
             "web_url": f"https://oauth2:{SECRET_TOKEN}@gitlab.example.org/foreman-demo/safe-eat?t=1",
             "owner_email": "dev@example.org",  # champ déclaré `redact` par le test
-            "api_token": SECRET_TOKEN,  # nom de champ sensible
+            "api_token": "valeur-ordinaire",  # masquée par le NOM du champ, pas par motif
+            "client_secret": "autre-valeur-ordinaire",
             "note": f"password={SECRET_PASSWORD} " + "x" * 800,
         }
         logs = [f"connexion avec {SECRET_TOKEN}", "y" * 900, *(f"ligne {i}" for i in range(120))]
@@ -164,6 +167,36 @@ class ExplodingRegistry:
         return []
 
 
+class ExplodingAudit:
+    """Journal d'audit en panne : l'exception porte une adresse avec identifiants."""
+
+    def __init__(self, inner: Any = None) -> None:
+        self._inner = inner
+
+    async def append(self, entry: AuditEntry) -> None:
+        raise RuntimeError(SECRET_URL)
+
+    async def list_for_project(self, project_id: UUID, limit: int = 200) -> list[AuditEntry]:
+        return []
+
+
+class FlakyAudit:
+    """La première écriture échoue (panne passagère), les suivantes passent."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+        self._failed = False
+
+    async def append(self, entry: AuditEntry) -> None:
+        if not self._failed:
+            self._failed = True
+            raise RuntimeError(SECRET_URL)
+        await self._inner.append(entry)
+
+    async def list_for_project(self, project_id: UUID, limit: int = 200) -> list[AuditEntry]:
+        return await self._inner.list_for_project(project_id, limit)
+
+
 class ManualClock:
     def __init__(self) -> None:
         self.now = 0.0
@@ -227,12 +260,15 @@ def make_world(
     gitlab: ToolAdapter | None = None,
     registry: object | None = None,
     clock: Callable[[], float] | None = None,
+    audit: Callable[[Any], Any] | None = None,
 ) -> World:
     catalog = catalog or load_catalog(CATALOG_ROOT, environment="staging")
     projects = InMemoryProjectStore()
     state, stores = in_memory_stores(projects=projects)
     if registry is not None:
         stores = replace(stores, registry=registry)  # type: ignore[type-var]
+    if audit is not None:
+        stores = replace(stores, audit=audit(stores.audit))
     gitlab_counter = CountingAdapter(
         gitlab or SimulatedGitLab.from_referentiel(catalog.referentiels["gitlab-groups"].data)
     )
@@ -654,7 +690,7 @@ async def test_an_allowed_call_returns_masked_and_truncated_output() -> None:
 
     assert len(result.logs) <= 50 and all(len(line) <= 500 for line in result.logs)
     assert result.output["owner_email"] == MASK
-    assert result.output["api_token"] == MASK
+    assert result.output["api_token"] == result.output["client_secret"] == MASK
     note = result.output["note"]
     assert isinstance(note, str) and len(note) <= 500
     leaked = repr(result.output) + repr(result.logs) + repr(result.audit)
@@ -712,6 +748,11 @@ async def adapter_returns_a_set() -> Failure:
     return Failure(world, await start(world, ONE_GROUP), "invalid_output", ("allow", "error"))
 
 
+async def adapter_returns_nan() -> Failure:
+    world = make_world(gitlab=MalformedAdapter({"group_id": 2000, "ratio": float("nan")}, []))
+    return Failure(world, await start(world, ONE_GROUP), "invalid_output", ("allow", "error"))
+
+
 async def adapter_returns_bytes() -> Failure:
     world = make_world(gitlab=MalformedAdapter({"group_id": b"2000"}, []))
     return Failure(world, await start(world, ONE_GROUP), "invalid_output", ("allow", "error"))
@@ -742,6 +783,7 @@ async def registry_is_down() -> Failure:
         adapter_raises_a_secret,
         adapter_meets_a_foreign_resource,
         adapter_returns_a_set,
+        adapter_returns_nan,
         adapter_returns_bytes,
         adapter_logs_an_integer,
         adapter_returns_a_group_of_another_project,
@@ -761,6 +803,54 @@ async def test_a_failed_call_is_opaque_and_audited(
     assert tuple(e.decision for e in logged) == failure.rows
     assert logged[-1].result_redacted == {"code": failure.code}
     assert "TOP-SECRET-PW" not in repr(logged)
+
+
+async def test_a_failing_audit_never_leaks_its_error_through_a_refusal() -> None:
+    world = make_world(audit=ExplodingAudit)
+    started = await start(world, ONE_GROUP)
+    with pytest.raises(CallDenied) as denied:
+        await world.gateway.call(call_for(started, plan_hash="sha256:" + "0" * 64))
+    assert denied.value.code == "plan_hash_mismatch"
+    assert denied.value.__cause__ is None and denied.value.__context__ is None
+    assert "TOP-SECRET-PW" not in repr(denied.value.args)
+
+
+async def test_a_call_not_executed_for_lack_of_an_audit_row_is_not_counted_in_the_budget() -> None:
+    world = make_world(tight_budget(max_tool_calls=1), audit=FlakyAudit)
+    started = await start(world, ONE_GROUP)
+    with pytest.raises(CallFailed):  # la ligne `allow` n'a pas pu être écrite : rien ne s'exécute
+        await world.gateway.call(call_for(started))
+    assert world.gitlab.calls == 0
+    assert (await world.gateway.call(call_for(started))).output["group_id"] == 2000
+
+
+async def test_audited_parameters_are_masked_in_refusals_and_decisions() -> None:
+    secret = f"{PWD.lower()}={VALUE}"  # un nom de groupe valide pour le schéma, mais un secret
+    steps = [
+        group_step(1, 1000, "safe-eat") | {"params": {**ONE_GROUP[0]["params"], "name": secret}}
+    ]  # type: ignore[dict-item]
+    world = make_world()
+    started = await start(world, steps)
+    with pytest.raises(CallDenied):
+        await world.gateway.call(call_for(started, plan_hash="sha256:" + "0" * 64))
+    executed = await world.gateway.call(call_for(started))
+    logged = await world.stores.audit.list_for_project(started.project_id)
+    assert [e.decision for e in logged] == ["denied", "allow"]
+    assert all(e.params_redacted is not None for e in [*logged, executed.audit])
+    assert VALUE not in repr(logged) + repr(executed.audit)
+
+
+async def test_a_dry_run_registers_nothing_and_unlocks_no_deployment() -> None:
+    check = playbook_step(1, "bootstrap_project")
+    check["params"] = {**check["params"], "mode": "check"}  # type: ignore[dict-item]
+    world = make_world()
+    started = await start(world, [check, playbook_step(2, "deploy_compose")], reserve=())
+    await engine_step(world, started, 1)
+    assert await world.stores.registry.list_for_project(started.project_id) == []
+    await world.stores.executions.reserve_idempotency(started.lease, 2)
+    with pytest.raises(CallDenied) as denied:
+        await world.gateway.call(call_for(started, 2))
+    assert denied.value.code == "scope_violation"  # le projet n'a jamais été créé
 
 
 # --- 5. Concurrence et annulation -------------------------------------------------------------
@@ -807,6 +897,11 @@ BEARER = "Bear" + "er"
 AT = "@"
 VALUE = "s3cr3t" + "Value" + "123456"
 BASIC = base64.b64encode(b"utilisateur:" + b"motdepasse").decode()
+PGP = [
+    "-----BEGIN PGP PRIV" + "ATE KEY BLOCK-----",
+    "corps",
+    "-----END PGP PRIV" + "ATE KEY BLOCK-----",
+]
 PEM = [
     "-----BEGIN RSA PRIV" + "ATE KEY-----",
     "MIIEowIBAAKCAQEAsecretbody",
@@ -827,6 +922,13 @@ PEM = [
         (["clone avec " + "github" + "_pat_" + "A1" * 20], "A1A1A1A1", "clone"),
         (["jeton " + "glcbt" + "-" + "B2" * 12], "B2B2B2B2", "jeton"),
         ([f"clone https://user:pa/ss{AT}word{AT}host.example/repo.git"], "pa/ss", "https://"),
+        ([f"mysql --{PWD.lower()} {VALUE} --verbose"], VALUE, "--verbose"),
+        ([f"mysql -u root -p{VALUE}"], VALUE, "mysql"),
+        ([f"MYSQL_ROOT_{PWD} {VALUE}"], VALUE, ""),
+        ([f"secret_key_base {VALUE}"], VALUE, ""),
+        ([f"{PWD.lower()}: >-", f"  {VALUE}", "  suite", "autre: ok"], VALUE, "autre: ok"),
+        ([PGP[0], f"corps {VALUE}", PGP[2], "apres"], VALUE, "apres"),
+        (["x" * 3000 + PGP[0], f"corps {VALUE}", PGP[2], "apres"], VALUE, "apres"),
         ([f"clone https://user:{VALUE}{AT}host.example/repo.git"], f"user:{VALUE}", "host.example"),
         ([*PEM, "après la clé"], "secretbody", "après la clé"),
         (["BEGIN", *PEM[:2], "fin sans marqueur"], "secretbody", ""),
@@ -837,6 +939,49 @@ def test_secret_shapes_are_masked_in_logs(lines: list[str], secret: str, kept: s
     assert secret not in filtered
     assert MASK in filtered
     assert kept in filtered
+
+
+def test_structured_values_are_masked_whatever_their_shape() -> None:
+    body = redact_value({"cles": [PEM[0], f"corps {VALUE}", PEM[2], "apres"]}, frozenset())
+    assert VALUE not in repr(body) and "apres" in repr(body)
+    token_as_key = "gh" + "p_" + "a1" * 15
+    assert token_as_key not in repr(redact_value({token_as_key: "x"}, frozenset()))
+    assert redact_value({"mot_de_passe": "ordinaire"}, frozenset({"mot_de_passe"})) == {
+        "mot_de_passe": MASK
+    }
+
+
+PATHOLOGICAL = {
+    "mot": "token" * 20_000,
+    "mots": "pass" * 25_000,
+    "lettres": "A" * 100_000,
+    "jwt": "eyJ-" * 25_000,
+    "cle": "-----BEGIN PRIVATE KEY-----" * 3_700,
+    "url": "http://" * 14_000,
+    "basic": "Basic " * 16_000,
+    "entete": "Authorization " * 7_000,
+    "nom": "a_" * 50_000,
+    "option": "-password " * 10_000,
+    "egal": "token=" * 16_000,
+    "blancs": "token" + " " * 100_000,
+    "jetons": "token a " * 12_000,
+    "base64": ("QUJD" * 500 + "\n") * 50,
+}
+SLOW_S = 0.25  # des secondes avant le correctif ; la marge couvre un exécuteur chargé
+
+
+@pytest.mark.parametrize("name", sorted(PATHOLOGICAL))
+def test_masking_stays_fast_on_pathological_input(name: str) -> None:
+    text = PATHOLOGICAL[name]
+    for pattern in PATTERNS:
+        started = time.perf_counter()
+        pattern.sub(MASK, text)
+        assert time.perf_counter() - started < SLOW_S, pattern.pattern[:60]
+    started = time.perf_counter()
+    mask_text(text)
+    filter_logs([text] * 200)
+    redact_value({"a": text, "b": [text] * 2_000}, frozenset())
+    assert time.perf_counter() - started < SLOW_S * 4
 
 
 # --- 7. Matrice minimale ----------------------------------------------------------------------

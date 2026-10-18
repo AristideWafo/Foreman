@@ -52,6 +52,11 @@ class Gateway(Protocol):
     async def call(self, call: GatewayCall) -> GatewayResult:
         """Exécute l'appel s'il passe les contrôles.
 
+        Rejeu : tant que `complete_step` n'a pas marqué l'étape réussie, un appel séquentiel de la
+        même étape (le moteur a échoué après la gateway) relance l'adaptateur. L'idempotence de
+        l'adaptateur (clé `idempotency_key`) est donc REQUISE ; seuls deux appels simultanés de la
+        même étape sont refusés (`call_in_progress`).
+
         Lève `CallDenied` (refus, adaptateur non appelé) ou `CallFailed` (échec d'exécution) ; ces
         deux cas sont déjà audités par la gateway. Les messages sont opaques. Toute autre
         exception est un défaut : le moteur finit alors l'exécution en `blocked`.

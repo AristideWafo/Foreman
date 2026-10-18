@@ -237,7 +237,9 @@ class ExecutionStore(Protocol):
         """Vide si une autre instance tient un bail valide. Chaque prise incrémente le jeton."""
         ...
 
-    async def renew(self, lease: Lease, ttl_s: int = LEASE_TTL_S) -> bool: ...
+    async def renew(self, lease: Lease, ttl_s: int = LEASE_TTL_S) -> bool:
+        """Faux si le bail n'est plus le nôtre ou a expiré (il se reprend par `claim_lease`)."""
+        ...
 
     async def next_step(self, execution_id: UUID) -> StepRecord | None:
         """Première étape non réussie (point de reprise)."""
