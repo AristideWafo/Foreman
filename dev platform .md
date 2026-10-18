@@ -122,9 +122,9 @@ Onze composants, dont deux sont critiques : la Tool Gateway, qui décide, et le 
 | Composant | Responsabilité | Choix au PoC |
 | --- | --- | --- |
 | Web app | Chats par projet, plans, approbations, flux d'exécution, éditeur de Skills, administration | React ou Vue, flux SSE |
-| API backend | Authentification, rôles, projets, orchestration des demandes | Monolithe Go |
+| API backend | Authentification, rôles, projets, orchestration des demandes | Monolithe Python (FastAPI) |
 | Agent runtime | Lit Skills et référentiels, produit un plan JSON, appelle des outils, analyse les résultats | Modèle via API ; contexte reconstruit à chaque tour depuis l'état structuré |
-| Tool Gateway | Point de passage de chaque appel : permissions effectives, schéma, secrets, masquage, budget, journal | Go, matrice YAML |
+| Tool Gateway | Point de passage de chaque appel : permissions effectives, schéma, secrets, masquage, budget, journal | Python, matrice YAML |
 | Moteur d'exécution | Étapes, baux, reprise, budgets, idempotence | Table PostgreSQL et worker |
 | Registre des ressources | Ressources créées, identifiants externes, marquage | PostgreSQL |
 | Réconciliateur | Compare état désiré, observé et registre, produit les dérives | Appelé avant chaque écriture |
