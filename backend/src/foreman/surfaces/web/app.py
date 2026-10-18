@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
 from foreman.bootstrap.configure import App, Profile, configure
-from foreman.config.env import ENV_STATIC_DIR
+from foreman.config.env import DEFAULT_VERSION, ENV_STATIC_DIR, ENV_VERSION
 from foreman.surfaces.web.api import create_router
 from foreman.surfaces.web.errors import install_error_handlers
 from foreman.surfaces.web.openapi import install_event_schema
@@ -53,7 +53,8 @@ def create_app(app_state: App | None = None) -> FastAPI:
 
     @api.get("/healthz")
     async def healthz() -> dict[str, str]:
-        return {"status": "ok", "profile": state.profile.value}
+        version = os.environ.get(ENV_VERSION, "")[:32] or DEFAULT_VERSION
+        return {"status": "ok", "profile": state.profile.value, "version": version}
 
     # Monté en dernier : les routes de l'API restent prioritaires sur la SPA.
     static_dir = os.environ.get(ENV_STATIC_DIR)
