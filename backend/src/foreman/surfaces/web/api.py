@@ -5,14 +5,16 @@ from collections.abc import AsyncIterator
 from typing import Annotated, Any, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, Header, Query, Response
 from fastapi.responses import StreamingResponse
 from pydantic import JsonValue
 
 from foreman.bootstrap.configure import App
 from foreman.core.events import AnyEvent
+from foreman.core.execution.cards import execution_card
 from foreman.core.ports import CapacityExceeded
 from foreman.core.projects import Project
+from foreman.core.store import ApprovalRefused
 from foreman.core.turn import TurnInProgress, TurnRequest
 from foreman.surfaces.web.errors import ApiError
 from foreman.surfaces.web.schemas import (
@@ -20,6 +22,7 @@ from foreman.surfaces.web.schemas import (
     ApprovalRequest,
     CreateProjectRequest,
     ErrorResponse,
+    ExecutionStepView,
     ExecutionView,
     MessageAccepted,
     MessageRequest,
@@ -205,10 +208,22 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         },
     )
     async def approve_plan(
-        project_id: UUID, plan_id: UUID, body: ApprovalRequest
+        project_id: UUID, plan_id: UUID, body: ApprovalRequest, response: Response
     ) -> ApprovalAccepted:
         """Le développeur valide son plan (staging) : l'approbation porte sur le hash affiché."""
-        raise ApiError(501, "not_implemented")
+        if app.approvals is None or app.engine is None:
+            raise ApiError(501, "not_implemented")
+        result = await app.approvals.approve(project_id, plan_id, body.plan_hash)
+        if isinstance(result, ApprovalRefused):
+            if result.reason == "not_found":
+                raise ApiError(404, "not_found")
+            raise ApiError(409, result.reason)
+        if result.created:
+            # Les cartes sont déjà émises (plan puis exécution) : le moteur peut partir.
+            tasks.spawn(app.engine.run(project_id, result.execution_id))
+        else:
+            response.status_code = 200  # rejeu idempotent : mêmes identifiants
+        return ApprovalAccepted(approval_id=result.approval_id, execution_id=result.execution_id)
 
     @router.get(
         "/projects/{project_id}/plans/{plan_id}", response_model=PlanView, responses=_ERRORS
@@ -234,6 +249,26 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         responses=_ERRORS,
     )
     async def get_execution(project_id: UUID, execution_id: UUID) -> ExecutionView:
-        raise ApiError(501, "not_implemented")
+        """Vue reconstruite de l'état persisté (`elapsed_s` : connu de la carte vive seulement)."""
+        if app.engine is None or app.catalog is None:
+            raise ApiError(501, "not_implemented")
+        execution = await app.stores.executions.get(project_id, execution_id)
+        card = await execution_card(app.stores, app.catalog, project_id, execution_id)
+        if execution is None or card is None:
+            raise ApiError(404, "not_found")  # aussi pour l'exécution d'un autre projet
+        return ExecutionView(
+            id=card.execution_id,
+            plan_id=execution.plan_id,
+            plan_card_id=card.plan_card_id,
+            state=card.state,
+            autonomy_level=card.autonomy_level,
+            budget=card.budget,
+            steps=[
+                ExecutionStepView(step=s.step, title=s.title, tool=s.tool or "", status=s.status)
+                for s in card.steps
+            ],
+            resources=card.resources,
+            result=card.result,
+        )
 
     return router

@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Final, Literal
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
@@ -185,7 +185,10 @@ def render_key(template: str, project_id: UUID, seq: int, params: Mapping[str, J
             return str(seq)
         if name.startswith("input."):
             value = params.get(name[len("input.") :])
-            return "" if value is None else _reference_text(value)
+            text = "" if value is None else _reference_text(value)
+            if "{" in text or "}" in text:
+                raise InvalidPlan  # une valeur ne doit pas fabriquer un `{execution_id}`
+            return text
         return match.group(0)  # `{execution_id}`
 
     return _PLACEHOLDER.sub(replace, template)
@@ -286,6 +289,10 @@ def build_content(draft: Draft, project_id: UUID, catalog: Catalog) -> tuple[Pla
             seq,
             proposed.params,
         )
+        if _reference_keys(proposed.params) and EXECUTION_ID_PLACEHOLDER not in key:
+            # Une clé bâtie sur le texte d'une référence (`$from(1.group_id)`) ne dit rien de la
+            # valeur résolue : sans `{execution_id}`, un autre plan du projet le rejouerait.
+            key = f"{EXECUTION_ID_PLACEHOLDER}:{key}"
         if not key or len(key) > MAX_KEY_CHARS or reversibility == "per_playbook":
             raise InvalidPlan
         tools.append(tool)
@@ -403,6 +410,11 @@ def plan_card(
     )
 
 
+def plan_card_id(plan_id: UUID) -> str:
+    """Identifiant déterministe : la carte plan réémise à l'approbation remplace la première."""
+    return plan_id.hex
+
+
 def _utc_now() -> datetime:
     return datetime.now(UTC)
 
@@ -430,4 +442,4 @@ class Planner:
         return record, content
 
     def card(self, record: PlanRecord, content: PlanContent) -> PlanCardData:
-        return plan_card(record, content, self._catalog, uuid4().hex)
+        return plan_card(record, content, self._catalog, plan_card_id(record.id))

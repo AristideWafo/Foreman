@@ -14,7 +14,9 @@ from foreman.config.env import (
     ENV_ENVIRONMENT,
     ENV_LOG_LEVEL,
 )
+from foreman.core.approval import ApprovalService
 from foreman.core.catalog import Catalog
+from foreman.core.execution.engine import ExecutionEngine
 from foreman.core.gateway.port import Gateway
 from foreman.core.planning import Planner
 from foreman.core.ports import EventLog, ProjectStore
@@ -52,7 +54,9 @@ class App:
     stores: Stores = field(default_factory=_memory_stores)
     lifecycle: Lifecycle = field(default_factory=NoLifecycle)
     catalog: Catalog | None = None  # chargé par `configure` ; absent dans certains tests
-    gateway: Gateway | None = None  # seul chemin vers les outils ; consommé par le moteur (C2)
+    gateway: Gateway | None = None  # seul chemin vers les outils ; consommé par le moteur
+    approvals: ApprovalService | None = None
+    engine: ExecutionEngine | None = None
 
 
 def configure(profile: Profile) -> App:
@@ -79,6 +83,7 @@ def configure(profile: Profile) -> App:
         stores = in_memory_stores(projects=memory_projects)[1]
         lifecycle = NoLifecycle()
     # 4. Services du cœur
+    gateway = build_gateway(catalog, stores)
     return App(
         profile=profile,
         projects=projects,
@@ -87,5 +92,7 @@ def configure(profile: Profile) -> App:
         stores=stores,
         lifecycle=lifecycle,
         catalog=catalog,
-        gateway=build_gateway(catalog, stores),
+        gateway=gateway,
+        approvals=ApprovalService(catalog, stores, events),
+        engine=ExecutionEngine(catalog=catalog, stores=stores, gateway=gateway, events=events),
     )

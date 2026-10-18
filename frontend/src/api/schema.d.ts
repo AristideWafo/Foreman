@@ -65,7 +65,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Execution */
+        /**
+         * Get Execution
+         * @description Vue reconstruite de l'état persisté (`elapsed_s` : connu de la carte vive seulement).
+         */
         get: operations["get_execution_api_projects__project_id__executions__execution_id__get"];
         put?: never;
         post?: never;

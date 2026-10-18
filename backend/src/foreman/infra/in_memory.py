@@ -14,6 +14,7 @@ from foreman.core.projects import Project
 from foreman.core.store import (
     LEASE_TTL_S,
     MAX_AUDIT_DURATION_MS,
+    MAX_RESUMABLE,
     ApprovalRefused,
     ApprovalResult,
     Approved,
@@ -21,6 +22,7 @@ from foreman.core.store import (
     CompletedReservation,
     DuplicateResource,
     ExecutionRecord,
+    ExecutionRef,
     ExecutionState,
     InvalidTransition,
     Lease,
@@ -291,14 +293,15 @@ class InMemoryPlanStore:
             for e in self._s.executions.values()
         ):
             return ApprovalRefused("execution_in_progress")
+        execution_id = uuid4()
         execution = _Execution(
-            id=uuid4(),
+            id=execution_id,
             plan_id=plan_id,
             project_id=project_id,
             autonomy_level=autonomy_level,
             steps=[
-                _Step(uuid4(), s.seq, s.tool, s.params, s.idempotency_key)
-                for s in steps_of(record.content)
+                _Step(uuid4(), b.seq, b.tool, b.params, b.idempotency_key)
+                for b in (s.bound_to(execution_id) for s in steps_of(record.content))
             ],
         )
         self._s.executions[execution.id] = execution
@@ -323,6 +326,10 @@ class InMemoryExecutionStore:
             return None
         steps = [_step_record(s) for s in sorted(e.steps, key=lambda s: s.seq)]
         return ExecutionRecord(e.id, e.plan_id, e.project_id, e.state, e.autonomy_level, steps)
+
+    async def list_resumable(self) -> list[ExecutionRef]:
+        running = [e for e in self._s.executions.values() if e.state == "running"]
+        return [ExecutionRef(e.project_id, e.id) for e in running[:MAX_RESUMABLE]]
 
     async def claim_lease(
         self, execution_id: UUID, owner: str, ttl_s: int = LEASE_TTL_S
@@ -408,6 +415,16 @@ class InMemoryExecutionStore:
         self._s.audit.extend(audit)
         self._s.idempotency[(e.project_id, step.idempotency_key)] = dict(result)
         step.status, step.result = "succeeded", dict(result)
+
+    async def release(self, lease: Lease, step_seq: int | None) -> None:
+        e = self._held(lease)
+        step = next((s for s in e.steps if s.seq == step_seq), None)
+        if step is not None and step.status == "running" and step.result is None:
+            key = (e.project_id, step.idempotency_key)
+            if key in self._s.idempotency and self._s.idempotency[key] is None:
+                del self._s.idempotency[key]
+            step.status = "pending"
+        e.lease_owner, e.lease_expires_at = None, None
 
     async def finish(self, lease: Lease, state: Literal["succeeded", "blocked"]) -> None:
         e = self._held(lease)

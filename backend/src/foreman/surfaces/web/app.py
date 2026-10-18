@@ -1,3 +1,4 @@
+import logging
 import os
 from collections.abc import AsyncIterator, MutableMapping
 from contextlib import asynccontextmanager
@@ -36,6 +37,19 @@ class SpaStaticFiles(StaticFiles):
             return await super().get_response("index.html", scope)
 
 
+async def resume_executions(state: App, tasks: TaskRegistry) -> None:
+    """Reprend les exécutions `running` laissées par un arrêt du processus (bail permettant)."""
+    if state.engine is None:
+        return
+    try:
+        pending = await state.stores.executions.list_resumable()
+    except Exception as exc:  # StoreError ou base absente : le démarrage ne doit pas échouer
+        logging.getLogger(__name__).warning("reprise impossible (%s)", type(exc).__name__)
+        return
+    for ref in pending:
+        tasks.spawn(state.engine.run(ref.project_id, ref.execution_id, resumed=True))
+
+
 def create_app(app_state: App | None = None) -> FastAPI:
     """`app_state` permet d'injecter des adaptateurs (tests) ; sinon profil web."""
     state = app_state or configure(Profile.WEB)
@@ -44,9 +58,12 @@ def create_app(app_state: App | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await state.lifecycle.start()  # migrations puis amorçage (profil web avec base)
+        await resume_executions(state, tasks)
         try:
             yield
         finally:
+            if state.engine is not None:
+                await state.engine.shutdown()  # laisse finir l'étape en cours (borné)
             await tasks.shutdown()
             await state.lifecycle.stop()
 

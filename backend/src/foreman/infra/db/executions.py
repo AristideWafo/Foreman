@@ -15,10 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from foreman.core.store import (
     LEASE_TTL_S,
+    MAX_RESUMABLE,
     AuditEntry,
     CompletedReservation,
     DuplicateResource,
     ExecutionRecord,
+    ExecutionRef,
     InvalidTransition,
     Lease,
     NewReservation,
@@ -105,6 +107,21 @@ class PostgresExecutionStore:
             autonomy_level=execution.autonomy_level,
             steps=[_step(s) for s in steps],
         )
+
+    async def list_resumable(self) -> list[ExecutionRef]:
+        statement = (
+            sa.select(t.executions.c.project_id, t.executions.c.id)
+            .where(t.executions.c.state == "running")
+            .order_by(t.executions.c.started_at, t.executions.c.id)
+            .limit(MAX_RESUMABLE)
+        )
+        try:
+            async with self._engine.connect() as conn:
+                rows = (await conn.execute(statement)).all()
+        except SQLAlchemyError as exc:
+            log_failure("execution.list_resumable", exc)
+            raise StoreError("stockage indisponible") from None
+        return [ExecutionRef(row.project_id, row.id) for row in rows]
 
     async def claim_lease(
         self, execution_id: UUID, owner: str, ttl_s: int = LEASE_TTL_S
@@ -297,6 +314,46 @@ class PostgresExecutionStore:
         except SQLAlchemyError as exc:
             log_failure("execution.complete_step", exc)
             raise StoreError("écriture refusée") from None
+
+    async def release(self, lease: Lease, step_seq: int | None) -> None:
+        try:
+            async with self._engine.begin() as conn:
+                await _held(conn, lease)
+                if step_seq is not None:
+                    step = (
+                        await conn.execute(
+                            sa.select(t.execution_steps.c.id)
+                            .where(
+                                t.execution_steps.c.execution_id == lease.execution_id,
+                                t.execution_steps.c.seq == step_seq,
+                                t.execution_steps.c.status == "running",
+                            )
+                            .with_for_update()
+                        )
+                    ).one_or_none()
+                    if step is not None:
+                        await conn.execute(
+                            sa.delete(t.step_idempotency).where(
+                                t.step_idempotency.c.step_id == step.id,
+                                t.step_idempotency.c.status == "reserved",
+                            )
+                        )
+                        await conn.execute(
+                            sa.update(t.execution_steps)
+                            .where(t.execution_steps.c.id == step.id)
+                            .values(status="pending", started_at=None)
+                        )
+                await conn.execute(
+                    sa.update(t.executions)
+                    .where(
+                        t.executions.c.id == lease.execution_id,
+                        t.executions.c.lease_epoch == lease.epoch,
+                    )
+                    .values(lease_owner=None, lease_expires_at=None)
+                )
+        except SQLAlchemyError as exc:
+            log_failure("execution.release", exc)
+            raise StoreError("stockage indisponible") from None
 
     async def finish(self, lease: Lease, state: Literal["succeeded", "blocked"]) -> None:
         try:
