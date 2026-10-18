@@ -2,7 +2,8 @@
 # Copié dans /opt/<projet>/compose.yaml par deploy-custom.sh. Traefik détecte l'application
 # grâce aux labels ci-dessous ; aucun port n'est publié sur l'hôte.
 #
-# Variables obligatoires (fournies par deploy-custom.sh) : PROJECT, FOREMAN_IMAGE, FOREMAN_DOMAIN.
+# Variables obligatoires : PROJECT, FOREMAN_IMAGE, FOREMAN_DOMAIN (fournies par deploy-custom.sh) et
+# FOREMAN_BASIC_AUTH_USERS (dans /opt/<projet>/.env : `utilisateur:hash`, voir docs/DEPLOYMENT.md).
 # Les autres ont une valeur par défaut, surchargeable dans /opt/<projet>/.env.
 
 name: ${PROJECT:?PROJECT requis}
@@ -48,8 +49,24 @@ services:
       - traefik.http.routers.${PROJECT}.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}
       - traefik.http.routers.${PROJECT}.tls=true
       - traefik.http.routers.${PROJECT}.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
-      - traefik.http.routers.${PROJECT}.middlewares=${PROJECT}-headers,${PROJECT}-compress
+      - traefik.http.routers.${PROJECT}.middlewares=${PROJECT}-auth,${PROJECT}-headers,${PROJECT}-compress
       - traefik.http.routers.${PROJECT}.service=${PROJECT}
+
+      # Authentification HTTP sur tout le site, flux SSE compris (le navigateur renvoie les
+      # identifiants seul au même domaine). Sans FOREMAN_BASIC_AUTH_USERS, le déploiement est
+      # refusé : le site ne peut pas être publié ouvert par oubli. L'en-tête Authorization est
+      # retiré avant d'atteindre l'application.
+      - traefik.http.middlewares.${PROJECT}-auth.basicauth.users=${FOREMAN_BASIC_AUTH_USERS:?FOREMAN_BASIC_AUTH_USERS requis (utilisateur:hash, voir docs/DEPLOYMENT.md)}
+      - traefik.http.middlewares.${PROJECT}-auth.basicauth.removeheader=true
+
+      # /healthz reste public (supervision, vérification du déploiement) : il ne renvoie que l'état.
+      - "traefik.http.routers.${PROJECT}-health.rule=Host(`${FOREMAN_DOMAIN}`) && Path(`/healthz`)"
+      - traefik.http.routers.${PROJECT}-health.priority=1000
+      - traefik.http.routers.${PROJECT}-health.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}
+      - traefik.http.routers.${PROJECT}-health.tls=true
+      - traefik.http.routers.${PROJECT}-health.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.routers.${PROJECT}-health.middlewares=${PROJECT}-headers
+      - traefik.http.routers.${PROJECT}-health.service=${PROJECT}
 
       # En-têtes de sécurité (équivalents du Caddyfile)
       - traefik.http.middlewares.${PROJECT}-headers.headers.stsSeconds=31536000

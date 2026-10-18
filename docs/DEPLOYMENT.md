@@ -51,12 +51,39 @@ Un verrou empêche deux déploiements simultanés d'un même projet.
   journaux (10 Mo × 3). Valeurs modifiables dans `.env` (voir `.env.deploy.example`) ; cAdvisor et Grafana les voient
   sans configuration supplémentaire.
 
+**Protéger l'accès (obligatoire).** Tout le site, flux SSE compris, est derrière une authentification HTTP
+(`basicAuth` Traefik) ; seul `/healthz` reste public (supervision et vérification du déploiement). Sans
+`FOREMAN_BASIC_AUTH_USERS` dans `/opt/<projet>/.env`, `deploy-custom.sh` et `docker compose` refusent de
+déployer : le site ne peut pas être publié ouvert par oubli. Un mot de passe en clair est refusé aussi.
+
+1. Sur le serveur, générer l'empreinte (le mot de passe ne s'affiche pas et n'entre pas dans l'historique) :
+
+   ```bash
+   read -rs -p "Mot de passe : " PW; echo
+   printf "FOREMAN_BASIC_AUTH_USERS='admin:%s'\n" "$(openssl passwd -apr1 "$PW")" >> /opt/foreman/.env
+   unset PW
+   ```
+
+   La valeur est entre apostrophes pour que les `$` de l'empreinte restent littéraux. Plusieurs utilisateurs :
+   séparer par des virgules (`admin:...,bob:...`).
+2. Recopier `deploy-custom.sh` et `compose.custom.yaml` à côté l'un de l'autre sur le serveur (le compose n'est
+   pas synchronisé automatiquement, voir « Limite connue »).
+3. Redéployer (merge sur `prod`, ou **Deploy** manuel avec un SHA).
+4. Vérifier : `curl -s -o /dev/null -w '%{http_code}' https://<domaine>/api/projects` renvoie `401` sans
+   identifiants ; avec `-u admin:<mot de passe>` il répond ; `https://<domaine>/healthz` reste accessible sans
+   identifiants.
+
+Le navigateur renvoie lui-même les identifiants au flux d'événements (même domaine). L'en-tête
+`Authorization` est retiré par Traefik avant d'atteindre l'application. L'empreinte (pas le mot de passe) se
+retrouve dans l'environnement du conteneur, puisque le `.env` entier est transmis ; elle ne doit pas être
+commitée. Ce mécanisme est provisoire : il sera remplacé par l'authentification de la semaine 4 (S10).
+
 **Installation (une fois par projet)** :
 
 1. Copier `deploy/deploy-custom.sh` et `deploy/compose.custom.yaml` côte à côte sur le serveur
    (par exemple `/opt/deploy/`), script exécutable.
-2. Créer `/opt/<projet>/.env` à partir de `.env.deploy.example` (au minimum `FOREMAN_DOMAIN` ; avec `--with-db`,
-   aussi `POSTGRES_PASSWORD`).
+2. Créer `/opt/<projet>/.env` à partir de `.env.deploy.example` (au minimum `FOREMAN_DOMAIN` et
+   `FOREMAN_BASIC_AUTH_USERS` ; avec `--with-db`, aussi `POSTGRES_PASSWORD`).
 3. Si le registre est privé : `docker login ghcr.io` une fois avec un jeton en lecture seule.
 4. Essai à blanc : `deploy-custom.sh --dry-run <projet> ghcr.io/<owner>/<repo>@sha256:<digest>`.
 
