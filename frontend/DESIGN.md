@@ -61,7 +61,7 @@ d'événements (évolution additive du contrat), pas un changement d'interface.
 Deux graisses en plus de la normale : `font-medium` (actions) et `font-semibold` (titres). Pas de `font-bold`.
 Police : **Geist** (texte), **Geist Mono** (code, identifiants).
 
-Icônes : **Heroicons `24/outline`**, une seule taille (**20 px**) et un trait de **2** partout. C'est imposé par
+Icônes : **Heroicons `24/outline`**, une seule taille (**18 px**) et un trait de **1,75** partout. C'est imposé par
 une règle globale dans `src/index.css` (hors `@layer`, elle l'emporte sur les tailles des composants shadcn) :
 on n'écrit donc aucun `size-*` sur une icône. Pas de `24/solid`.
 
