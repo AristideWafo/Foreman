@@ -51,7 +51,10 @@ jobs:
           cache-dependency-glob: backend/uv.lock
           python-version: "3.12"
       - run: uv sync
-      - run: uv run pytest
+      - run: uv run pytest --junitxml=junit.xml
+      - name: Annote les tests en échec (les journaux bruts ne sont pas toujours lisibles)
+        if: failure()
+        run: python3 scripts/annotate_failures.py junit.xml
 
   frontend:
     name: Frontend — lint, typage, tests, build
