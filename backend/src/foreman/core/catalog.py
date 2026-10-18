@@ -25,27 +25,14 @@ from pydantic import (
     model_validator,
 )
 
+from foreman.core.events import Sha256
+
 TOOL_NAME_PATTERN: Final = r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$"
 REGISTRY_MARKING: Final = "managed-by=foreman"
 DRAFT_ALLOWED_ENVIRONMENTS: Final = frozenset({"staging"})
 SKILL_SECTIONS: Final = ("# Objectif", "# Instructions", "# Règles", "# Résultat attendu")
 MAX_CATALOG_FILE_BYTES: Final = 64 * 1024
 
-# Règles de la matrice connues du code : une règle hors de cette liste est refusée au chargement.
-KNOWN_RULE_IDS: Final = frozenset(
-    {
-        "R1-lecture",
-        "R2-controle",
-        "R3-niveau4-reprise-et-rollback",
-        "R4-remediation-reversible",
-        "R5-remediation-autre",
-        "R6-ecriture-staging",
-        "R7-ecriture-production",
-        "R8-irreversible",
-        "R9-hors-registre",
-        "R10-destructif",
-    }
-)
 
 ToolClass = Literal["read", "write_registry", "write_foreign", "destructive", "control"]
 Reversibility = Literal[
@@ -66,18 +53,33 @@ SkillStatus = Literal["draft", "published"]
 _NAME_RE: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _PLACEHOLDER_RE: Final = re.compile(r"\{([^{}]*)\}")
 _KEY_VARIABLES: Final = frozenset({"project_id", "execution_id", "step_seq"})
-_OBJECT_SCHEMA_CHILD_KEYS: Final = ("properties", "patternProperties", "$defs", "definitions")
-_SCHEMA_LIST_KEYS: Final = ("allOf", "anyOf", "oneOf", "prefixItems")
-_SCHEMA_SINGLE_KEYS: Final = (
-    "items",
-    "additionalProperties",
-    "contains",
-    "not",
-    "if",
-    "then",
-    "else",
-    "propertyNames",
-)
+# Liste blanche des mots-clés JSON Schema : tout le reste (patternProperties, unevaluated*,
+# dependentSchemas, not, if/then/else, $ref, prefixItems...) est refusé, donc ne peut pas contourner
+# la fermeture des objets.
+_ALLOWED_KEYWORDS: Final = frozenset(
+    {
+        "type", "enum", "const", "properties", "required", "additionalProperties", "items",
+        "minItems", "maxItems", "uniqueItems", "minLength", "maxLength", "pattern", "format",
+        "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
+        "minProperties", "maxProperties", "allOf", "anyOf", "oneOf", "description", "title",
+        "default", "examples",
+    }
+)  # fmt: skip
+_COMBINATORS: Final = ("allOf", "anyOf", "oneOf")
+# Règles connues du code, avec la classe (et l'environnement) qu'elles visent : une règle hors de
+# cette table, ou détournée vers une autre classe, est refusée au chargement.
+RULE_BINDINGS: Final[Mapping[str, tuple[str, str | None]]] = {
+    "R1-lecture": ("read", None),
+    "R2-controle": ("control", None),
+    "R3-niveau4-reprise-et-rollback": ("write_registry", "staging"),
+    "R4-remediation-reversible": ("write_registry", None),
+    "R5-remediation-autre": ("write_registry", None),
+    "R6-ecriture-staging": ("write_registry", "staging"),
+    "R7-ecriture-production": ("write_registry", "production"),
+    "R8-irreversible": ("write_registry", None),
+    "R9-hors-registre": ("write_foreign", None),
+    "R10-destructif": ("destructive", None),
+}
 
 
 class CatalogError(Exception):
@@ -88,21 +90,36 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=False)
 
 
-def sha256_hex(raw: bytes) -> str:
-    return hashlib.sha256(raw).hexdigest()
+def sha256_ref(raw: bytes) -> str:
+    """Empreinte au format du contrat (`events.Sha256`) : `sha256:<64 hex>`."""
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
 # --- Lecture sûre ------------------------------------------------------------------------------
 
 
-def parse_yaml_mapping(raw: bytes, source: str) -> dict[str, Any]:
-    """Décode du YAML avec `safe_load` et exige un objet à la racine."""
+def check_text_bytes(raw: bytes, source: str) -> str:
+    """Texte UTF-8 en LF, sans BOM : sinon le hash dépendrait du poste de travail."""
     if len(raw) > MAX_CATALOG_FILE_BYTES:
         raise CatalogError(f"{source}: fichier trop volumineux")
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raise CatalogError(f"{source}: BOM UTF-8 interdit")
+    if b"\r" in raw:
+        raise CatalogError(f"{source}: fins de ligne CRLF interdites (LF attendu)")
     try:
-        loaded = yaml.safe_load(raw.decode("utf-8"))
-    except (yaml.YAMLError, UnicodeDecodeError) as exc:
-        raise CatalogError(f"{source}: YAML invalide ou non sûr") from exc
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise CatalogError(f"{source}: encodage UTF-8 attendu") from None
+
+
+def parse_yaml_mapping(raw: bytes, source: str) -> dict[str, Any]:
+    """Décode du YAML avec `safe_load` et exige un objet à la racine."""
+    text = check_text_bytes(raw, source)
+    try:
+        loaded = yaml.safe_load(text)
+    except yaml.YAMLError:
+        # `from None` : la cause YAML cite un extrait du fichier, qui ne doit sortir nulle part.
+        raise CatalogError(f"{source}: YAML invalide ou non sûr") from None
     if not isinstance(loaded, dict) or not all(isinstance(k, str) for k in loaded):
         raise CatalogError(f"{source}: un objet YAML est attendu à la racine")
     return loaded
@@ -115,48 +132,58 @@ def _validate[M: BaseModel](model: type[M], data: Mapping[str, Any], source: str
         problems = "; ".join(
             f"{'.'.join(str(p) for p in e['loc']) or '<racine>'}: {e['msg']}" for e in exc.errors()
         )
-        raise CatalogError(f"{source}: {problems}") from exc
+        # `from None` : la cause pydantic porte les valeurs invalides.
+        raise CatalogError(f"{source}: {problems}") from None
 
 
 # --- Outils ------------------------------------------------------------------------------------
 
 
-def _is_object_schema(node: Mapping[str, Any]) -> bool:
-    kind = node.get("type")
-    is_typed = kind == "object" or (isinstance(kind, list) and "object" in kind)
-    return is_typed or "properties" in node or "patternProperties" in node
+def schema_problems(schema: object, path: str = "input") -> list[str]:
+    """Défauts de fermeture d'un schéma d'entrée, à TOUS les niveaux.
 
-
-def _subschemas(node: Mapping[str, Any]) -> Iterable[tuple[str, Any]]:
-    for key in _OBJECT_SCHEMA_CHILD_KEYS:
-        children = node.get(key)
-        if isinstance(children, dict):
-            for name, child in children.items():
-                yield f"{key}.{name}", child
-    for key in _SCHEMA_LIST_KEYS:
-        children = node.get(key)
-        if isinstance(children, list):
-            for i, child in enumerate(children):
-                yield f"{key}[{i}]", child
-    for key in _SCHEMA_SINGLE_KEYS:
-        child = node.get(key)
-        if isinstance(child, dict):
-            yield key, child
-        elif key == "items" and isinstance(child, list):
-            for i, item in enumerate(child):
-                yield f"items[{i}]", item
-
-
-def schema_problems(schema: Mapping[str, Any], path: str = "input") -> list[str]:
-    """Défauts de fermeture : `additionalProperties: false` à TOUS les niveaux d'objet."""
+    Chaque sous-schéma est un objet (pas de schéma booléen), n'utilise que des mots-clés de la
+    liste blanche, déclare un `type` (ou `enum`/`const`), ferme ses objets par
+    `additionalProperties: false` et déclare les `items` de ses tableaux.
+    """
+    if not isinstance(schema, dict):
+        return [f"{path}: un schéma objet est attendu (pas de schéma booléen)"]
     problems: list[str] = []
-    if "$ref" in schema or "$dynamicRef" in schema:
-        problems.append(f"{path}: les références ($ref) ne sont pas prises en charge")
-    if _is_object_schema(schema) and schema.get("additionalProperties") is not False:
+    unknown = sorted(set(schema) - _ALLOWED_KEYWORDS)
+    if unknown:
+        problems.append(f"{path}: mots-clés non pris en charge : {unknown}")
+    kind = schema.get("type")
+    if isinstance(kind, str):
+        types = [kind]
+    elif isinstance(kind, list) and all(isinstance(t, str) for t in kind):
+        types = list(kind)
+    else:
+        types = []
+        if kind is not None:
+            problems.append(f"{path}: type invalide")
+    if kind is None and not any(k in schema for k in ("enum", "const", *_COMBINATORS)):
+        problems.append(f"{path}: type, enum, const ou combinaison explicite requis")
+    if ("properties" in schema or "required" in schema) and "object" not in types:
+        problems.append(f"{path}: properties ou required exigent type object")
+    if "object" in types and schema.get("additionalProperties") is not False:
         problems.append(f"{path}: additionalProperties doit valoir false")
-    for sub_path, child in _subschemas(schema):
-        if isinstance(child, dict):
-            problems.extend(schema_problems(child, f"{path}.{sub_path}"))
+    if "array" in types and not isinstance(schema.get("items"), dict):
+        problems.append(f"{path}: un tableau déclare ses items")
+    properties = schema.get("properties")
+    if isinstance(properties, dict):
+        for name, child in properties.items():
+            problems.extend(schema_problems(child, f"{path}.{name}"))
+    elif properties is not None:
+        problems.append(f"{path}: properties doit être un objet")
+    if "items" in schema:
+        problems.extend(schema_problems(schema["items"], f"{path}[]"))
+    for key in _COMBINATORS:
+        branches = schema.get(key)
+        if isinstance(branches, list):
+            for i, child in enumerate(branches):
+                problems.extend(schema_problems(child, f"{path}.{key}[{i}]"))
+        elif branches is not None:
+            problems.append(f"{path}: {key} doit être une liste")
     return problems
 
 
@@ -201,8 +228,21 @@ class Scope(_Strict):
         return self
 
 
+class PlaybookDefinition(_Strict):
+    """Réversibilité et portée d'UN playbook, lues par la gateway avant la matrice."""
+
+    reversibility: Literal["reversible", "compensable", "irreversible"]
+    scope: Scope
+
+
 class ToolDefinition(_Strict):
-    """Définition d'un outil. La classe et la réversibilité viennent d'ici, jamais du modèle."""
+    """Définition d'un outil. La classe et la réversibilité viennent d'ici, jamais du modèle.
+
+    Un outil `per_playbook` déclare `playbooks` (une entrée par valeur du paramètre `playbook`) ;
+    la réversibilité et la portée effectives sont celles du playbook appelé
+    (`effective_reversibility`, `effective_scope`). La gateway doit aussi imposer que
+    `params.environment` soit celui du plan : le schéma seul ne le garantit pas.
+    """
 
     tool: Annotated[str, Field(pattern=TOOL_NAME_PATTERN)]
     version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+$")]
@@ -213,7 +253,8 @@ class ToolDefinition(_Strict):
     output: dict[str, JsonValue]
     idempotency: Idempotency | None = None
     registry: RegistryEntry | None = None
-    scope: Scope
+    scope: Scope | None = None
+    playbooks: dict[str, PlaybookDefinition] | None = None
     redact: list[str] = Field(default_factory=list)
     timeout_s: Annotated[int, Field(gt=0, le=900)]
 
@@ -228,6 +269,19 @@ class ToolDefinition(_Strict):
         problems = self._input_problems()
         if problems:
             raise ValueError("; ".join(problems))
+        properties = self.input.get("properties")
+        names = set(properties) if isinstance(properties, dict) else set()
+        self._check_class(names)
+        self._check_scopes(names)
+        if self.registry is not None:
+            known = names | set(self.output)
+            if self.registry.external_id not in known:
+                raise ValueError("registry.external_id doit être un champ de input ou de output")
+        if self.idempotency is not None:
+            self._check_key(self.idempotency.key, names)
+        return self
+
+    def _check_class(self, names: set[str]) -> None:
         is_write = self.tool_class in ("write_registry", "write_foreign", "destructive")
         if self.tool_class in ("read", "control") and self.reversibility != "not_applicable":
             raise ValueError("un outil de lecture ou de contrôle est not_applicable")
@@ -237,20 +291,57 @@ class ToolDefinition(_Strict):
             raise ValueError("un outil d'écriture déclare son idempotence")
         if self.tool_class == "write_registry" and self.registry is None:
             raise ValueError("un outil write_registry déclare son entrée de registre")
-        if self.tool_class == "write_registry" and self.scope.kind == "read":
-            raise ValueError("un outil d'écriture n'a pas une portée read")
-        if self.tool_class in ("read", "control") and self.scope.kind != "read":
-            raise ValueError("un outil de lecture ou de contrôle a une portée read")
-        if self.registry is not None and self.registry.external_id not in self.output:
-            raise ValueError("registry.external_id doit être un champ de output")
+        if self.reversibility == "per_playbook":
+            self._check_playbooks()
+        elif self.playbooks is not None:
+            raise ValueError("playbooks n'est admis que pour per_playbook")
+
+    def _check_playbooks(self) -> None:
         properties = self.input.get("properties")
-        names = set(properties) if isinstance(properties, dict) else set()
-        for ref in (self.scope.parent, self.scope.target):
-            if ref is not None and ref not in names:
-                raise ValueError("scope fait référence à un paramètre inconnu")
-        if self.idempotency is not None:
-            self._check_key(self.idempotency.key, names)
-        return self
+        playbook = properties.get("playbook") if isinstance(properties, dict) else None
+        allowed = playbook.get("enum") if isinstance(playbook, dict) else None
+        if not self.playbooks or not isinstance(allowed, list):
+            raise ValueError("per_playbook exige playbooks et un enum input.playbook")
+        if set(self.playbooks) != set(allowed):
+            raise ValueError("playbooks doit couvrir exactement l'enum input.playbook")
+        if self.scope is not None:
+            raise ValueError("per_playbook : la portée est déclarée par playbook")
+        if self.tool_class != "write_registry":
+            raise ValueError("per_playbook concerne un outil write_registry")
+
+    def _check_scopes(self, names: set[str]) -> None:
+        scopes = [d.scope for d in (self.playbooks or {}).values()]
+        if self.scope is not None:
+            scopes.append(self.scope)
+        elif self.playbooks is None:
+            raise ValueError("la portée (scope) est obligatoire")
+        for scope in scopes:
+            for ref in (scope.parent, scope.target):
+                if ref is not None and ref not in names:
+                    raise ValueError("scope fait référence à un paramètre inconnu")
+            if self.tool_class == "write_registry" and scope.kind == "read":
+                raise ValueError("un outil d'écriture n'a pas une portée read")
+            if self.tool_class in ("read", "control") and scope.kind != "read":
+                raise ValueError("un outil de lecture ou de contrôle a une portée read")
+
+    def effective_reversibility(self, params: Mapping[str, Any]) -> Reversibility:
+        """Réversibilité de l'appel : celle du playbook pour un outil `per_playbook`."""
+        if self.playbooks is None:
+            return self.reversibility
+        return self._playbook(params).reversibility
+
+    def effective_scope(self, params: Mapping[str, Any]) -> Scope:
+        if self.playbooks is None:
+            if self.scope is None:  # exclu par le chargeur
+                raise ValueError("portée absente")
+            return self.scope
+        return self._playbook(params).scope
+
+    def _playbook(self, params: Mapping[str, Any]) -> PlaybookDefinition:
+        definition = (self.playbooks or {}).get(str(params.get("playbook")))
+        if definition is None:
+            raise ValueError("playbook inconnu")
+        return definition
 
     def _input_problems(self) -> list[str]:
         try:
@@ -291,7 +382,7 @@ class SkillDocument(_Strict):
     description: Annotated[str, Field(min_length=1, max_length=500)]
     tools: list[Annotated[str, Field(pattern=TOOL_NAME_PATTERN)]]
     body: Annotated[str, Field(min_length=1)]
-    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    sha256: Sha256
 
     @field_validator("body")
     @classmethod
@@ -312,12 +403,7 @@ class _SkillFrontMatter(_Strict):
 
 
 def parse_skill(raw: bytes, source: str, expected_name: str | None = None) -> SkillDocument:
-    if len(raw) > MAX_CATALOG_FILE_BYTES:
-        raise CatalogError(f"{source}: fichier trop volumineux")
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise CatalogError(f"{source}: encodage UTF-8 attendu") from exc
+    text = check_text_bytes(raw, source)
     opening = "---\n"
     if not text.startswith(opening):
         raise CatalogError(f"{source}: front matter manquant")
@@ -332,7 +418,7 @@ def parse_skill(raw: bytes, source: str, expected_name: str | None = None) -> Sk
         raise CatalogError(f"{source}: le nom du Skill doit être celui de son dossier")
     return _validate(
         SkillDocument,
-        {**meta.model_dump(), "body": body, "sha256": sha256_hex(raw)},
+        {**meta.model_dump(), "body": body, "sha256": sha256_ref(raw)},
         source,
     )
 
@@ -344,13 +430,13 @@ class Referentiel(_Strict):
     """Faits d'infrastructure (YAML). Le contenu est libre, le hash le trace."""
 
     name: Annotated[str, Field(pattern=_NAME_RE.pattern)]
-    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    sha256: Sha256
     data: dict[str, JsonValue] = Field(min_length=1)
 
 
 def parse_referentiel(raw: bytes, name: str, source: str) -> Referentiel:
     data = parse_yaml_mapping(raw, source)
-    return _validate(Referentiel, {"name": name, "sha256": sha256_hex(raw), "data": data}, source)
+    return _validate(Referentiel, {"name": name, "sha256": sha256_ref(raw), "data": data}, source)
 
 
 # --- Matrice -----------------------------------------------------------------------------------
@@ -361,7 +447,7 @@ def _as_list(value: object) -> object:
 
 
 class RuleMatch(_Strict):
-    tool_class: Annotated[ToolClass | None, Field(alias="class")] = None
+    tool_class: Annotated[ToolClass, Field(alias="class")]
     env: list[str] | None = None
     purpose: list[Purpose] | None = None
     reversibility: list[Reversibility] | None = None
@@ -384,7 +470,7 @@ class Rule(_Strict):
     @field_validator("id")
     @classmethod
     def _known(cls, value: str) -> str:
-        if value not in KNOWN_RULE_IDS:
+        if value not in RULE_BINDINGS:
             raise ValueError("règle de matrice inconnue")
         return value
 
@@ -394,6 +480,17 @@ class Rule(_Strict):
             raise ValueError("allow n'a pas de requires (utiliser allow_if)")
         if self.decision == "allow_if" and not self.requires:
             raise ValueError("allow_if exige au moins un requires")
+        tool_class = self.match.tool_class
+        if tool_class in ("write_registry", "write_foreign", "destructive"):
+            if self.decision != "allow_if":
+                raise ValueError("une écriture n'est jamais allow : allow_if avec exigences")
+            if tool_class == "write_registry" and "plan_approved" not in self.requires:
+                raise ValueError("une écriture dans le registre exige plan_approved")
+        bound_class, bound_env = RULE_BINDINGS[self.id]
+        if tool_class != bound_class:
+            raise ValueError(f"la règle {self.id} porte sur la classe {bound_class}")
+        if bound_env is not None and self.match.env != [bound_env]:
+            raise ValueError(f"la règle {self.id} porte sur l'environnement {bound_env}")
         return self
 
 
@@ -437,6 +534,9 @@ class PolicyMatrix(_Strict):
         if set(self.classes) != set(get_args(ToolClass)):
             raise ValueError("classes : les cinq classes d'outils sont attendues")
         for rule in self.rules:
+            unknown_env = set(rule.match.env or []) - set(self.autonomy.environments)
+            if unknown_env:
+                raise ValueError("règle sur un environnement absent de autonomy.environments")
             if rule.roles is not None and not set(rule.roles) <= set(self.roles):
                 raise ValueError("règle avec un rôle inconnu")
         return self

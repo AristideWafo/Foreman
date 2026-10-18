@@ -1,13 +1,22 @@
 tool: server.apply_playbook
 version: 1.0.0
 class: write_registry
-reversibility: per_playbook        # lue dans le manifeste du playbook
+reversibility: per_playbook        # résolue par playbook (voir `playbooks`) avant la matrice
 connector: server
+# La réversibilité et la portée effectives sont celles du playbook appelé. La gateway doit imposer
+# params.environment == plan.environment : le schéma seul ne le garantit pas.
+playbooks:
+  bootstrap_project:
+    reversibility: compensable
+    scope: {kind: create, parent: environment}   # crée le projet sous l'environnement autorisé
+  deploy_compose:
+    reversibility: compensable
+    scope: {kind: update, target: project}       # agit sur un projet déjà dans le registre
 input:
   type: object
   required: [environment, project, playbook, mode]
   properties:
-    environment: {enum: [staging, production]}
+    environment: {enum: [staging]}    # production arrive avec sa règle (R7)
     project:     {type: string, pattern: "^[a-z0-9][a-z0-9-]{1,40}$"}
     playbook:    {enum: [bootstrap_project, deploy_compose]}
     mode:        {enum: [check, apply]}
@@ -22,8 +31,7 @@ idempotency:
   on_conflict: return_previous_result
 registry:
   resource_type: server_project
-  external_id: run_id
+  external_id: project               # le slug du projet ; run_id reste une sortie
   marking: "répertoire et services Compose du projet étiquetés managed-by=foreman"
-scope: {kind: update, target: project}
 redact: []
 timeout_s: 900

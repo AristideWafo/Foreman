@@ -7,7 +7,7 @@ input:
   type: object
   required: [environment, project]
   properties:
-    environment: {enum: [staging, production]}
+    environment: {enum: [staging]}
     project:     {type: string, pattern: "^[a-z0-9][a-z0-9-]{1,40}$"}
   additionalProperties: false
 output: {status: {enum: [ok, failed]}, http_status: integer, database: string}

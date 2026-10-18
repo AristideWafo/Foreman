@@ -1,0 +1,2 @@
+catalog/** text eol=lf
+backend/src/foreman/integrations/**/*.yaml text eol=lf

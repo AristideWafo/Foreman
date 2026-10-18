@@ -7,7 +7,7 @@ input:
   type: object
   required: [environment]
   properties:
-    environment: {enum: [staging, production]}
+    environment: {enum: [staging]}
   additionalProperties: false
 output:
   records:
