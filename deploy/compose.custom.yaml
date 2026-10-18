@@ -33,6 +33,11 @@ services:
         reservations:
           memory: ${APP_MEM_RESERVATION:-128M}
     networks: [traefik, internal]
+    # Avec --with-db, l'application attend que PostgreSQL soit sain ; sans le profil « db », la dépendance est ignorée.
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
@@ -85,7 +90,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-foreman}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis avec --with-db}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}  # contrôlé par deploy-custom.sh --with-db
       POSTGRES_DB: ${POSTGRES_DB:-foreman}
     volumes:
       - db_data:/var/lib/postgresql/data

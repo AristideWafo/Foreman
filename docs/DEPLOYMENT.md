@@ -121,6 +121,40 @@ Si le mot de passe contient des caractères spéciaux, les encoder dans l'URL (`
 - Les projets, plans, approbations, exécutions, registre et audit sont en PostgreSQL et survivent à un redéploiement ;
   le chat (événements) reste en mémoire et est vidé à chaque redémarrage.
 - L'URL de la base n'est écrite dans aucun journal. La retirer du `.env` ramène l'application en mémoire.
+- Le service `app` ne démarre qu'une fois `db` sain (`depends_on: service_healthy`, ignoré sans `--with-db`).
+- **Contrôles de `deploy-custom.sh --with-db`** (valeurs jamais affichées) : Docker Compose 2.29 ou plus (limites `pids`) ;
+  `POSTGRES_PASSWORD` présent ; `FOREMAN_DATABASE_URL` présent **une seule fois** sous la forme `NOM=valeur` (ni `export`,
+  ni indentation, ni doublon), sans `$` ni `${VAR}`, de la forme `postgresql[+psycopg]://utilisateur:mot_de_passe@db:5432/base` ;
+  et, quand l'URL n'a pas de `%`, mêmes utilisateur, mot de passe et base que `POSTGRES_USER` (défaut `foreman`),
+  `POSTGRES_PASSWORD` et `POSTGRES_DB` (défaut `foreman`).
+- `POSTGRES_PASSWORD` n'est appliqué qu'à **l'initialisation du volume** `db_data`. Changer le mot de passe plus tard
+  se fait dans la base (`ALTER ROLE foreman PASSWORD '…'`) puis dans `.env` (les deux variables ensemble).
+- **Sauvegarde automatique** : si le conteneur `db` tourne, le script lance `pg_dump -Fc` avant `up` vers
+  `$DEPLOY_ROOT/backups/<projet>-<date>.dump` (répertoire 0700, fichiers 0600, 5 dumps conservés). Si le dump échoue,
+  le déploiement est abandonné (code 70) et aucun fichier partiel n'est conservé. Au premier déploiement, rien n'est
+  sauvegardé. Copier ces dumps hors du serveur reste à votre charge. Sauvegarde manuelle :
+
+  ```bash
+  cd /opt/<projet>
+  docker compose -p <projet> exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > <fichier>.dump
+  ```
+
+- **Retour arrière après une migration** : le retour arrière automatique du script ne restaure que l'image, jamais la base.
+  Si le déploiement ajoute une migration Alembic, l'ancienne image **ne redémarre plus** (révision inconnue d'Alembic).
+  Il faut restaurer le dump pris avant ce déploiement **avant** de relancer l'ancienne image. `pg_restore --clean` ne
+  supprime pas les tables créées par la migration plus récente : recréer la base d'abord.
+
+  ```bash
+  cd /opt/<projet>
+  docker compose -p <projet> stop app
+  docker compose -p <projet> exec -T db sh -c 'dropdb -U "$POSTGRES_USER" "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+  docker compose -p <projet> exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < <fichier>.dump
+  deploy-custom.sh --with-db <projet> <ancienne image@sha256:…>
+  ```
+
+  (`dropdb` échoue tant que des connexions restent ouvertes : arrêter `app` d'abord, comme ci-dessus.)
+- Par SSH, `SSH_ORIGINAL_COMMAND` prime sur les arguments : les options (`--with-db`, `--dry-run`) doivent figurer dans la
+  commande `deploy …` envoyée ; celles passées en argument au script sont ignorées.
 - Retour arrière d'une migration : jamais automatique. `downgrade()` supprime les tables (audit compris) ; ne le lancer
   que sur une base de test.
 

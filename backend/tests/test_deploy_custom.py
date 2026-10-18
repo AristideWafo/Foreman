@@ -91,10 +91,11 @@ class TestRenderedCompose:
             "PROJECT": "mon-app",
             "FOREMAN_IMAGE": IMAGE,
             "FOREMAN_DOMAIN": "mon-app.example.com",
-            "POSTGRES_PASSWORD": "test",
             "FOREMAN_BASIC_AUTH_USERS": AUTH,
             "COMPOSE_PROFILES": profile,
         }
+        if profile == "db":  # sans profil, POSTGRES_PASSWORD ne doit pas être exigé
+            env.update({"POSTGRES_PASSWORD": "test"})
         out = subprocess.run(
             ["docker", "compose", "-f", "compose.yaml", "config", "--format", "json"],  # noqa: S607
             cwd=tmp_path,
@@ -150,14 +151,34 @@ class TestRenderedCompose:
         )
 
 
-def stub_docker(tmp_path: Path) -> dict[str, str]:
-    """Faux `docker` qui accepte tout : permet d'exécuter le script sans serveur."""
+STUB_DOCKER = r"""#!/usr/bin/env bash
+# Faux docker : journalise chaque appel (profil compris) et simule la base selon des variables.
+echo "profiles=${COMPOSE_PROFILES:-} $*" >> "$STUB_LOG"
+case "$*" in
+  "compose version --short") echo "${STUB_COMPOSE_VERSION:-2.29.0}" ;;
+  *" ps --status running --services"*) [[ -n "${STUB_DB_RUNNING:-}" ]] && echo db ;;
+  *" exec "*)
+    echo "debut-de-dump"
+    [[ -n "${STUB_DUMP_FAIL:-}" ]] && exit 1
+    echo "fin-de-dump" ;;
+esac
+exit 0
+"""
+
+
+def stub_docker(tmp_path: Path, **extra: str) -> dict[str, str]:
+    """Faux `docker` : permet d'exécuter le script sans serveur."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     docker = bin_dir / "docker"
-    docker.write_text("#!/usr/bin/env bash\nexit 0\n")
+    docker.write_text(STUB_DOCKER)
     docker.chmod(0o755)
-    return {"PATH": f"{bin_dir}:{os.environ['PATH']}", "DEPLOY_ROOT": str(tmp_path / "opt")}
+    return {
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "DEPLOY_ROOT": str(tmp_path / "opt"),
+        "STUB_LOG": str(tmp_path / "docker.log"),
+        **extra,
+    }
 
 
 def run_deploy(tmp_path: Path, env_file: str) -> subprocess.CompletedProcess[str]:
@@ -204,3 +225,130 @@ def test_script_accepts_hashed_credentials(tmp_path: Path, auth_line: str) -> No
     result = run_deploy(tmp_path, BASE_ENV + auth_line)
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "opt" / "mon-app" / ".current-image").read_text().strip() == IMAGE
+
+
+SECRET = "secretdetest"  # noqa: S105
+AUTH_LINE = "FOREMAN_BASIC_AUTH_USERS='admin:$apr1$sel$empreinte'\n"
+GOOD_URL = f"FOREMAN_DATABASE_URL=postgresql+psycopg://foreman:{SECRET}@db:5432/foreman\n"
+DB_ENV = f"{BASE_ENV}{AUTH_LINE}POSTGRES_PASSWORD={SECRET}\n"
+
+
+def run_deploy_with_db(
+    tmp_path: Path, env_file: str, **stub: str
+) -> subprocess.CompletedProcess[str]:
+    env = stub_docker(tmp_path, **stub)
+    project_dir = tmp_path / "opt" / "mon-app"
+    project_dir.mkdir(parents=True)
+    (project_dir / ".env").write_text(env_file)
+    return subprocess.run(  # noqa: S603
+        ["bash", str(SCRIPT), "--with-db", "mon-app", IMAGE],  # noqa: S607
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "url_lines",
+    [
+        "",  # absent : l'application retomberait en mémoire sans erreur
+        "FOREMAN_DATABASE_URL=postgresql+psycopg://foreman:secretdetest@localhost:5432/foreman\n",
+        "FOREMAN_DATABASE_URL=mysql://foreman:secretdetest@db:3306/foreman\n",
+        "FOREMAN_DATABASE_URL=postgresql://foreman:secretdetest@evil.com@db:5432/foreman\n",
+        "FOREMAN_DATABASE_URL=postgresql://foreman:secretdetest@db@evil.com:5432/foreman\n",
+        "FOREMAN_DATABASE_URL=postgresql://foreman:secretdetest@db:5432/foreman?host=evil.com\n",
+        # avec `%`, la comparaison à POSTGRES_* est sautée : seule la forme de l'URL protège
+        "FOREMAN_DATABASE_URL=postgresql://foreman:p%41ss@evil.com@db:5432/foreman\n",
+        "FOREMAN_DATABASE_URL=postgresql://foreman:p%41ss@db@evil.com:5432/foreman\n",
+        "FOREMAN_DATABASE_URL=postgresql://foreman:p%41${H}@db:5432/foreman\n",
+        # Compose et le script ne liraient pas le même fichier :
+        GOOD_URL + "export FOREMAN_DATABASE_URL=postgresql://x:y@evil.com:5432/z\n",
+        GOOD_URL + GOOD_URL,
+        "  " + GOOD_URL,
+        "export " + GOOD_URL,
+        "FOREMAN_DATABASE_URL=postgresql://foreman:${H}@db:5432/foreman\n",
+        # incohérent avec POSTGRES_* : la base ne s'ouvrirait jamais
+        "FOREMAN_DATABASE_URL=postgresql://foreman:autremotdepasse@db:5432/foreman\n",
+        f"FOREMAN_DATABASE_URL=postgresql://admin:{SECRET}@db:5432/foreman\n",
+        f"FOREMAN_DATABASE_URL=postgresql://foreman:{SECRET}@db:5432/autre\n",
+    ],
+)
+def test_with_db_refuses_unsafe_database_url(tmp_path: Path, url_lines: str) -> None:
+    result = run_deploy_with_db(tmp_path, DB_ENV + url_lines)
+    assert result.returncode == 66
+    assert "FOREMAN_DATABASE_URL" in result.stderr
+    assert SECRET not in result.stderr + result.stdout
+    assert not result.stderr.rstrip().endswith(" 66")  # le code de sortie n'est pas dans le message
+    assert not (tmp_path / "opt" / "mon-app" / ".current-image").exists()
+
+
+def test_with_db_activates_profile_and_never_prints_the_url(tmp_path: Path) -> None:
+    result = run_deploy_with_db(tmp_path, DB_ENV + GOOD_URL)
+    assert result.returncode == 0, result.stderr
+    assert SECRET not in result.stderr + result.stdout
+    up = [x for x in (tmp_path / "docker.log").read_text().splitlines() if " up " in x]
+    assert up
+    assert all(x.startswith("profiles=db ") for x in up)
+
+
+def test_without_db_flag_the_profile_stays_off(tmp_path: Path) -> None:
+    result = run_deploy(tmp_path, BASE_ENV + AUTH_LINE)
+    assert result.returncode == 0, result.stderr
+    assert "profiles= " in (tmp_path / "docker.log").read_text()
+
+
+def test_old_compose_is_refused(tmp_path: Path) -> None:
+    result = run_deploy_with_db(tmp_path, DB_ENV + GOOD_URL, STUB_COMPOSE_VERSION="2.28.1")
+    assert result.returncode == 69
+    assert "2.29" in result.stderr
+
+
+def backups(tmp_path: Path) -> list[Path]:
+    return sorted((tmp_path / "opt" / "backups").glob("*"))
+
+
+def test_database_is_dumped_before_up_and_only_last_five_kept(tmp_path: Path) -> None:
+    backup_dir = tmp_path / "opt" / "backups"
+    backup_dir.mkdir(parents=True)
+    for n in range(7):  # anciens dumps : 01 (le plus ancien) à 07
+        dump = backup_dir / f"mon-app-2020010{n + 1}-000000.dump"
+        dump.write_text("ancien")
+        os.utime(dump, (1_000_000 + n, 1_000_000 + n))
+    result = run_deploy_with_db(tmp_path, DB_ENV + GOOD_URL, STUB_DB_RUNNING="1")
+    assert result.returncode == 0, result.stderr
+    kept = backups(tmp_path)
+    assert len(kept) == 5
+    assert not (backup_dir / "mon-app-20200101-000000.dump").exists()
+    new = [p for p in kept if not p.name.startswith("mon-app-2020")]
+    assert len(new) == 1
+    assert new[0].read_text() == "debut-de-dump\nfin-de-dump\n"
+    assert new[0].stat().st_mode & 0o777 == 0o600
+    assert backup_dir.stat().st_mode & 0o777 == 0o700
+    log = (tmp_path / "docker.log").read_text().splitlines()
+    assert next(i for i, x in enumerate(log) if " exec " in x) < next(
+        i for i, x in enumerate(log) if " up " in x
+    )
+    assert SECRET not in "".join(log)  # aucun mot de passe en ligne de commande
+
+
+def test_failed_dump_aborts_the_deployment_and_keeps_no_partial_file(tmp_path: Path) -> None:
+    result = run_deploy_with_db(
+        tmp_path, DB_ENV + GOOD_URL, STUB_DB_RUNNING="1", STUB_DUMP_FAIL="1"
+    )
+    assert result.returncode == 70
+    assert backups(tmp_path) == []
+    assert not (tmp_path / "opt" / "mon-app" / ".current-image").exists()
+    assert " up " not in (tmp_path / "docker.log").read_text()
+
+
+def test_first_deployment_has_nothing_to_dump(tmp_path: Path) -> None:
+    result = run_deploy_with_db(tmp_path, DB_ENV + GOOD_URL)  # db ne tourne pas encore
+    assert result.returncode == 0, result.stderr
+    assert " exec " not in (tmp_path / "docker.log").read_text()
+
+
+def test_dry_run_is_honoured_through_ssh_original_command() -> None:
+    result = run_script(ssh_command=f"deploy --dry-run {IMAGE}")
+    assert result.returncode == 0
+    assert "dry-run : rien" in result.stdout
