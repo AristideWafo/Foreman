@@ -1,0 +1,44 @@
+# Réponses enregistrées du modèle pour le scénario S2 : environnement non précisé (valeurs fictives).
+# Tour 1 : le message n'indique pas l'environnement -> `ask_user` sur le champ `environment`.
+#   Le modèle ne fournit ni options ni identifiants : le serveur les lit dans les référentiels.
+# Tour 2 : le message canonique produit par la route de réponse
+#   (`Réponse à la clarification : environment = staging`) -> `propose_plan` pour staging.
+# Le choix se fait sur le sha256 EXACT du dernier message, jamais sur une regex. Si l'un de ces
+# textes change (ex. `answer_text` dans core/clarification.py), régénérez les hashes.
+version: 1
+exchanges:
+  # sha256("Prépare le projet Safe Eat : GitLab puis déploiement.")
+  - when: {last_user_sha256: c21a56033eb21f56ab7d2dba814fd244a7e2e6bb062740f21c7e67a7e219b8cc}
+    reply:
+      text: "Avant de planifier, j'ai besoin de connaître l'environnement cible."
+      tool_calls:
+        - name: ask_user
+          arguments:
+            questions:
+              - field: environment
+                prompt: "Sur quel environnement faut-il déployer Safe Eat ?"
+  # sha256("Réponse à la clarification : environment = staging")
+  - when: {last_user_sha256: 8b7bd26ff42a0c5b2023540599b342b7a0d37a2b5cc5a7c25ec8471a703e18d2}
+    reply:
+      text: "Merci. Voici le plan pour Safe Eat en staging. Rien ne s'exécute avant votre validation."
+      tool_calls:
+        - name: propose_plan
+          arguments:
+            title: "Safe Eat : GitLab et déploiement en staging"
+            summary: "Groupe safe-eat, dépôt safe-eat-api depuis le boilerplate Go, puis préparation du serveur de staging et vérification de santé."
+            environment: staging
+            stack: {backend: go-api}
+            skills: [gitlab-project-creation, go-backend-standard, docker-staging-deploy]
+            steps:
+              - title: "Créer le groupe safe-eat"
+                tool: gitlab.create_group
+                params: {parent_group_id: 1000, name: "Safe Eat", path: safe-eat}
+              - title: "Créer le dépôt safe-eat-api"
+                tool: gitlab.create_project
+                params: {parent_group_id: {"$from": {step: 1, field: group_id}}, name: safe-eat-api, path: safe-eat-api, boilerplate: go-api}
+              - title: "Préparer le serveur de staging"
+                tool: server.apply_playbook
+                params: {environment: staging, project: safe-eat, playbook: bootstrap_project, mode: apply}
+              - title: "Vérifier la santé du projet"
+                tool: server.healthcheck
+                params: {environment: staging, project: safe-eat}
