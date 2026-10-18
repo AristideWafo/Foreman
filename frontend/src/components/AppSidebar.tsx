@@ -11,6 +11,7 @@ import {
 import type { ComponentType, SVGProps } from "react";
 import { Link } from "react-router-dom";
 import { LinkButton } from "@/components/LinkButton";
+import { MemoryModeBadge } from "@/components/MemoryModeBadge";
 import {
   Sidebar,
   SidebarContent,
@@ -35,6 +36,8 @@ interface AppSidebarProps {
   /** Projet ouvert (surligné), `null` sur l'accueil. */
   activeProjectId: string | null;
   homeActive: boolean;
+  /** Le serveur n'a pas de base : badge d'avertissement en pied de panneau. */
+  memoryMode?: boolean;
 }
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -71,7 +74,12 @@ function RailItem({
 }
 
 /** Double barre latérale : rail d'icônes (navigation) + panneau (projets). */
-export function AppSidebar({ projects, activeProjectId, homeActive }: AppSidebarProps) {
+export function AppSidebar({
+  projects,
+  activeProjectId,
+  homeActive,
+  memoryMode = false,
+}: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" className="overflow-hidden *:data-[sidebar=sidebar]:flex-row">
       <Sidebar collapsible="none" className="w-[calc(var(--sidebar-width-icon)+1px)]! border-r">
@@ -135,6 +143,11 @@ export function AppSidebar({ projects, activeProjectId, homeActive }: AppSidebar
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+        {memoryMode && (
+          <SidebarFooter className="border-t p-4">
+            <MemoryModeBadge />
+          </SidebarFooter>
+        )}
       </Sidebar>
     </Sidebar>
   );

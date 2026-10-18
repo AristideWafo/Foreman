@@ -12,6 +12,9 @@ type MessageAccepted =
 type ApprovalBody = components["schemas"]["ApprovalRequest"];
 type ApprovalAccepted = components["schemas"]["ApprovalAccepted"];
 
+// `/healthz` est décrit dans l'OpenAPI comme `{ [clé]: string }` (sans champ nommé) : on en tire le type.
+type Health = paths["/healthz"]["get"]["responses"][200]["content"]["application/json"];
+
 const ERROR_CODES: readonly ErrorCode[] = [
   "not_found",
   "invalid_request",
@@ -66,6 +69,12 @@ function jsonPost(body: unknown): RequestInit {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   };
+}
+
+/** Mode de persistance annoncé par le serveur (`postgres`, `memory`), ou `null` s'il est absent. */
+export async function getPersistence(): Promise<string | null> {
+  const health = await request<Health>("/healthz");
+  return health.persistence ?? null;
 }
 
 export function createProject(body: CreateProjectBody = { title: "" }): Promise<Project> {
