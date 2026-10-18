@@ -2,269 +2,1823 @@
   {
     "v": 1,
     "seq": 1,
-    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
-    "turn_id": "6f1c2a3e-0000-4000-8000-000000000002",
-    "at": "2026-10-20T09:00:00Z",
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:01Z",
     "type": "message",
-    "data": { "role": "user", "text": "Déploie mon site statique sur un serveur de test." }
+    "data": {
+      "role": "user",
+      "text": "Crée le projet Safe Eat : GitLab, puis déploiement en staging."
+    }
   },
   {
     "v": 1,
     "seq": 2,
-    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
-    "turn_id": "6f1c2a3e-0000-4000-8000-000000000002",
-    "at": "2026-10-20T09:00:01Z",
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:02Z",
     "type": "turn_status",
-    "data": { "status": "running" }
+    "data": {
+      "status": "running"
+    }
   },
   {
     "v": 1,
     "seq": 3,
-    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
-    "turn_id": "6f1c2a3e-0000-4000-8000-000000000002",
-    "at": "2026-10-20T09:00:02Z",
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:03Z",
+    "type": "message",
+    "data": {
+      "role": "assistant",
+      "text": "Voici le plan pour Safe Eat : la structure GitLab, puis la préparation et le déploiement en staging. Rien ne s'exécute avant votre validation."
+    }
+  },
+  {
+    "v": 1,
+    "seq": 4,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:04Z",
     "type": "card",
     "data": {
-      "card_id": "plan-s01",
+      "card_id": "00000000000040008000000000000003",
       "kind": "plan",
-      "title": "Déployer le site statique",
-      "summary": "Créer le serveur de test, copier le site, vérifier qu'il répond.",
+      "title": "Safe Eat : GitLab et déploiement en staging",
+      "summary": "Groupe safe-eat avec sous-groupes backend et frontend, deux dépôts depuis les boilerplates, puis préparation du serveur et déploiement Compose en staging.",
       "steps": [
         {
           "step": 1,
-          "title": "Créer le serveur de test",
+          "title": "Créer le groupe safe-eat",
           "status": "pending",
-          "tool": "provision_server",
-          "tool_class": "write_foreign",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
           "reversibility": "compensable"
         },
         {
           "step": 2,
-          "title": "Copier les fichiers du site",
+          "title": "Créer le sous-groupe backend",
           "status": "pending",
-          "tool": "upload_files",
-          "tool_class": "write_foreign",
-          "reversibility": "reversible"
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
         },
         {
           "step": 3,
-          "title": "Vérifier la réponse HTTP",
+          "title": "Créer le sous-groupe frontend",
           "status": "pending",
-          "tool": "http_check",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
           "tool_class": "read",
           "reversibility": "not_applicable"
         }
       ],
-      "plan_id": "6f1c2a3e-0000-4000-8000-0000000000a1",
-      "plan_hash": "sha256:3fa9c1d27be04a56c8f10e9b7d42a6153fcb8e0a91d4e7625b3c0f18a9d6e742",
+      "plan_id": "00000000-0000-4000-8000-000000000003",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
       "status": "proposed",
       "environment": "staging",
-      "autonomy_level": 1,
-      "stack": { "web": "nginx", "os": "debian-12" },
+      "autonomy_level": 2,
+      "stack": {
+        "backend": "go-api",
+        "frontend": "vue-web"
+      },
       "skills": [
         {
-          "name": "static-site",
-          "version": 2,
-          "sha256": "sha256:9c0e5a7d1b3f48620a9d7c5e3b1f0a8d6c4e2b09f7a5d3c1e8b6a4f20d9c7e51"
+          "name": "gitlab-project-creation",
+          "version": 1,
+          "sha256": "sha256:a104d93a6eca59bc8ca9ddeb4abdaaf9bc322b1b07997493acb95b1d94dbece4"
+        },
+        {
+          "name": "go-backend-standard",
+          "version": 1,
+          "sha256": "sha256:384d3e7f9af2720ce82160d44962cb3523d8a42df6fb248a5e811407e75213d9"
+        },
+        {
+          "name": "docker-staging-deploy",
+          "version": 1,
+          "sha256": "sha256:f0e909121c1953e7382003ee3c18979099442d20d3b4069cac16b9c88e1fbcff"
         }
       ],
       "expected_resources": [
-        { "name": "site-test", "provider": "simulated-cloud", "resource_type": "server" }
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "safe-eat"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "backend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "frontend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "safe-eat-api"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "safe-eat-web"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        }
       ],
       "approvable": true
     }
   },
   {
     "v": 1,
-    "seq": 4,
-    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
-    "turn_id": "6f1c2a3e-0000-4000-8000-000000000002",
-    "at": "2026-10-20T09:00:03Z",
+    "seq": 5,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:05Z",
     "type": "turn_status",
-    "data": { "status": "completed" }
+    "data": {
+      "status": "completed"
+    }
   },
   {
     "v": 1,
-    "seq": 5,
-    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
-    "turn_id": "6f1c2a3e-0000-4000-8000-000000000003",
-    "at": "2026-10-20T09:01:00Z",
+    "seq": 6,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:06Z",
     "type": "card",
     "data": {
-      "card_id": "plan-s01",
+      "card_id": "00000000000040008000000000000003",
       "kind": "plan",
-      "title": "Déployer le site statique",
-      "summary": "Créer le serveur de test, copier le site, vérifier qu'il répond.",
+      "title": "Safe Eat : GitLab et déploiement en staging",
+      "summary": "Groupe safe-eat avec sous-groupes backend et frontend, deux dépôts depuis les boilerplates, puis préparation du serveur et déploiement Compose en staging.",
       "steps": [
         {
           "step": 1,
-          "title": "Créer le serveur de test",
+          "title": "Créer le groupe safe-eat",
           "status": "pending",
-          "tool": "provision_server",
-          "tool_class": "write_foreign",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
           "reversibility": "compensable"
         },
         {
           "step": 2,
-          "title": "Copier les fichiers du site",
+          "title": "Créer le sous-groupe backend",
           "status": "pending",
-          "tool": "upload_files",
-          "tool_class": "write_foreign",
-          "reversibility": "reversible"
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
         },
         {
           "step": 3,
-          "title": "Vérifier la réponse HTTP",
+          "title": "Créer le sous-groupe frontend",
           "status": "pending",
-          "tool": "http_check",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
           "tool_class": "read",
           "reversibility": "not_applicable"
         }
       ],
-      "plan_id": "6f1c2a3e-0000-4000-8000-0000000000a1",
-      "plan_hash": "sha256:3fa9c1d27be04a56c8f10e9b7d42a6153fcb8e0a91d4e7625b3c0f18a9d6e742",
+      "plan_id": "00000000-0000-4000-8000-000000000003",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
       "status": "dev_approved",
       "environment": "staging",
-      "autonomy_level": 1,
-      "stack": { "web": "nginx", "os": "debian-12" },
+      "autonomy_level": 2,
+      "stack": {
+        "backend": "go-api",
+        "frontend": "vue-web"
+      },
       "skills": [
         {
-          "name": "static-site",
-          "version": 2,
-          "sha256": "sha256:9c0e5a7d1b3f48620a9d7c5e3b1f0a8d6c4e2b09f7a5d3c1e8b6a4f20d9c7e51"
+          "name": "gitlab-project-creation",
+          "version": 1,
+          "sha256": "sha256:a104d93a6eca59bc8ca9ddeb4abdaaf9bc322b1b07997493acb95b1d94dbece4"
+        },
+        {
+          "name": "go-backend-standard",
+          "version": 1,
+          "sha256": "sha256:384d3e7f9af2720ce82160d44962cb3523d8a42df6fb248a5e811407e75213d9"
+        },
+        {
+          "name": "docker-staging-deploy",
+          "version": 1,
+          "sha256": "sha256:f0e909121c1953e7382003ee3c18979099442d20d3b4069cac16b9c88e1fbcff"
         }
       ],
       "expected_resources": [
-        { "name": "site-test", "provider": "simulated-cloud", "resource_type": "server" }
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "safe-eat"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "backend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "frontend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "safe-eat-api"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "safe-eat-web"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        }
       ],
       "approvable": false
     }
   },
   {
     "v": 1,
-    "seq": 6,
-    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
-    "turn_id": "6f1c2a3e-0000-4000-8000-000000000003",
-    "at": "2026-10-20T09:01:01Z",
+    "seq": 7,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:07Z",
     "type": "card",
     "data": {
-      "card_id": "exec-s01",
+      "card_id": "00000000000040008000000000000004",
       "kind": "execution",
-      "execution_id": "6f1c2a3e-0000-4000-8000-0000000000b1",
-      "plan_card_id": "plan-s01",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
       "state": "running",
-      "autonomy_level": 1,
+      "autonomy_level": 2,
       "steps": [
         {
           "step": 1,
-          "title": "Créer le serveur de test",
-          "status": "running",
-          "tool": "provision_server",
-          "tool_class": "write_foreign",
+          "title": "Créer le groupe safe-eat",
+          "status": "pending",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
           "reversibility": "compensable"
         },
         {
           "step": 2,
-          "title": "Copier les fichiers du site",
+          "title": "Créer le sous-groupe backend",
           "status": "pending",
-          "tool": "upload_files",
-          "tool_class": "write_foreign",
-          "reversibility": "reversible"
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
         },
         {
           "step": 3,
-          "title": "Vérifier la réponse HTTP",
+          "title": "Créer le sous-groupe frontend",
           "status": "pending",
-          "tool": "http_check",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
           "tool_class": "read",
           "reversibility": "not_applicable"
         }
       ],
-      "budget": { "tool_calls_used": 0, "tool_calls_max": 20, "elapsed_s": 0, "max_minutes": 10 },
+      "budget": {
+        "tool_calls_used": 0,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
       "resources": [],
       "result": null
     }
   },
   {
     "v": 1,
-    "seq": 7,
-    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
-    "turn_id": "6f1c2a3e-0000-4000-8000-000000000003",
-    "at": "2026-10-20T09:01:02Z",
-    "type": "execution_log",
+    "seq": 8,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:08Z",
+    "type": "execution_step",
     "data": {
-      "card_id": "exec-s01",
+      "card_id": "00000000000040008000000000000004",
       "step": 1,
-      "lines": ["Création du serveur site-test…", "Serveur prêt (token=***)"]
+      "status": "running"
     }
   },
   {
     "v": 1,
-    "seq": 8,
-    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
-    "turn_id": "6f1c2a3e-0000-4000-8000-000000000003",
-    "at": "2026-10-20T09:01:03Z",
-    "type": "execution_step",
-    "data": { "card_id": "exec-s01", "step": 1, "status": "succeeded" }
+    "seq": 9,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:09Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 1,
+      "lines": ["groupe foreman-demo/safe-eat créé"]
+    }
   },
   {
     "v": 1,
-    "seq": 9,
-    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
-    "turn_id": "6f1c2a3e-0000-4000-8000-000000000003",
-    "at": "2026-10-20T09:01:09Z",
+    "seq": 10,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:10Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 1,
+      "status": "succeeded"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 11,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:11Z",
     "type": "card",
     "data": {
-      "card_id": "exec-s01",
+      "card_id": "00000000000040008000000000000004",
       "kind": "execution",
-      "execution_id": "6f1c2a3e-0000-4000-8000-0000000000b1",
-      "plan_card_id": "plan-s01",
-      "state": "succeeded",
-      "autonomy_level": 1,
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
       "steps": [
         {
           "step": 1,
-          "title": "Créer le serveur de test",
+          "title": "Créer le groupe safe-eat",
           "status": "succeeded",
-          "tool": "provision_server",
-          "tool_class": "write_foreign",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
           "reversibility": "compensable"
         },
         {
           "step": 2,
-          "title": "Copier les fichiers du site",
-          "status": "succeeded",
-          "tool": "upload_files",
-          "tool_class": "write_foreign",
-          "reversibility": "reversible"
+          "title": "Créer le sous-groupe backend",
+          "status": "pending",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
         },
         {
           "step": 3,
-          "title": "Vérifier la réponse HTTP",
-          "status": "succeeded",
-          "tool": "http_check",
+          "title": "Créer le sous-groupe frontend",
+          "status": "pending",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
           "tool_class": "read",
           "reversibility": "not_applicable"
         }
       ],
-      "budget": { "tool_calls_used": 5, "tool_calls_max": 20, "elapsed_s": 8, "max_minutes": 10 },
+      "budget": {
+        "tool_calls_used": 1,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
       "resources": [
         {
-          "name": "site-test",
-          "provider": "simulated-cloud",
-          "resource_type": "server",
-          "url": "https://site-test.example.test/"
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+        }
+      ],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 12,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:12Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 2,
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 13,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:13Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 2,
+      "lines": ["groupe foreman-demo/safe-eat/backend créé"]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 14,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:14Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 2,
+      "status": "succeeded"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 15,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:15Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le groupe safe-eat",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
         },
         {
-          "name": "journal-interne",
-          "provider": "simulated-cloud",
-          "resource_type": "log",
+          "step": 2,
+          "title": "Créer le sous-groupe backend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Créer le sous-groupe frontend",
+          "status": "pending",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 2,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+        }
+      ],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 16,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:16Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 3,
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 17,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:17Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 3,
+      "lines": ["groupe foreman-demo/safe-eat/frontend créé"]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 18,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:18Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 3,
+      "status": "succeeded"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 19,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:19Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le groupe safe-eat",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Créer le sous-groupe backend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Créer le sous-groupe frontend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 3,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2002",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+        }
+      ],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 20,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:20Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 4,
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 21,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:21Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 4,
+      "lines": ["dépôt safe-eat-api créé (boilerplate go-api)"]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 22,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:22Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 4,
+      "status": "succeeded"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 23,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:23Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le groupe safe-eat",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Créer le sous-groupe backend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Créer le sous-groupe frontend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "succeeded",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 4,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2002",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "5000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+        }
+      ],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 24,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:24Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 5,
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 25,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:25Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 5,
+      "lines": ["dépôt safe-eat-web créé (boilerplate vue-web)"]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 26,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:26Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 5,
+      "status": "succeeded"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 27,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:27Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le groupe safe-eat",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Créer le sous-groupe backend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Créer le sous-groupe frontend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "succeeded",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "succeeded",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 5,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2002",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "5000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "5001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web"
+        }
+      ],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 28,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:28Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 6,
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 29,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:29Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 6,
+      "lines": [
+        "PLAY [bootstrap_project] projet=safe-eat mode=apply",
+        "changed: Créer le répertoire du projet",
+        "changed: Installer le fichier Compose",
+        "changed: Créer le réseau du projet"
+      ]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 30,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:30Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 6,
+      "status": "succeeded"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 31,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:31Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le groupe safe-eat",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Créer le sous-groupe backend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Créer le sous-groupe frontend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "succeeded",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "succeeded",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 6,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2002",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "5000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "5001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat",
+          "url": null
+        }
+      ],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 32,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:32Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 7,
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 33,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:33Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 7,
+      "lines": [
+        "PLAY [deploy_compose] projet=safe-eat mode=apply",
+        "changed: Tirer les images",
+        "changed: Démarrer les services Compose",
+        "changed: Déclarer le sous-domaine dans Caddy"
+      ]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 34,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:34Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 7,
+      "status": "succeeded"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 35,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:35Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le groupe safe-eat",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Créer le sous-groupe backend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Créer le sous-groupe frontend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "succeeded",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "succeeded",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 7,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2002",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "5000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "5001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat",
+          "url": null
+        }
+      ],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 36,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:36Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 8,
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 37,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:37Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 8,
+      "lines": ["healthcheck : ok"]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 38,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:38Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 8,
+      "status": "succeeded"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 39,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:39Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le groupe safe-eat",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Créer le sous-groupe backend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Créer le sous-groupe frontend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "succeeded",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "succeeded",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "succeeded",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 8,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2002",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "5000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "5001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat",
+          "url": null
+        }
+      ],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 40,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:40Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "succeeded",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le groupe safe-eat",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Créer le sous-groupe backend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Créer le sous-groupe frontend",
+          "status": "succeeded",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "succeeded",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 5,
+          "title": "Créer le dépôt safe-eat-web",
+          "status": "succeeded",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 6,
+          "title": "Préparer le serveur de staging",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 7,
+          "title": "Déployer avec Docker Compose",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 8,
+          "title": "Vérifier la santé du projet",
+          "status": "succeeded",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 8,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "2002",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "5000",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "5001",
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat",
           "url": null
         }
       ],
       "result": {
-        "summary": "Le site répond sur le serveur de test.",
-        "links": [{ "label": "Ouvrir le site", "url": "https://site-test.example.test/" }]
+        "summary": "8 étapes réussies sur 8 en staging.",
+        "links": [
+          {
+            "label": "gitlab_group 2000",
+            "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+          },
+          {
+            "label": "gitlab_group 2001",
+            "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+          },
+          {
+            "label": "gitlab_group 2002",
+            "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+          },
+          {
+            "label": "gitlab_project 5000",
+            "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+          },
+          {
+            "label": "gitlab_project 5001",
+            "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web"
+          }
+        ]
       }
     }
   }

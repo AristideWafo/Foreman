@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install check check-full check-imports test fmt api-types check-api-types
+.PHONY: help install check check-full check-imports test fmt api-types check-api-types s01-fixture
 
 BACKEND := cd backend && uv run
 
@@ -39,3 +39,7 @@ api-types: ## Régénère openapi.json et les types TypeScript
 
 check-api-types: api-types ## Échoue si les types générés sont périmés
 	git diff --exit-code -- openapi.json frontend/src/api/schema.d.ts
+
+s01-fixture: ## Régénère le fixture des cartes S1 (événements normalisés) pour le front
+	cd backend && uv run python scripts/export_s01_fixture.py > ../frontend/src/features/cards/s01-events.json
+	cd frontend && pnpm exec prettier --write src/features/cards/s01-events.json
