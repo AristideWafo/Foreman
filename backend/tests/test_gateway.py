@@ -2,7 +2,9 @@
 
 import asyncio
 import base64
+import contextlib
 import copy
+import signal
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
@@ -14,11 +16,18 @@ from uuid import UUID
 import pytest
 from pydantic import JsonValue
 
+import foreman.core.gateway.redact as redact_module
 from foreman.core.catalog import Catalog, PolicyMatrix, ToolClass, parse_policy
 from foreman.core.gateway.errors import DENIED_MESSAGE, FAILED_MESSAGE, CallDenied, CallFailed
 from foreman.core.gateway.pipeline import ToolGateway
 from foreman.core.gateway.port import GatewayCall
-from foreman.core.gateway.redact import MASK, PATTERNS, filter_logs, mask_text, redact_value
+from foreman.core.gateway.redact import (
+    ALL_PATTERNS,
+    MASK,
+    filter_logs,
+    mask_text,
+    redact_value,
+)
 from foreman.core.policy.matrix import (
     Allow,
     AllowIf,
@@ -895,6 +904,7 @@ KEY = "ke" + "y"
 AUTH = "Authori" + "zation"
 BEARER = "Bear" + "er"
 AT = "@"
+CURL = "cur" + "l"
 VALUE = "s3cr3t" + "Value" + "123456"
 BASIC = base64.b64encode(b"utilisateur:" + b"motdepasse").decode()
 PGP = [
@@ -921,9 +931,25 @@ PEM = [
         ([f"header Basic {BASIC}"], BASIC, "header"),
         (["clone avec " + "github" + "_pat_" + "A1" * 20], "A1A1A1A1", "clone"),
         (["jeton " + "glcbt" + "-" + "B2" * 12], "B2B2B2B2", "jeton"),
-        ([f"clone https://user:pa/ss{AT}word{AT}host.example/repo.git"], "pa/ss", "https://"),
+        ([f"clone https://user:pa{AT}ss{AT}host.example/repo.git"], f"pa{AT}ss", "https://"),
+        ([f"clone https://user:{'p' * 300}{AT}host.example/r.git"], "p" * 20, "host.example"),
+        ([f'{{"{PWD.lower()}": "correct horse {VALUE}"}}'], VALUE, ""),
+        ([f'DB_{PWD}="alpha {VALUE}"'], VALUE, ""),
+        ([f'{{"{PWD.lower()}":"ab\\"{VALUE}"}}'], VALUE, ""),
+        ([f"{PWD.lower()}=abc;{VALUE}"], VALUE, ""),
+        ([f"{CURL} -u admin:{VALUE} https://x.example"], VALUE, "https://x.example"),
+        ([f"{CURL} --user admin:{VALUE}"], VALUE, CURL),
+        ([f"helm registry login reg.example -u a -p {VALUE}"], VALUE, ""),
+        ([f"dock{'er'} login -u admin -p {VALUE} reg.example"], VALUE, ""),
+        ([f"{'x' * 60}_{PWD}={VALUE}"], VALUE, ""),
+        ([f"{PWD}{' ' * 30}= {VALUE}"], VALUE, ""),
+        (
+            [f"{PEM[0]} a {PEM[2]} milieu {PEM[0]}", f"corps {VALUE}", PEM[2], "apres"],
+            VALUE,
+            "apres",
+        ),
         ([f"mysql --{PWD.lower()} {VALUE} --verbose"], VALUE, "--verbose"),
-        ([f"mysql -u root -p{VALUE}"], VALUE, "mysql"),
+        ([f"mysql -u root -p{VALUE}"], VALUE, ""),
         ([f"MYSQL_ROOT_{PWD} {VALUE}"], VALUE, ""),
         ([f"secret_key_base {VALUE}"], VALUE, ""),
         ([f"{PWD.lower()}: >-", f"  {VALUE}", "  suite", "autre: ok"], VALUE, "autre: ok"),
@@ -941,47 +967,187 @@ def test_secret_shapes_are_masked_in_logs(lines: list[str], secret: str, kept: s
     assert kept in filtered
 
 
+class CallCounter:
+    """Remplace `mask_text` : compte les appels et la taille maximale du texte reçu."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.longest = 0
+        self.total = 0
+
+    def __call__(self, text: str) -> str:
+        self.calls += 1
+        self.total += len(text)
+        self.longest = max(self.longest, len(text))
+        return text
+
+
+@pytest.fixture
+def counter(monkeypatch: pytest.MonkeyPatch) -> CallCounter:
+    counting = CallCounter()
+    monkeypatch.setattr(redact_module, "mask_text", counting)
+    return counting
+
+
 def test_structured_values_are_masked_whatever_their_shape() -> None:
-    body = redact_value({"cles": [PEM[0], f"corps {VALUE}", PEM[2], "apres"]}, frozenset())
-    assert VALUE not in repr(body) and "apres" in repr(body)
-    token_as_key = "gh" + "p_" + "a1" * 15
-    assert token_as_key not in repr(redact_value({token_as_key: "x"}, frozenset()))
+    token_a, token_b = "gh" + "p_" + "a1" * 15, "gh" + "p_" + "b2" * 15
+    masked = redact_value({token_a: 1, token_b: 2}, frozenset())
+    assert isinstance(masked, dict) and sorted(masked.values()) == [1, 2]  # aucune perte
+    assert token_a not in repr(masked) and token_b not in repr(masked)
     assert redact_value({"mot_de_passe": "ordinaire"}, frozenset({"mot_de_passe"})) == {
         "mot_de_passe": MASK
     }
+    assert redact_value({"liste": ("a", "b")}, frozenset()) == {"liste": ["a", "b"]}
 
 
-PATHOLOGICAL = {
-    "mot": "token" * 20_000,
-    "mots": "pass" * 25_000,
-    "lettres": "A" * 100_000,
-    "jwt": "eyJ-" * 25_000,
-    "cle": "-----BEGIN PRIVATE KEY-----" * 3_700,
-    "url": "http://" * 14_000,
-    "basic": "Basic " * 16_000,
-    "entete": "Authorization " * 7_000,
-    "nom": "a_" * 50_000,
-    "option": "-password " * 10_000,
-    "egal": "token=" * 16_000,
-    "blancs": "token" + " " * 100_000,
-    "jetons": "token a " * 12_000,
-    "base64": ("QUJD" * 500 + "\n") * 50,
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"cles": [PEM[0], 1, f"corps {VALUE}", PEM[2]]},  # liste mixte
+        {"a": PEM[0], "b": f"corps {VALUE}", "c": PEM[2]},  # champs successifs d'un dict
+        {"x": [[PEM[0]], [f"corps {VALUE}"], [PEM[2]]]},  # listes imbriquées
+    ],
+)
+def test_one_private_key_split_across_fields_is_masked_whole(value: Any) -> None:
+    assert VALUE not in repr(redact_value(value, frozenset()))
+
+
+def test_ordinary_text_is_not_overmasked() -> None:
+    plain = [
+        "ssh -p2222 host.example",
+        "docker run -p8080:80 image",
+        "https://gitlab.example.org/x?assignee=bob@example.org",
+        "npm i https://registry.example/@scope/pkg",
+        "global-platform-team",
+        "glance-dashboard-v2",
+        "sk-payments-service-2024",
+        "https://gitlab.example.org/foreman-demo/global-platform-team/glance-dashboard-v2",
+    ]
+    assert [mask_text(line) for line in plain] == plain
+    assert filter_logs(plain) == plain
+    assert redact_value({"web_url": plain[-1], "path": plain[4]}, frozenset()) == {
+        "web_url": plain[-1],
+        "path": plain[4],
+    }
+    # Deux blocs sur une ligne : seul ce qui est entre BEGIN et END est masqué.
+    assert "milieu" in mask_text(f"{PEM[0]} a {PEM[2]} milieu {PEM[0]} b {PEM[2]}")
+
+
+def test_a_flood_of_log_lines_is_counted_not_processed(counter: CallCounter) -> None:
+    filtered = filter_logs(["eyJ-" * 500] * 10_000)
+    assert counter.calls <= 60  # les lignes qui ne tiennent plus ne sont pas masquées
+    counter.calls = 0
+    filter_logs(["x"] * 100_000)
+    assert counter.calls <= 60  # au plus 50 lignes conservées
+    assert filtered[-1].startswith("… ") and "ligne(s) omise(s)" in filtered[-1]
+
+
+def test_the_omission_line_counts_in_the_four_kib() -> None:
+    lines = ["a" * 409] * 9 + [
+        "b" * 400,
+        "c" * 10,
+    ]  # 4091 octets tiennent, avec la ligne d'omission non
+    filtered = filter_logs(lines)
+    assert sum(len(line.encode()) + 1 for line in filtered) <= 4096
+
+
+def test_work_is_bounded_by_keys_nodes_and_lines(counter: CallCounter) -> None:
+    long_keys = {f"k{i}" + "x" * 2000: "v" for i in range(10_000)}
+    masked = redact_value(long_keys, frozenset())
+    assert isinstance(masked, dict) and masked["truncated"] is True
+    assert counter.longest <= 500 and counter.total <= 32 * 1024 + 500  # caractères masqués
+    counter.calls = 0
+    redact_value({f"k{i}": "v" for i in range(5_000)}, frozenset())
+    assert counter.calls <= 1_000  # nombre de clés traitées
+    counter.calls = 0
+    redact_value({"a": ["x"] * 5_000}, frozenset())
+    assert counter.calls <= 1_000  # nombre d'éléments traités
+    counter.calls = 0
+    redact_value("ligne\n" * 10_000, frozenset())
+    assert counter.calls <= 100  # nombre de lignes d'une chaîne
+
+
+async def test_a_non_json_output_is_normalised_before_masking_and_keeps_the_resource() -> None:
+    leaky = {"group_id": 2000, "extra": (f"{AUTH}: {BEARER} {VALUE}",), "meta": {1: "x"}}
+    world = make_world(gitlab=MalformedAdapter(leaky, []))
+    started = await start(world, ONE_GROUP)
+    result = await world.gateway.call(call_for(started))
+    assert VALUE not in repr(result.output) + repr(result.audit)
+    assert result.output["meta"] == {"1": "x"}  # clé entière : texte, sans erreur après l'effet
+    assert [r.external_id for r in result.resources] == ["2000"]
+
+
+# --- 6b. Le temps de chaque motif croît linéairement ------------------------------------------
+
+UNITS = {
+    "mot": "token",
+    "mots": "pass",
+    "lettres": "A",
+    "jwt": "eyJ-",
+    "cle": "-----BEGIN PRIVATE KEY-----",
+    "url": "http://",
+    "url-arobase": "http://a@",
+    "basic": "Basic ",
+    "entete": "Authorization ",
+    "nom": "a_",
+    "option": "-password ",
+    "egal": "token=",
+    "guillemet": 'password="',
+    "blancs": " ",
+    "jetons": "token a ",
+    "curl": "cur" + "l -u a ",
+    "login": "docker login ",
+    "mysql": "mysql x ",
 }
-SLOW_S = 0.25  # des secondes avant le correctif ; la marge couvre un exécuteur chargé
+SMALL, LARGE, GROWTH_MAX, DEADLINE_S = 20_000, 80_000, 9.0, 2.0
 
 
-@pytest.mark.parametrize("name", sorted(PATHOLOGICAL))
-def test_masking_stays_fast_on_pathological_input(name: str) -> None:
-    text = PATHOLOGICAL[name]
-    for pattern in PATTERNS:
+@contextlib.contextmanager
+def deadline(seconds: float) -> Any:
+    """Interrompt un traitement qui s'emballe (une régression exponentielle ne bloque pas la CI)."""
+
+    def stop(signum: int, frame: Any) -> None:
+        raise AssertionError("traitement trop long")
+
+    previous = signal.signal(signal.SIGALRM, stop)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+class Apply:
+    def __init__(self, pattern: Any) -> None:
+        self._pattern = pattern
+
+    def __call__(self, text: str) -> None:
+        self._pattern.sub(MASK, text)
+
+
+def best_time(action: Any, text: str) -> float:
+    best = float("inf")
+    for _ in range(5):
         started = time.perf_counter()
-        pattern.sub(MASK, text)
-        assert time.perf_counter() - started < SLOW_S, pattern.pattern[:60]
-    started = time.perf_counter()
-    mask_text(text)
-    filter_logs([text] * 200)
-    redact_value({"a": text, "b": [text] * 2_000}, frozenset())
-    assert time.perf_counter() - started < SLOW_S * 4
+        with deadline(DEADLINE_S):
+            action(text)
+        best = min(best, time.perf_counter() - started)
+    return best
+
+
+@pytest.mark.parametrize("name", sorted(UNITS))
+def test_masking_time_grows_linearly_with_the_input(name: str) -> None:
+    unit = UNITS[name]
+    small, large = unit * (SMALL // len(unit)), unit * (LARGE // len(unit))
+    for pattern in ALL_PATTERNS:
+        apply = Apply(pattern)
+        ratio = best_time(apply, large) / max(best_time(apply, small), 2e-4)
+        assert ratio < GROWTH_MAX, (pattern.pattern[:60], ratio)
+    with deadline(DEADLINE_S * 4):  # filet absolu : tout le chemin public sur 100 Ko
+        mask_text(large)
+        filter_logs([large] * 200)
+        redact_value({"a": large, "b": [large] * 2_000}, frozenset())
 
 
 # --- 7. Matrice minimale ----------------------------------------------------------------------

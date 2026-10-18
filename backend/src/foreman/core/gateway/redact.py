@@ -6,8 +6,13 @@ garantie : un outil ne doit pas renvoyer de secret, et déclare `redact` pour se
 
 Ce code tourne SYNCHRONE dans la boucle asynchrone, sur des données que l'adaptateur contrôle :
 tout motif est donc borné (quantificateurs bornés ou possessifs, ancrage sur un début de mot) et
-le volume traité l'est aussi (texte, lignes, nœuds). Le test de performance du dépôt applique
-chaque motif de `PATTERNS` à des entrées pathologiques de 100 Ko.
+le volume traité l'est aussi (texte, lignes, nœuds, clés). Dès qu'une limite est atteinte, le
+reste est COMPTÉ mais plus traité. Le test de performance du dépôt vérifie que le temps de chaque
+motif de `ALL_PATTERNS` croît linéairement.
+
+Limites connues (formes non couvertes) : valeur sur la ligne SUIVANTE d'un `password:` YAML,
+`!vault`, DSN `user:pw@tcp(...)`, `.netrc`, en-têtes `Cookie` à plusieurs cookies, deux-points
+pleine chasse, clés PuTTY, secrets en base64, mot de passe contenant `/` non encodé dans une URL.
 """
 
 import json
@@ -19,11 +24,12 @@ from pydantic import JsonValue
 
 MASK: Final = "[masqué]"
 MAX_OUTPUT_BYTES: Final = 4 * 1024
+OMISSION_RESERVE_BYTES: Final = 64  # place réservée à la ligne « … N ligne(s) omise(s) »
 MAX_LOG_LINES: Final = 50
 MAX_LINE_CHARS: Final = 500
 PRE_MASK_CHARS: Final = 4 * MAX_LINE_CHARS  # texte masqué : jamais plus
 SCAN_CHARS: Final = 64 * 1024  # recherche des marqueurs de bloc (clé privée) dans une ligne
-MAX_NODES: Final = 1_000  # nœuds JSON traités par sortie
+MAX_NODES: Final = 1_000  # nœuds et clés traités par sortie
 MAX_VALUE_CHARS: Final = 32 * 1024  # caractères masqués par sortie
 MAX_STRING_LINES: Final = 100
 MAX_DEPTH: Final = 8
@@ -33,8 +39,13 @@ _WORDS: Final = (
     r"pass(?:word|wd)?|pwd|secret|token|api[_-]?key|private[_-]?key|credential|auth|cookie|"
     r"session|access[_-]?key|ssh[_-]?key"
 )
-# Nom contenant un mot sensible : au plus 40 caractères avant et après, ancré sur un début de nom.
-_NAME: Final = rf"[\w.\-]{{0,40}}(?:{_WORDS})[\w.\-]{{0,40}}"
+# Nom contenant un mot sensible : au plus 80 caractères avant et après, ancré sur un début de nom.
+_NAME: Final = rf"[\w.\-]{{0,80}}(?:{_WORDS})[\w.\-]{{0,80}}"
+# Valeur : entre guillemets (espaces et guillemets échappés compris), guillemet jamais fermé, ou
+# jusqu'au prochain blanc, guillemet ou virgule.
+_VALUE: Final = (
+    r"(?:\"(?:[^\"\\\r\n]|\\.){0,500}\"|'[^'\r\n]{0,500}'|[\"'][^\r\n]{0,500}+|[^\s\"',]++)"
+)
 _PEM_TYPE: Final = r"[A-Z ]{0,30}PRIVATE KEY(?: BLOCK)?"
 _PEM_BEGIN: Final = re.compile(rf"-----BEGIN {_PEM_TYPE}-----")
 _PEM_END: Final = re.compile(rf"-----END {_PEM_TYPE}-----")
@@ -43,7 +54,8 @@ _YAML_BLOCK: Final = re.compile(
     rf"[ \t]{{0,40}}-?[ \t]{{0,3}}{_NAME}[ \t]{{0,3}}:[ \t]{{0,3}}[>|][+\-0-9]{{0,2}}[ \t]*",
     re.IGNORECASE,
 )
-_URL_USERINFO: Final = re.compile(r"(\b[a-z][a-z0-9+.\-]{0,20}://)\S{0,128}@", re.IGNORECASE)
+# Identifiants d'une URL : seulement dans la partie autorité (avant le premier `/`, `?` ou `#`).
+URL_USERINFO: Final = re.compile(r"(\b[a-z][a-z0-9+.\-]{0,20}://)[^\s/?#]{0,512}@", re.IGNORECASE)
 
 # Tous les motifs de masquage (hors URL, traitée à part) : le test de performance les parcourt.
 PATTERNS: Final = tuple(
@@ -53,20 +65,25 @@ PATTERNS: Final = tuple(
         r"\bAuthorization[ \t]{0,20}[:=][^\r\n]*+",  # en-tête complet
         r"\bBasic[ \t]{1,20}[A-Za-z0-9+/=]{8,}+",
         r"\bBearer[ \t]{1,20}[A-Za-z0-9._~+/=\-]{8,}+",
-        r"\bgithub_pat_[A-Za-z0-9_]{20,}+",
-        r"\bgl[a-z]{2,5}-[A-Za-z0-9_\-]{10,}+",  # glpat-, glptt-, glrt-, glcbt-, gldt-...
-        r"\bgh[pousr]_[A-Za-z0-9]{20,}+",  # jetons GitHub
-        r"\bAKIA[0-9A-Z]{16}\b",  # clé d'accès AWS
-        r"\bxox[abprs]-[A-Za-z0-9\-]{10,}+",  # jetons Slack
-        r"\bsk-[A-Za-z0-9_\-]{20,}+",  # clés d'API de type sk-...
+        # Jetons à préfixe : sensibles à la casse (un nom de dépôt ne doit pas être masqué).
+        r"(?-i:\bgithub_pat_[A-Za-z0-9_]{20,}+)",
+        r"(?-i:\bgl(?:pat|ptt|rt|rtr|cbt|dt|ft|imt|oas|soat|agent|ffct|wt)-[A-Za-z0-9_\-]{20,}+)",
+        r"(?-i:\bgh[pousr]_[A-Za-z0-9]{20,}+)",  # jetons GitHub
+        r"(?-i:\bAKIA[0-9A-Z]{16}\b)",  # clé d'accès AWS
+        r"(?-i:\bxox[abprs]-[A-Za-z0-9\-]{10,}+)",  # jetons Slack
+        r"(?-i:\bsk-(?:(?:proj|svcacct|admin)-[A-Za-z0-9_\-]{20,}+|[A-Za-z0-9_]{20,}+))",
         r"\beyJ[A-Za-z0-9_\-]{5,256}\.[A-Za-z0-9_\-]{5,256}\.[A-Za-z0-9_\-]{5,}+",  # JWT
+        r"\b(?:docker|podman|helm)(?: registry)?[ \t]{1,5}login\b[^\r\n]{0,500}+",
+        r"(?<![\w\-])(?:-u|--user)[ \t=]{1,5}[^\s:]{1,100}:\S{1,200}",  # -u utilisateur:secret
         # clé=valeur ou clé: valeur, noms composés compris (POSTGRES_PASSWORD, X_TOKEN, "token":)
-        rf"(?<![\w.\-]){_NAME}[\"']?\s{{0,20}}[=:]\s{{0,20}}[\"']?[^\s\"',;]++",
-        r"(?<![\w\-])-p(?=[^\s\-])[^\s\"',;]++",  # -psecret (mysql)
+        rf"(?<![\w.\-]){_NAME}[\"']?\s{{0,40}}[=:]\s{{0,20}}{_VALUE}",
+        # -pMOT_DE_PASSE collé, pour les clients qui l'utilisent (mysql, psql, sshpass...)
+        r"\b(?:mysql|mysqldump|mariadb|psql|sshpass)\b[^\r\n]{0,200}?[ \t]-p[ \t]?\S{1,100}",
         # nom composé suivi d'une valeur sans séparateur : --password v, MYSQL_ROOT_PASSWORD v
-        rf"(?<![\w.\-])(?=[\w.\-]{{0,80}}[_\-]){_NAME}[ \t]{{1,20}}(?![=:\-])[^\s\"',;]++",
+        rf"(?<![\w.\-])(?=[\w.\-]{{0,80}}[_\-]){_NAME}[ \t]{{1,20}}(?![=:\-]){_VALUE}",
     )
 )
+ALL_PATTERNS: Final = (URL_USERINFO, *PATTERNS)
 
 
 def mask_text(text: str) -> str:
@@ -74,7 +91,7 @@ def mask_text(text: str) -> str:
 
     Le texte est borné avant d'être traité.
     """
-    text = _URL_USERINFO.sub(rf"\1{MASK}@", text[:PRE_MASK_CHARS])
+    text = URL_USERINFO.sub(rf"\1{MASK}@", text[:PRE_MASK_CHARS])
     for pattern in PATTERNS:
         text = pattern.sub(MASK, text)
     return text
@@ -104,30 +121,38 @@ class _Masker:
             if not raw.strip() or indent > self._block_indent:
                 return MASK
             self._block_indent = None
-        begin = _PEM_BEGIN.search(scanned)
-        if begin is not None:
-            self._in_key = _PEM_END.search(scanned, begin.end()) is None
+        begins = list(_PEM_BEGIN.finditer(scanned))
+        if begins:
+            # Une clé reste ouverte si le DERNIER marqueur BEGIN n'est pas suivi de son END.
+            self._in_key = _PEM_END.search(scanned, begins[-1].end()) is None
         elif _YAML_BLOCK.fullmatch(head):
             self._block_indent = len(raw) - len(raw.lstrip(" \t"))
         return _clip(mask_text(head))
 
 
 def filter_logs(lines: Iterable[str]) -> list[str]:
-    """Au plus `MAX_LOG_LINES` lignes de `MAX_LINE_CHARS` caractères, au plus 4 Kio au total.
+    """Au plus `MAX_LOG_LINES` lignes de `MAX_LINE_CHARS` caractères, au plus 4 Kio au total, la
+    ligne « … N ligne(s) omise(s) » comprise.
 
-    Une fois la limite atteinte, les lignes suivantes ne sont plus traitées (seulement comptées).
+    Dès qu'une ligne ne tient pas, les suivantes sont seulement COMPTÉES (aucun masquage).
     """
     kept: list[str] = []
     total = 0
     omitted = 0
+    full = False
     masker = _Masker()
     for raw in lines:
-        if len(kept) >= MAX_LOG_LINES - 1 or total >= MAX_OUTPUT_BYTES:
+        if full:
+            omitted += 1
+            continue
+        if len(kept) >= MAX_LOG_LINES - 1:
+            full = True
             omitted += 1
             continue
         line = masker.line(raw)
         size = len(line.encode("utf-8")) + 1
-        if total + size > MAX_OUTPUT_BYTES:
+        if total + size > MAX_OUTPUT_BYTES - OMISSION_RESERVE_BYTES:
+            full = True
             omitted += 1
             continue
         kept.append(line)
@@ -137,56 +162,76 @@ def filter_logs(lines: Iterable[str]) -> list[str]:
     return kept
 
 
-class _Budget:
-    """Volume qu'une sortie a le droit de faire traiter : nœuds et caractères."""
+class _State:
+    """Ce qu'une sortie a le droit de faire traiter (nœuds, clés, caractères) et le masqueur
+    UNIQUE de l'appel : un bloc ouvert dans un champ se referme dans le suivant."""
 
     def __init__(self) -> None:
         self.nodes = MAX_NODES
         self.chars = MAX_VALUE_CHARS
+        self.masker = _Masker()
+
+    @property
+    def exhausted(self) -> bool:
+        return self.nodes <= 0 or self.chars <= 0
 
 
-def _mask_string(text: str, budget: _Budget, masker: _Masker | None = None) -> str:
+def _mask_string(text: str, state: _State) -> str:
     """Chaîne multi-lignes masquée ligne à ligne (état conservé), puis tronquée."""
-    masker = masker or _Masker()
     lines = text[: PRE_MASK_CHARS * 4].split("\n")[:MAX_STRING_LINES]
     out: list[str] = []
     for line in lines:
-        budget.chars -= min(len(line), PRE_MASK_CHARS)
-        out.append(masker.line(line) if budget.chars >= 0 else MASK)
+        state.chars -= min(len(line), PRE_MASK_CHARS)
+        out.append(state.masker.line(line) if state.chars >= 0 else MASK)
     return _clip("\n".join(out))
 
 
+def _unique(name: str, taken: Mapping[str, object]) -> str:
+    """Deux clés qui se masquent pareil ne doivent pas s'écraser."""
+    if name not in taken:
+        return name
+    n = 2
+    while f"{name}#{n}" in taken:
+        n += 1
+    return f"{name}#{n}"
+
+
 def redact_value(
-    value: JsonValue, fields: frozenset[str], _budget: _Budget | None = None, _depth: int = 0
+    value: JsonValue, fields: frozenset[str], _state: _State | None = None, _depth: int = 0
 ) -> JsonValue:
     """Masque les champs déclarés (`fields`) ou au nom sensible, et les motifs de secret.
 
-    Les chaînes sont tronquées à `MAX_LINE_CHARS`, les noms de clé masqués comme les valeurs, une
-    liste de chaînes est traitée d'une traite (une clé privée découpée en éléments est masquée).
-    Au-delà de `MAX_DEPTH` ou de `MAX_NODES` nœuds, la valeur est masquée.
+    Les chaînes sont tronquées à `MAX_LINE_CHARS`, les noms de clé masqués comme les valeurs (sur
+    `MAX_LINE_CHARS` caractères). Au-delà de `MAX_DEPTH`, de `MAX_NODES` nœuds ou clés, ou de
+    `MAX_VALUE_CHARS` caractères, le reste est abandonné (clé `truncated`, élément masqué).
     """
-    budget = _budget or _Budget()
-    budget.nodes -= 1
-    if _depth > MAX_DEPTH or budget.nodes < 0:
+    state = _state or _State()
+    state.nodes -= 1
+    if _depth > MAX_DEPTH or state.nodes < 0:
         return MASK
     if isinstance(value, str):
-        return _mask_string(value, budget)
+        return _mask_string(value, state)
     if isinstance(value, dict):
-        return {
-            _clip(mask_text(key)): MASK
-            if key in fields or _SENSITIVE_KEY.search(key)
-            else redact_value(item, fields, budget, _depth + 1)
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        if all(isinstance(item, str) for item in value):
-            masker = _Masker()
-            out: list[JsonValue] = []
-            for item in value:
-                budget.nodes -= 1
-                out.append(MASK if budget.nodes < 0 else _mask_string(str(item), budget, masker))
-            return out
-        return [redact_value(item, fields, budget, _depth + 1) for item in value]
+        out: dict[str, JsonValue] = {}
+        for key, item in value.items():
+            if state.exhausted:
+                out["truncated"] = True
+                break
+            state.nodes -= 1
+            state.chars -= min(len(key), MAX_LINE_CHARS)
+            short = key[:MAX_LINE_CHARS]
+            name = _unique(_clip(mask_text(short)), out)
+            hidden = key in fields or _SENSITIVE_KEY.search(short)
+            out[name] = MASK if hidden else redact_value(item, fields, state, _depth + 1)
+        return out
+    if isinstance(value, list | tuple):
+        items: list[JsonValue] = []
+        for item in value:
+            if state.exhausted:
+                items.append(MASK)
+                break
+            items.append(redact_value(item, fields, state, _depth + 1))
+        return items
     return value
 
 
@@ -205,17 +250,14 @@ def bounded_for_audit(
     return redacted
 
 
-def truncated_output(
-    value: Mapping[str, JsonValue], fields: frozenset[str]
-) -> dict[str, JsonValue]:
-    """Sortie trop grande : `truncated` plus les valeurs scalaires courtes qui tiennent (les
-    identifiants dont les étapes suivantes ont besoin) ; le reste est abandonné."""
+def truncated_output(masked: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+    """Sortie déjà masquée mais trop grande : `truncated` plus les valeurs scalaires courtes qui
+    tiennent (les identifiants dont les étapes suivantes ont besoin) ; le reste est abandonné.
+    Ne masque rien de plus : le travail a déjà été payé."""
     result: dict[str, JsonValue] = {"truncated": True}
-    for key, item in list(value.items())[:MAX_NODES]:
+    for key, item in masked.items():
         if isinstance(item, dict | list):
             continue
-        masked = redact_value({key: item}, fields)
-        assert isinstance(masked, dict)  # noqa: S101 - `redact_value` d'un dict rend un dict
-        if json_size({**result, **masked}) <= MAX_OUTPUT_BYTES:
-            result.update(masked)
+        if json_size({**result, key: item}) <= MAX_OUTPUT_BYTES:
+            result[key] = item
     return result

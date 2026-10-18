@@ -132,18 +132,23 @@ def safe_url(value: object) -> str | None:
 
 
 def _valid_result(raw: object) -> AdapterResult | None:
-    """Forme du résultat d'un adaptateur (zone non fiable) : sortie JSON, logs de chaînes."""
+    """Forme du résultat d'un adaptateur (zone non fiable), normalisée en JSON pur.
+
+    La normalisation (`dumps` puis `loads`) transforme les tuples en listes et les clés en chaînes :
+    plus rien d'exotique n'atteint le masquage, l'audit ni la sérialisation. Une valeur qui n'est
+    pas du JSON (ensemble, octets, `nan`, clé étrangère) donne `None`.
+    """
     if not isinstance(raw, AdapterResult):
-        return None
-    if not isinstance(raw.output, dict) or not all(isinstance(k, str) for k in raw.output):
         return None
     if not isinstance(raw.logs, list) or not all(isinstance(line, str) for line in raw.logs):
         return None
     try:
-        json.dumps(raw.output, allow_nan=False)
+        output = json.loads(json.dumps(raw.output, allow_nan=False))
     except (TypeError, ValueError, RecursionError):
         return None
-    return raw
+    if not isinstance(output, dict):
+        return None
+    return AdapterResult(output=output, logs=list(raw.logs))
 
 
 class ToolGateway:
@@ -387,7 +392,7 @@ class ToolGateway:
         output = (
             masked
             if isinstance(masked, dict) and json_size(masked) <= MAX_OUTPUT_BYTES
-            else truncated_output(raw.output, fields)
+            else truncated_output(masked if isinstance(masked, dict) else {})
         )
         entry = self._entry(
             call,
