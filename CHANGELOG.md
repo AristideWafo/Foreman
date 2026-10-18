@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/AristideWafo/Foreman/compare/v0.7.0...v0.8.0) (2026-10-18)
+
+
+### Features
+
+* GET /api/projects, persistence dans /healthz, liste des projets lue en base ([#150](https://github.com/AristideWafo/Foreman/issues/150)) ([c188050](https://github.com/AristideWafo/Foreman/commit/c18805073f38566978d672655ca6790a362b0f3b))
+
 ## [0.7.0](https://github.com/AristideWafo/Foreman/compare/v0.6.0...v0.7.0) (2026-10-18)
 
 
