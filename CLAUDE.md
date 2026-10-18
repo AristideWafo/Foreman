@@ -56,7 +56,18 @@ est affichée dans le front.
 
 ## Tests et sécurité
 
-- **Back-end : toujours des tests** avec chaque fonctionnalité (à fort signal, fakes nommés — voir `AGENTS.md`).
+- **Back-end : toujours des tests, mais seulement les plus importants.** La vitesse de livraison prime : on
+  n'écrit pas « tout ce qu'on peut tester », on écrit ce qui coûterait cher si cela cassait. Par fonctionnalité,
+  **un à trois tests**, dans cet ordre de priorité :
+  1. sécurité et autorisation (ce qui doit être refusé l'est) ;
+  2. contrats figés (OpenAPI, événements) et frontières de couches ;
+  3. le scénario nominal de la fonctionnalité, de bout en bout (critère de fin) ;
+  4. concurrence et arrêt ; une régression déjà vécue (le test qui l'aurait attrapée).
+  Pas de test de détail d'implémentation, de getter, de mock qui vérifie seulement un appel, ni de test qui
+  dépend de l'ordre, de l'horloge ou du réseau (fakes nommés — voir `AGENTS.md`).
+- **Un test qui bloque la livraison sans protéger grand-chose se supprime** (ou se réécrit en plus simple) dans
+  la PR en cause, au lieu d'être relancé ou contourné ; dites-le dans la PR. Les tests secondaires ne retardent
+  jamais une PR : notez-les dans le ticket s'ils valent la peine.
 - **Front-end : les tests sont facultatifs** (ils coûtent cher). Au minimum, vérifiez qu'une carte s'affiche
   (test de rendu léger, ou vérification notée dans la PR) pour prouver le critère de fin d'un scénario.
 - **Sécurité** : à chaque changement, vérifiez les règles de `AGENTS.md` (pas de secret en clair, erreurs

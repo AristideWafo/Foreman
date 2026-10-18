@@ -1,0 +1,271 @@
+[
+  {
+    "v": 1,
+    "seq": 1,
+    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
+    "turn_id": "6f1c2a3e-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:00Z",
+    "type": "message",
+    "data": { "role": "user", "text": "Déploie mon site statique sur un serveur de test." }
+  },
+  {
+    "v": 1,
+    "seq": 2,
+    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
+    "turn_id": "6f1c2a3e-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:01Z",
+    "type": "turn_status",
+    "data": { "status": "running" }
+  },
+  {
+    "v": 1,
+    "seq": 3,
+    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
+    "turn_id": "6f1c2a3e-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:02Z",
+    "type": "card",
+    "data": {
+      "card_id": "plan-s01",
+      "kind": "plan",
+      "title": "Déployer le site statique",
+      "summary": "Créer le serveur de test, copier le site, vérifier qu'il répond.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le serveur de test",
+          "status": "pending",
+          "tool": "provision_server",
+          "tool_class": "write_foreign",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Copier les fichiers du site",
+          "status": "pending",
+          "tool": "upload_files",
+          "tool_class": "write_foreign",
+          "reversibility": "reversible"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la réponse HTTP",
+          "status": "pending",
+          "tool": "http_check",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "plan_id": "6f1c2a3e-0000-4000-8000-0000000000a1",
+      "plan_hash": "sha256:3fa9c1d27be04a56c8f10e9b7d42a6153fcb8e0a91d4e7625b3c0f18a9d6e742",
+      "status": "proposed",
+      "environment": "staging",
+      "autonomy_level": 1,
+      "stack": { "web": "nginx", "os": "debian-12" },
+      "skills": [
+        {
+          "name": "static-site",
+          "version": 2,
+          "sha256": "sha256:9c0e5a7d1b3f48620a9d7c5e3b1f0a8d6c4e2b09f7a5d3c1e8b6a4f20d9c7e51"
+        }
+      ],
+      "expected_resources": [
+        { "name": "site-test", "provider": "simulated-cloud", "resource_type": "server" }
+      ],
+      "approvable": true
+    }
+  },
+  {
+    "v": 1,
+    "seq": 4,
+    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
+    "turn_id": "6f1c2a3e-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:03Z",
+    "type": "turn_status",
+    "data": { "status": "completed" }
+  },
+  {
+    "v": 1,
+    "seq": 5,
+    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
+    "turn_id": "6f1c2a3e-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:01:00Z",
+    "type": "card",
+    "data": {
+      "card_id": "plan-s01",
+      "kind": "plan",
+      "title": "Déployer le site statique",
+      "summary": "Créer le serveur de test, copier le site, vérifier qu'il répond.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le serveur de test",
+          "status": "pending",
+          "tool": "provision_server",
+          "tool_class": "write_foreign",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Copier les fichiers du site",
+          "status": "pending",
+          "tool": "upload_files",
+          "tool_class": "write_foreign",
+          "reversibility": "reversible"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la réponse HTTP",
+          "status": "pending",
+          "tool": "http_check",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "plan_id": "6f1c2a3e-0000-4000-8000-0000000000a1",
+      "plan_hash": "sha256:3fa9c1d27be04a56c8f10e9b7d42a6153fcb8e0a91d4e7625b3c0f18a9d6e742",
+      "status": "dev_approved",
+      "environment": "staging",
+      "autonomy_level": 1,
+      "stack": { "web": "nginx", "os": "debian-12" },
+      "skills": [
+        {
+          "name": "static-site",
+          "version": 2,
+          "sha256": "sha256:9c0e5a7d1b3f48620a9d7c5e3b1f0a8d6c4e2b09f7a5d3c1e8b6a4f20d9c7e51"
+        }
+      ],
+      "expected_resources": [
+        { "name": "site-test", "provider": "simulated-cloud", "resource_type": "server" }
+      ],
+      "approvable": false
+    }
+  },
+  {
+    "v": 1,
+    "seq": 6,
+    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
+    "turn_id": "6f1c2a3e-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:01:01Z",
+    "type": "card",
+    "data": {
+      "card_id": "exec-s01",
+      "kind": "execution",
+      "execution_id": "6f1c2a3e-0000-4000-8000-0000000000b1",
+      "plan_card_id": "plan-s01",
+      "state": "running",
+      "autonomy_level": 1,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le serveur de test",
+          "status": "running",
+          "tool": "provision_server",
+          "tool_class": "write_foreign",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Copier les fichiers du site",
+          "status": "pending",
+          "tool": "upload_files",
+          "tool_class": "write_foreign",
+          "reversibility": "reversible"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la réponse HTTP",
+          "status": "pending",
+          "tool": "http_check",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": { "tool_calls_used": 0, "tool_calls_max": 20, "elapsed_s": 0, "max_minutes": 10 },
+      "resources": [],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 7,
+    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
+    "turn_id": "6f1c2a3e-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:01:02Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "exec-s01",
+      "step": 1,
+      "lines": ["Création du serveur site-test…", "Serveur prêt (token=***)"]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 8,
+    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
+    "turn_id": "6f1c2a3e-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:01:03Z",
+    "type": "execution_step",
+    "data": { "card_id": "exec-s01", "step": 1, "status": "succeeded" }
+  },
+  {
+    "v": 1,
+    "seq": 9,
+    "project_id": "6f1c2a3e-0000-4000-8000-000000000001",
+    "turn_id": "6f1c2a3e-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:01:09Z",
+    "type": "card",
+    "data": {
+      "card_id": "exec-s01",
+      "kind": "execution",
+      "execution_id": "6f1c2a3e-0000-4000-8000-0000000000b1",
+      "plan_card_id": "plan-s01",
+      "state": "succeeded",
+      "autonomy_level": 1,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le serveur de test",
+          "status": "succeeded",
+          "tool": "provision_server",
+          "tool_class": "write_foreign",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Copier les fichiers du site",
+          "status": "succeeded",
+          "tool": "upload_files",
+          "tool_class": "write_foreign",
+          "reversibility": "reversible"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la réponse HTTP",
+          "status": "succeeded",
+          "tool": "http_check",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": { "tool_calls_used": 5, "tool_calls_max": 20, "elapsed_s": 8, "max_minutes": 10 },
+      "resources": [
+        {
+          "name": "site-test",
+          "provider": "simulated-cloud",
+          "resource_type": "server",
+          "url": "https://site-test.example.test/"
+        },
+        {
+          "name": "journal-interne",
+          "provider": "simulated-cloud",
+          "resource_type": "log",
+          "url": null
+        }
+      ],
+      "result": {
+        "summary": "Le site répond sur le serveur de test.",
+        "links": [{ "label": "Ouvrir le site", "url": "https://site-test.example.test/" }]
+      }
+    }
+  }
+]

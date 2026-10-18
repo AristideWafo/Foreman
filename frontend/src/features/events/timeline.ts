@@ -2,10 +2,17 @@ import type { CardData, ProjectEvent } from "../../api/events";
 
 export type TimelineItem =
   | { key: string; kind: "message"; role: "user" | "assistant"; text: string }
-  | { key: string; kind: "card"; card: CardData }
+  | { key: string; kind: "card"; card: CardData; logs: StepLogs }
   /** Activité d'un tour : réflexion en cours, puis outils utilisés (déduits des événements du contrat). */
   | { key: string; kind: "trace"; status: "running" | "done" | "error"; tools: string[] }
   | { key: string; kind: "error"; message: string };
+
+/** Lignes de journal par numéro d'étape (flux `execution_log`, filtré par la gateway côté serveur). */
+export type StepLogs = Readonly<Record<number, readonly string[]>>;
+
+/** Bornes côté client, en plus de celles du contrat (≤50 lignes de ≤500 caractères par événement). */
+const MAX_LINES_PER_STEP = 200;
+const MAX_LINE_LENGTH = 500;
 
 export interface TimelineState {
   lastSeq: number;
@@ -70,6 +77,31 @@ function updateTrace(items: TimelineItem[], status: string, key: string): Timeli
   return next;
 }
 
+/** Les cartes plan et exécution doivent avoir la forme minimale que le rendu suppose ; les autres `kind` passent. */
+function hasExpectedShape(card: CardData): boolean {
+  switch (card.kind) {
+    case "plan":
+      return Array.isArray(card.steps);
+    case "execution":
+      return (
+        Array.isArray(card.steps) &&
+        Array.isArray(card.resources) &&
+        typeof card.budget === "object" &&
+        card.budget !== null
+      );
+    default:
+      return true;
+  }
+}
+
+/** `execution_step` et `execution_log` visent la carte d'exécution, jamais la carte plan. */
+function findExecutionCard(items: TimelineItem[], cardId: unknown): number {
+  return items.findIndex(
+    (item) =>
+      item.kind === "card" && item.card.kind === "execution" && item.card.card_id === cardId,
+  );
+}
+
 function applyContent(state: TimelineState, event: ProjectEvent): TimelineState {
   const key = `e${event.seq}`;
   switch (event.type) {
@@ -90,35 +122,51 @@ function applyContent(state: TimelineState, event: ProjectEvent): TimelineState 
       };
     case "card": {
       const card = event.data;
-      if (typeof card.card_id !== "string") return state;
+      if (typeof card.card_id !== "string" || !hasExpectedShape(card)) return state;
       const index = state.items.findIndex(
         (item) => item.kind === "card" && item.card.card_id === card.card_id,
       );
-      if (index === -1) {
+      const previous = state.items[index];
+      if (previous?.kind !== "card") {
         // Une carte de plan est le résultat de l'outil `propose_plan` : on l'ajoute à la trace du tour.
         const items = card.kind === "plan" ? addTool(state.items, "propose_plan") : state.items;
-        return { ...state, items: [...items, { key, kind: "card", card }] };
+        return { ...state, items: [...items, { key, kind: "card", card, logs: {} }] };
       }
-      // Même `card_id` : la carte remplace la précédente, à la même place.
+      // Même `card_id` : la carte (réémise entière) remplace la précédente, à la même place.
+      // Les logs, qui arrivent à part, sont conservés.
       const items = state.items.slice();
-      items[index] = { key: state.items[index]?.key ?? key, kind: "card", card };
+      items[index] = { key: previous.key, kind: "card", card, logs: previous.logs };
       return { ...state, items };
     }
     case "execution_step": {
       const { card_id, step, status } = event.data;
-      const index = state.items.findIndex(
-        (item) => item.kind === "card" && item.card.card_id === card_id,
-      );
+      const index = findExecutionCard(state.items, card_id);
       const target = state.items[index];
-      // Carte inconnue, ou d'un `kind` sans étapes (évolution additive) : événement ignoré.
-      if (!target || target.kind !== "card") return state;
-      if (target.card.kind !== "plan" || !Array.isArray(target.card.steps)) return state;
+      // Carte inconnue ou qui n'est pas l'exécution : événement ignoré.
+      if (target?.kind !== "card" || target.card.kind !== "execution") return state;
       const card = {
         ...target.card,
         steps: target.card.steps.map((s) => (s.step === step ? { ...s, status } : s)),
       };
       const items = state.items.slice();
       items[index] = { ...target, card };
+      return { ...state, items };
+    }
+    case "execution_log": {
+      const { card_id, step, lines } = event.data;
+      const index = findExecutionCard(state.items, card_id);
+      const target = state.items[index];
+      if (target?.kind !== "card" || typeof step !== "number" || !Array.isArray(lines)) {
+        return state;
+      }
+      const fresh = lines
+        .filter((line): line is string => typeof line === "string")
+        .slice(0, 50)
+        .map((line) => line.slice(0, MAX_LINE_LENGTH));
+      if (fresh.length === 0) return state;
+      const merged = [...(target.logs[step] ?? []), ...fresh].slice(-MAX_LINES_PER_STEP);
+      const items = state.items.slice();
+      items[index] = { ...target, logs: { ...target.logs, [step]: merged } };
       return { ...state, items };
     }
     case "turn_status": {
