@@ -27,6 +27,18 @@ Règles : pairs sans import mutuel (`tools` ↔ `integrations`, `surfaces` ↔ c
 4. Budgets : appels, temps, coût et tokens de contexte (logs injectés).
 5. Événements diffusés en SSE ; actions journalisées dans l'audit.
 
+## Tool Gateway (`core/gateway`, `core/policy`)
+
+Le moteur n'atteint un adaptateur que par le port `Gateway.call(GatewayCall)` ; `bootstrap/adapters.py`
+est le seul endroit qui importe les connecteurs. Dix contrôles, chacun ne pouvant que refuser :
+contexte, outil connu, schéma, matrice (`policy/matrix.evaluate`, pure, refus par défaut),
+approbations (plan `dev_approved`, hash du plan, appel identique à l'étape du plan), invariants et
+périmètre (environnement du plan, parent ou cible dans le registre DU projet), budget, exécution
+sous délai, filtrage de la sortie (secrets masqués, 4 Kio, 50 lignes de 500 caractères), audit.
+Les erreurs (`CallDenied`, `CallFailed`) ne portent qu'un code stable. Un refus ou un échec est audité
+par la gateway ; un appel exécuté rend sa ligne d'audit et ses ressources au moteur, qui les écrit
+avec l'étape (`complete_step`).
+
 ## Décisions
 
 Les décisions structurantes sont consignées dans `docs/adr/`.
