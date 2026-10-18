@@ -54,6 +54,27 @@ def _identifier(value: JsonValue | None) -> str | None:
     return text or None
 
 
+async def _owned_by_another_project(
+    registry: ResourceRegistry,
+    project_id: UUID,
+    tool: ToolDefinition,
+    params: Mapping[str, JsonValue],
+) -> bool:
+    """Vrai si la ressource à créer (son identifiant est un paramètre) est celle d'un autre projet.
+
+    Un identifiant lu en SORTIE (GitLab) ne peut être contrôlé qu'après l'exécution : la gateway le
+    fait alors (`foreign_resource`).
+    """
+    if tool.registry is None or tool.registry.external_id not in params:
+        return False
+    external_id = _identifier(params[tool.registry.external_id])
+    if external_id is None:
+        return True  # identifiant inutilisable : refusé
+    return await registry.exists_elsewhere(
+        project_id, tool.connector, tool.registry.resource_type, external_id
+    )
+
+
 async def in_scope(
     *,
     catalog: Catalog,
@@ -71,11 +92,13 @@ async def in_scope(
         parent = _identifier(params.get(scope.parent or ""))
         if kind is None or parent is None:
             return False
-        if parent in kind.roots(catalog):
-            return True
-        return kind.resource_type is not None and await registry.contains(
-            project_id, tool.connector, kind.resource_type, parent
-        )
+        in_roots = parent in kind.roots(catalog)
+        if not in_roots and not (
+            kind.resource_type is not None
+            and await registry.contains(project_id, tool.connector, kind.resource_type, parent)
+        ):
+            return False
+        return not await _owned_by_another_project(registry, project_id, tool, params)
     target = _identifier(params.get(scope.target or ""))
     if tool.registry is None or target is None:
         return False

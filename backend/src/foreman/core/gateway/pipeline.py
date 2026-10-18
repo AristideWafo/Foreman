@@ -1,12 +1,15 @@
 """Tool Gateway : le seul chemin entre le moteur et un adaptateur.
 
 Dix étapes, dans cet ordre, chacune ne pouvant que refuser :
-1 contexte, 2 outil connu, 3 schéma, 4 matrice, 5 approbations, 6 invariants et périmètre,
-7 budget, 8 exécution (avec délai), 9 filtrage de la sortie, 10 audit (une ligne par décision).
+1 contexte (exécution en cours, bail valide, étape réservée), 2 outil connu, 3 schéma, 4 matrice,
+5 approbations, 6 invariants et périmètre, 7 budget, 8 exécution (avec délai), 9 filtrage de la
+sortie, 10 audit.
 
-Les refus et les échecs sont audités ici ; l'appel exécuté rend sa ligne d'audit au moteur, qui
-l'écrit avec l'étape (`complete_step`). Rien de ce qui vient du modèle, des paramètres ou d'un
-adaptateur n'entre dans une erreur ou un journal : seuls des codes fixes sortent.
+Audit : une ligne `allow` est écrite AVANT l'exécution (la décision) ; un refus ou un échec écrit
+sa propre ligne (`denied`, `error`) ; l'appel exécuté rend sa ligne de résultat (`executed`) au
+moteur, qui l'écrit avec l'étape (`complete_step`). Rien de ce qui vient du modèle, des paramètres
+ou d'un adaptateur n'entre dans une erreur ou un journal : seuls des codes fixes sortent, et les
+erreurs sont levées HORS des blocs `except` (aucune exception d'origine ne reste attachée).
 """
 
 import asyncio
@@ -16,6 +19,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Final, cast
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from jsonschema import Draft202012Validator
@@ -23,7 +27,7 @@ from pydantic import JsonValue
 
 from foreman.core.catalog import Catalog, ToolDefinition
 from foreman.core.gateway.budget import CallBudget
-from foreman.core.gateway.errors import CallDenied, CallFailed, DenialCode
+from foreman.core.gateway.errors import CallDenied, CallFailed, DenialCode, FailureCode
 from foreman.core.gateway.port import GatewayCall, GatewayResult
 from foreman.core.gateway.redact import (
     MAX_OUTPUT_BYTES,
@@ -32,6 +36,7 @@ from foreman.core.gateway.redact import (
     json_size,
     mask_text,
     redact_value,
+    truncated_output,
 )
 from foreman.core.gateway.scope import in_scope
 from foreman.core.policy.matrix import (
@@ -44,6 +49,7 @@ from foreman.core.policy.matrix import (
 )
 from foreman.core.ports import (
     AdapterError,
+    AdapterResult,
     ForeignResource,
     PermissionMissing,
     ToolAdapter,
@@ -53,6 +59,7 @@ from foreman.core.store import (
     MAX_AUDIT_DURATION_MS,
     AuditEntry,
     ExecutionRecord,
+    Lease,
     NewResource,
     PlanRecord,
     StepRecord,
@@ -106,6 +113,36 @@ def _identifier(value: JsonValue | None) -> str | None:
     return text if text and len(text) <= MAX_EXTERNAL_ID else None
 
 
+def safe_url(value: object) -> str | None:
+    """URL http(s) sans identifiants, sans paramètres ni ancre ; sinon `None`."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parts = urlsplit(value)
+        host = parts.hostname
+        port = f":{parts.port}" if parts.port else ""
+    except ValueError:
+        return None
+    if parts.scheme not in ("http", "https") or not host:
+        return None
+    return f"{parts.scheme}://{host}{port}{parts.path}"
+
+
+def _valid_result(raw: object) -> AdapterResult | None:
+    """Forme du résultat d'un adaptateur (zone non fiable) : sortie JSON, logs de chaînes."""
+    if not isinstance(raw, AdapterResult):
+        return None
+    if not isinstance(raw.output, dict) or not all(isinstance(k, str) for k in raw.output):
+        return None
+    if not isinstance(raw.logs, list) or not all(isinstance(line, str) for line in raw.logs):
+        return None
+    try:
+        json.dumps(raw.output, allow_nan=False)
+    except (TypeError, ValueError, RecursionError):
+        return None
+    return raw
+
+
 class ToolGateway:
     def __init__(
         self,
@@ -129,25 +166,53 @@ class ToolGateway:
         self._validators = {
             name: Draft202012Validator(tool.input) for name, tool in catalog.tools.items()
         }
+        self._inflight: set[tuple[UUID, int]] = set()
 
     async def call(self, call: GatewayCall) -> GatewayResult:
+        key = (call.execution_id, call.step_seq)
         started = self._clock()
         trace = _Trace()
+        # Aucun point de suspension entre le test et l'ajout : deux appels simultanés de la même
+        # étape ne lancent jamais l'adaptateur deux fois (et ne comptent qu'une fois au budget).
+        if key in self._inflight:
+            await self._audit(call, trace, "denied", "call_in_progress", None, started)
+            raise CallDenied("call_in_progress")
+        self._inflight.add(key)
+        try:
+            return await self._run(call, trace, started)
+        finally:
+            self._inflight.discard(key)
+
+    async def _run(self, call: GatewayCall, trace: _Trace, started: float) -> GatewayResult:
+        denial: DenialCode | None = None
+        failure: FailureCode = "internal_error"
+        rule_id: str | None = None
         try:
             authorized = await self._authorize(call, trace)
+            await self._record_decision(call, trace, authorized, started)
+            return await self._execute(call, trace, authorized, started)
         except _Refusal as refusal:
-            await self._audit_failure(call, trace, "denied", refusal.code, refusal.rule_id, started)
-            raise CallDenied(refusal.code) from None
+            denial, rule_id = refusal.code, refusal.rule_id
+        except CallFailed as failed:
+            failure, rule_id = cast(FailureCode, failed.code), trace.rule_id
         except StoreError:
             log.warning("gateway : stockage indisponible (étape %d)", call.step_seq)
-            raise CallFailed("storage_unavailable") from None
-        try:
-            return await self._execute(call, trace, authorized, started)
-        except CallFailed as failure:
-            await self._audit_failure(
-                call, trace, "error", failure.code, authorized.verdict.rule_id, started
-            )
+            failure, rule_id = "storage_unavailable", trace.rule_id
+        except Exception as exc:
+            # Défaut inattendu (registre, store, bogue) : seul le type est journalisé.
+            log.warning("gateway : exception inattendue (%s)", type(exc).__name__)
+            failure, rule_id = "internal_error", trace.rule_id
+        except BaseException as exc:
+            # Annulation (arrêt, délai du moteur) : la décision est déjà en audit, on y ajoute
+            # l'issue puis on relance.
+            code = "cancelled" if isinstance(exc, asyncio.CancelledError) else "interrupted"
+            await asyncio.shield(self._audit(call, trace, "error", code, trace.rule_id, started))
             raise
+        if denial is not None:
+            await self._audit(call, trace, "denied", denial, rule_id, started)
+            raise CallDenied(denial)
+        await self._audit(call, trace, "error", failure, rule_id, started)
+        raise CallFailed(failure)
 
     # --- Étapes 1 à 7 : décider --------------------------------------------------------------
 
@@ -176,6 +241,12 @@ class ToolGateway:
         if isinstance(verdict, Deny):
             raise _Refusal("policy_denied", verdict.rule_id)
         trace.rule_id = verdict.rule_id
+        # Seule l'approbation du développeur existe : un environnement qui exige un administrateur
+        # n'autorise aucune écriture (la lecture, `Allow`, reste permise).
+        if isinstance(verdict, AllowIf) and (
+            matrix.autonomy.environments[environment].admin_approval_required
+        ):
+            raise _Refusal("policy_denied", verdict.rule_id)
         self._check_approval(call, plan, execution, step, verdict)  # 5
         await self._check_invariants(call, tool, environment)  # 6
         if not self._budget.consume(call.execution_id):  # 7
@@ -193,6 +264,16 @@ class ToolGateway:
         if plan is None or step is None:
             raise _Refusal("unknown_context")
         trace.plan_id, trace.plan_hash = plan.id, plan.content_hash
+        # Le bail doit être celui de l'appelant ici et maintenant (propriétaire et époque).
+        lease = Lease(call.execution_id, call.lease_owner, call.lease_epoch)
+        if not await self._stores.executions.renew(lease):
+            raise _Refusal("stale_lease")
+        # L'étape a été réservée (`running`) et les précédentes ont réussi : pas de rejeu d'une
+        # étape terminée, pas d'étape sautée.
+        if step.status != "running" or any(
+            s.seq < step.seq and s.status != "succeeded" for s in execution.steps
+        ):
+            raise _Refusal("step_not_ready")
         return execution, plan, step
 
     @staticmethod
@@ -229,8 +310,7 @@ class ToolGateway:
     async def _check_invariants(
         self, call: GatewayCall, tool: ToolDefinition, plan_environment: str
     ) -> None:
-        declared = call.params.get("environment")
-        if "environment" in call.params and declared != plan_environment:
+        if "environment" in call.params and call.params["environment"] != plan_environment:
             raise _Refusal("environment_mismatch")
         allowed = await in_scope(
             catalog=self._catalog,
@@ -242,35 +322,113 @@ class ToolGateway:
         if not allowed:
             raise _Refusal("scope_violation")
 
+    async def _record_decision(
+        self, call: GatewayCall, trace: _Trace, authorized: _Authorized, started: float
+    ) -> None:
+        """Ligne `allow` AVANT l'exécution : si l'écriture échoue, rien ne s'exécute."""
+        tool = authorized.tool
+        entry = self._entry(
+            call,
+            trace,
+            "allow",
+            authorized.verdict.rule_id,
+            started,
+            params=bounded_for_audit(call.params, frozenset(tool.redact)),
+        )
+        await self._stores.audit.append(entry)
+
     # --- Étapes 8 et 9 : exécuter et filtrer --------------------------------------------------
 
-    async def _execute(
-        self, call: GatewayCall, trace: _Trace, authorized: _Authorized, started: float
-    ) -> GatewayResult:
-        tool = authorized.tool
+    async def _invoke(self, call: GatewayCall, tool: ToolDefinition) -> AdapterResult | FailureCode:
+        """Appelle l'adaptateur. Rend un code (jamais une exception) : le message d'origine ne
+        survit pas."""
         adapter = self._adapters[tool.connector]
         try:
             async with asyncio.timeout(tool.timeout_s):
                 raw = await adapter.execute(tool.tool, call.params, call.idempotency_key)
         except TimeoutError:
-            raise CallFailed("timeout") from None
+            return "timeout"
         except PermissionMissing:
-            raise CallFailed("permission_missing") from None
+            return "permission_missing"
         except ForeignResource:
-            raise CallFailed("foreign_resource") from None
+            return "foreign_resource"
         except AdapterError:
-            raise CallFailed("adapter_error") from None
+            return "adapter_error"
         except Exception as exc:
-            # Défaut de l'adaptateur : on ne journalise que le type, jamais le message.
             log.warning("gateway : défaut d'adaptateur (%s)", type(exc).__name__)
-            raise CallFailed("adapter_defect") from None
+            return "adapter_defect"
+        valid = _valid_result(raw)
+        return "invalid_output" if valid is None else valid
+
+    async def _execute(
+        self, call: GatewayCall, trace: _Trace, authorized: _Authorized, started: float
+    ) -> GatewayResult:
+        tool = authorized.tool
+        raw = await self._invoke(call, tool)
+        if isinstance(raw, str):
+            raise CallFailed(raw)
         fields = frozenset(tool.redact)
         resources = self._resources(call, tool, raw.output)
-        output = redact_value(dict(raw.output), fields)
-        if not isinstance(output, dict) or json_size(output) > MAX_OUTPUT_BYTES:
+        for (
+            resource
+        ) in resources:  # une ressource n'a qu'un maître : jamais celle d'un autre projet
+            if await self._stores.registry.exists_elsewhere(
+                call.project_id, resource.provider, resource.resource_type, resource.external_id
+            ):
+                raise CallFailed("foreign_resource")
+        masked = redact_value(dict(raw.output), fields)
+        output = (
+            masked
+            if isinstance(masked, dict) and json_size(masked) <= MAX_OUTPUT_BYTES
+            else truncated_output(raw.output, fields)
+        )
+        entry = self._entry(
+            call,
+            trace,
+            "executed",
+            authorized.verdict.rule_id,
+            started,
+            params=bounded_for_audit(call.params, fields),
+            result=output,
+        )
+        return GatewayResult(
+            output=output, logs=filter_logs(raw.logs), resources=resources, audit=entry
+        )
+
+    @staticmethod
+    def _resources(
+        call: GatewayCall, tool: ToolDefinition, output: Mapping[str, JsonValue]
+    ) -> tuple[NewResource, ...]:
+        """Ressources CRÉÉES par l'appel, lues sur la sortie brute (le masquage ne doit pas altérer
+        l'identifiant). Une mise à jour (portée `update`) ne crée rien."""
+        entry = tool.registry
+        if entry is None or tool.effective_scope(call.params).kind != "create":
+            return ()
+        external_id = _identifier(output.get(entry.external_id, call.params.get(entry.external_id)))
+        if external_id is None:
             raise CallFailed("invalid_output")
-        elapsed_ms = min(int((self._clock() - started) * 1000), MAX_AUDIT_DURATION_MS)
-        audit = AuditEntry(
+        return (
+            NewResource(
+                tool.connector, entry.resource_type, external_id, safe_url(output.get("web_url"))
+            ),
+        )
+
+    # --- Étape 10 : audit ----------------------------------------------------------------------
+
+    def _entry(
+        self,
+        call: GatewayCall,
+        trace: _Trace,
+        decision: str,
+        rule_id: str | None,
+        started: float,
+        *,
+        params: dict[str, JsonValue] | None = None,
+        result: dict[str, JsonValue] | None = None,
+    ) -> AuditEntry:
+        tool = trace.tool
+        elapsed = int((self._clock() - started) * 1000)
+        return AuditEntry(
             actor_kind=ACTOR_KIND,
             project_id=call.project_id,
             plan_id=trace.plan_id,
@@ -278,37 +436,16 @@ class ToolGateway:
             step_seq=call.step_seq,
             plan_hash=trace.plan_hash,
             actor=self._role,
-            tool=tool.tool,
-            tool_class=tool.tool_class,
-            decision="allow",
-            rule_id=authorized.verdict.rule_id,
-            params_redacted=bounded_for_audit(call.params, fields),
-            result_redacted=output,
-            duration_ms=max(elapsed_ms, 0),
-        )
-        return GatewayResult(
-            output=output, logs=filter_logs(raw.logs), resources=resources, audit=audit
+            tool=tool.tool if tool is not None else mask_text(call.tool)[:MAX_TOOL_NAME_AUDIT],
+            tool_class=tool.tool_class if tool is not None else None,
+            decision=decision,
+            rule_id=rule_id,
+            params_redacted=params,
+            result_redacted=result,
+            duration_ms=min(max(elapsed, 0), MAX_AUDIT_DURATION_MS),
         )
 
-    @staticmethod
-    def _resources(
-        call: GatewayCall, tool: ToolDefinition, output: Mapping[str, JsonValue]
-    ) -> tuple[NewResource, ...]:
-        """Ressource créée, lue sur la sortie brute (le masquage ne doit pas altérer l'id)."""
-        entry = tool.registry
-        if entry is None:
-            return ()
-        found = output.get(entry.external_id, call.params.get(entry.external_id))
-        external_id = _identifier(found)
-        if external_id is None:
-            raise CallFailed("invalid_output")
-        url = output.get("web_url")
-        safe_url = url if isinstance(url, str) and url.startswith(("https://", "http://")) else None
-        return (NewResource(tool.connector, entry.resource_type, external_id, safe_url),)
-
-    # --- Étape 10 : audit des refus et des échecs ---------------------------------------------
-
-    async def _audit_failure(
+    async def _audit(
         self,
         call: GatewayCall,
         trace: _Trace,
@@ -319,24 +456,30 @@ class ToolGateway:
     ) -> None:
         """Une ligne par refus ou échec. Si l'écriture échoue, le refus tient quand même."""
         tool = trace.tool
-        fields = frozenset(tool.redact) if tool is not None else frozenset()
-        entry = AuditEntry(
-            actor_kind=ACTOR_KIND,
-            project_id=call.project_id,
-            plan_id=trace.plan_id,
-            execution_id=call.execution_id,
-            step_seq=call.step_seq,
-            plan_hash=trace.plan_hash,
-            actor=self._role,
-            tool=(tool.tool if tool is not None else mask_text(call.tool)[:MAX_TOOL_NAME_AUDIT]),
-            tool_class=tool.tool_class if tool is not None else None,
-            decision=decision,
-            rule_id=rule_id,
-            params_redacted=bounded_for_audit(call.params, fields) if tool is not None else None,
-            result_redacted={"code": code},
-            duration_ms=min(max(int((self._clock() - started) * 1000), 0), MAX_AUDIT_DURATION_MS),
+        params = bounded_for_audit(call.params, frozenset(tool.redact)) if tool else None
+        entry = self._entry(
+            call, trace, decision, rule_id, started, params=params, result={"code": code}
         )
+        if code == "unknown_context":
+            # Contexte inventé ou étranger : la ligne ne se rattache à aucune exécution réelle.
+            entry = _detached(entry)
         try:
             await self._stores.audit.append(entry)
         except StoreError:
             log.warning("gateway : audit non écrit (%s)", code)
+
+
+def _detached(entry: AuditEntry) -> AuditEntry:
+    """La même ligne, sans exécution, étape ni plan (pour un contexte inconnu)."""
+    return AuditEntry(
+        actor_kind=entry.actor_kind,
+        project_id=entry.project_id,
+        actor=entry.actor,
+        tool=entry.tool,
+        tool_class=entry.tool_class,
+        decision=entry.decision,
+        rule_id=entry.rule_id,
+        params_redacted=entry.params_redacted,
+        result_redacted=entry.result_redacted,
+        duration_ms=entry.duration_ms,
+    )

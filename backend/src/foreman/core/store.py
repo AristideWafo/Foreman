@@ -290,6 +290,12 @@ class ResourceRegistry(Protocol):
         """Vrai seulement si la ressource est au registre DE CE PROJET (jamais d'un autre)."""
         ...
 
+    async def exists_elsewhere(
+        self, project_id: UUID, provider: str, resource_type: str, external_id: str
+    ) -> bool:
+        """Vrai si la ressource est au registre d'un AUTRE projet (un seul maître)."""
+        ...
+
     async def list_for_project(self, project_id: UUID) -> list[ResourceRecord]: ...
 
 

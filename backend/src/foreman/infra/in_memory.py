@@ -430,6 +430,12 @@ class InMemoryResourceRegistry:
         found = self._s.resources.get((provider, resource_type, external_id))
         return found is not None and found.project_id == project_id
 
+    async def exists_elsewhere(
+        self, project_id: UUID, provider: str, resource_type: str, external_id: str
+    ) -> bool:
+        found = self._s.resources.get((provider, resource_type, external_id))
+        return found is not None and found.project_id != project_id
+
     async def list_for_project(self, project_id: UUID) -> list[ResourceRecord]:
         return [r for r in self._s.resources.values() if r.project_id == project_id]
 

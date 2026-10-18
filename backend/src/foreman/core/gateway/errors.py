@@ -14,6 +14,9 @@ DenialCode = Literal[
     "environment_mismatch",  # params.environment != environnement du plan
     "scope_violation",  # parent ou cible hors du registre du projet et hors des racines
     "budget_exceeded",
+    "stale_lease",  # le bail n'est plus celui de l'appelant
+    "step_not_ready",  # étape non réservée (`running`) ou étape antérieure non réussie
+    "call_in_progress",  # le même appel est déjà en cours d'exécution
 ]
 FailureCode = Literal[
     "timeout",
@@ -23,6 +26,7 @@ FailureCode = Literal[
     "adapter_defect",  # exception inattendue de l'adaptateur
     "invalid_output",  # sortie inutilisable (trop grande, identifiant de ressource absent)
     "storage_unavailable",
+    "internal_error",  # toute autre exception : jamais de message
 ]
 
 DENIED_MESSAGE = "appel refusé par la gateway"
