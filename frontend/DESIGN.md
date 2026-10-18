@@ -44,6 +44,11 @@ Bulle de l'utilisateur : `Bubble` `secondary`. Réponse de l'agent : texte simpl
 (« Plan proposé »), puis la **carte plan** (voir « Cartes de plan et d'exécution ») dont les étapes ont une
 icône de statut (horloge, en cours, validée, échec).
 
+La trace est une ligne repliable (« Réflexion en cours » avec spinner, ouverte ; « Réflexion terminée en n étapes »,
+repliée) dont les étapes apparaissent une à une. Les éléments d'un tour (bulle, trace, texte, carte) sont révélés
+l'un après l'autre (`useStaggered`), même avec des données simulées ; un historique rechargé s'affiche d'un coup.
+La réflexion reste « en cours » au moins 1,5 s pour être lisible.
+
 Limite du contrat v1 : le serveur n'envoie ni texte de raisonnement ni appel d'outil. La trace est déduite
 de `turn_status` et des cartes. Un vrai raisonnement ou des outils détaillés demandent de nouveaux types
 d'événements (évolution additive du contrat), pas un changement d'interface.
@@ -109,7 +114,7 @@ reconnexion (une ligne de statut).
 ## Mouvement
 
 150 à 200 ms, `ease-out`, opacité et couleur seulement ; `prefers-reduced-motion` respecté
-(`motion-safe:`). Apparition d'un message : fondu. Texte « en cours » : `shimmer` de shadcn. Pas de
+(`motion-safe:`). Apparition d'un message : fondu. Texte « en cours » : `shimmer` de shadcn. Seule boucle permise : le spinner d'une étape « en cours ». Pas de
 rebond ni d'effet d'enfoncement.
 
 ## Accessibilité

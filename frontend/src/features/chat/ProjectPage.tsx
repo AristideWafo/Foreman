@@ -23,6 +23,10 @@ import type { TimelineItem } from "../events/timeline";
 import { useRecentProjects } from "../projects/useRecentProjects";
 import { MessageInput } from "./MessageInput";
 import { TurnTrace } from "./TurnTrace";
+import { useStaggered } from "./useStaggered";
+
+/** Durée pendant laquelle la réflexion reste visible avant la suite (cf. TurnTrace). */
+const TRACE_MS = 1800;
 
 function readFirstMessage(state: unknown): string | null {
   if (typeof state === "object" && state !== null && "firstMessage" in state) {
@@ -76,6 +80,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
   const { projects } = useRecentProjects();
   const { items, turnRunning, connection, retry } = useProjectEvents(projectId);
+  const visible = useStaggered(items, (previous) => (previous.kind === "trace" ? TRACE_MS : 450));
   const [draft, setDraft] = useState("");
   const firstMessage = useRef(readFirstMessage(location.state));
   const send = useMutation({ mutationFn: (text: string) => postMessage(projectId, text) });
@@ -124,7 +129,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
 
   const connecting = connection.status === "connecting" && items.length === 0;
   // Entre l'envoi et le premier événement du serveur : la réflexion est déjà affichée.
-  const awaitingServer = send.isPending && !turnRunning;
+  const awaitingServer = send.isPending && !turnRunning && visible.length === items.length;
 
   return (
     <>
@@ -146,11 +151,11 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           </p>
         ) : null}
         <div className="min-h-0 flex-1">
-          <MessageScrollerProvider autoScroll>
+          <MessageScrollerProvider>
             <MessageScroller aria-label="Conversation" role="log">
               <MessageScrollerViewport>
                 <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 px-4 py-4">
-                  {items.map((item) => (
+                  {visible.map((item) => (
                     <MessageScrollerItem
                       key={item.key}
                       messageId={item.key}

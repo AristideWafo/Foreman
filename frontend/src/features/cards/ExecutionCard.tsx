@@ -81,8 +81,8 @@ export function ExecutionCard({ card, logs }: { card: ExecutionCardData; logs: S
               value:
                 card.resources.length > 0 ? (
                   <ul className="flex flex-col">
-                    {card.resources.map((r) => (
-                      <li key={`${r.provider}/${r.resource_type}/${r.name}`}>
+                    {card.resources.map((r, index) => (
+                      <li key={`${index}:${r.provider}/${r.resource_type}/${r.name}`}>
                         <ExternalLink href={r.url}>{r.name}</ExternalLink>
                         <span className="text-xs text-muted-foreground">
                           {" "}

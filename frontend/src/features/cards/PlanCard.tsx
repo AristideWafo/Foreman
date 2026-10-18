@@ -95,55 +95,60 @@ export function PlanCard({ card, projectId }: { card: PlanCardData; projectId: s
           </h3>
           <StepList steps={card.steps} />
         </section>
-        <FactList
-          facts={[
-            { label: "Environnement", value: card.environment },
-            {
-              label: "Autonomie",
-              value:
-                typeof card.autonomy_level === "number" ? `Niveau ${card.autonomy_level}` : null,
-            },
-            {
-              label: "Stack",
-              value:
-                stack.length > 0
-                  ? stack.map(([key, value]) => `${key} : ${value}`).join(", ")
-                  : null,
-            },
-            {
-              label: "Skills",
-              value:
-                skills.length > 0
-                  ? skills.map((s) => `${s.name} (v${s.version})`).join(", ")
-                  : null,
-            },
-            {
-              label: "Ressources attendues",
-              value:
-                resources.length > 0 ? (
-                  <ul className="flex flex-col">
-                    {resources.map((r) => (
-                      <li key={`${r.provider}/${r.resource_type}/${r.name}`}>
-                        {r.name}
-                        <span className="text-xs text-muted-foreground">
-                          {" "}
-                          · {r.provider} · {r.resource_type}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+        <div
+          className="motion-safe:animate-in motion-safe:duration-300 motion-safe:fade-in-0 motion-safe:fill-mode-backwards"
+          style={{ animationDelay: `${card.steps.length * 120 + 200}ms` }}
+        >
+          <FactList
+            facts={[
+              { label: "Environnement", value: card.environment },
+              {
+                label: "Autonomie",
+                value:
+                  typeof card.autonomy_level === "number" ? `Niveau ${card.autonomy_level}` : null,
+              },
+              {
+                label: "Stack",
+                value:
+                  stack.length > 0
+                    ? stack.map(([key, value]) => `${key} : ${value}`).join(", ")
+                    : null,
+              },
+              {
+                label: "Skills",
+                value:
+                  skills.length > 0
+                    ? skills.map((s) => `${s.name} (v${s.version})`).join(", ")
+                    : null,
+              },
+              {
+                label: "Ressources attendues",
+                value:
+                  resources.length > 0 ? (
+                    <ul className="flex flex-col">
+                      {resources.map((r, index) => (
+                        <li key={`${index}:${r.provider}/${r.resource_type}/${r.name}`}>
+                          {r.name}
+                          <span className="text-xs text-muted-foreground">
+                            {" "}
+                            · {r.provider} · {r.resource_type}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null,
+              },
+              {
+                label: "Empreinte",
+                value: card.plan_hash ? (
+                  <code className="font-mono text-xs" title={card.plan_hash}>
+                    {shortHash(card.plan_hash)}
+                  </code>
                 ) : null,
-            },
-            {
-              label: "Empreinte",
-              value: card.plan_hash ? (
-                <code className="font-mono text-xs" title={card.plan_hash}>
-                  {shortHash(card.plan_hash)}
-                </code>
-              ) : null,
-            },
-          ]}
-        />
+              },
+            ]}
+          />
+        </div>
       </CardContent>
       {canApprove && planId && planHash ? (
         <CardFooter>

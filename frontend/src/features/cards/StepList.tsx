@@ -13,11 +13,15 @@ function stepMeta(step: CardStep): string {
 export function StepList({ steps }: { steps: readonly CardStep[] }) {
   return (
     <Trace>
-      {steps.map((step) => {
+      {steps.map((step, index) => {
         const status = stepStatus(String(step.status));
         const meta = stepMeta(step);
         return (
-          <div key={step.step} className="flex flex-col gap-0.5">
+          <div
+            key={step.step}
+            className="flex flex-col gap-0.5 motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0 motion-safe:slide-in-from-left-1 motion-safe:fill-mode-backwards"
+            style={{ animationDelay: `${index * 120}ms` }}
+          >
             <TraceLine status={status.line}>
               <TraceIcon>
                 <status.Icon />
