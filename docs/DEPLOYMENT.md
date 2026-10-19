@@ -206,6 +206,8 @@ Si le mot de passe contient des caractères spéciaux, les encoder dans l'URL (`
   (`dropdb` échoue tant que des connexions restent ouvertes : arrêter `app` d'abord, comme ci-dessus.)
 - Par SSH, `SSH_ORIGINAL_COMMAND` prime sur les arguments : les options (`--with-db`, `--dry-run`) doivent figurer dans la
   commande `deploy …` envoyée ; celles passées en argument au script sont ignorées.
+- `0005` (`plans.invalidation`, CHECK avec le statut) : `pg_dump` avant ; déployer migration et code ensemble (l'ancien
+  `reject_admin` violerait le CHECK). Retour arrière : `alembic downgrade 0004` AVANT de remettre l'ancien code.
 - Retour arrière d'une migration : jamais automatique. `downgrade()` supprime les tables (audit compris) ou le journal
   du chat (`0002`) ; il est refusé quand elles contiennent des données, sauf `FOREMAN_ALLOW_DESTRUCTIVE_DOWNGRADE=1`.
   Ne le lancer que sur une base de test.

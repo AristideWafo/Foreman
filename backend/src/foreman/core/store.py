@@ -6,6 +6,7 @@ absente (`None`), jamais « interdite ».
 """
 
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Final, Literal, Protocol
@@ -174,6 +175,16 @@ InvalidationResult = Invalidated | ApprovalRefused
 # Rôles qui peuvent donner l'approbation admin (défense en profondeur : la matrice `approvers`
 # est la source, le dépôt refuse en plus un développeur).
 ADMIN_ROLES: Final = ("team_admin", "org_admin")
+
+
+INVALIDATION_REASONS: Final = ("admin_rejected", "catalog_changed", "project_changed")
+
+
+def checked_invalidation(invalidation: Mapping[str, object]) -> dict[str, object]:
+    """Copie profonde de `{reason, changes}` ; `StoreError` si la raison est absente ou inconnue."""
+    if invalidation.get("reason") not in INVALIDATION_REASONS:
+        raise StoreError("invalidation invalide")
+    return deepcopy(dict(invalidation))
 
 
 def system_audit(plan: PlanRecord, decision: str, rule_id: str) -> "AuditEntry":
