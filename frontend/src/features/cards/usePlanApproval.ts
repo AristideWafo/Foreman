@@ -13,7 +13,10 @@ export function usePlanApproval(projectId: string, planId: string, planHash: str
     pending: mutation.isPending,
     approved: mutation.isSuccess,
     /** 202 : validé par le développeur, il reste l'approbation d'un administrateur. */
-    awaitingAdmin: mutation.data !== undefined && "status" in mutation.data,
+    awaitingAdmin:
+      mutation.data !== undefined &&
+      "status" in mutation.data &&
+      mutation.data.status === "approval_required",
     /** 409 / 404 : on attend la carte plan réémise au lieu de réessayer. */
     waitingForCard: failure?.waitForCard === true,
     errorMessage: failure?.message ?? null,

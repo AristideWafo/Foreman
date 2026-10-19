@@ -23,7 +23,13 @@ function Decision({ card, projectId }: { card: ApprovalCardData; projectId: stri
         <Button type="button" onClick={approve} disabled={disabled} aria-busy={pending}>
           {pending ? "Envoi en cours…" : "Approuver"}
         </Button>
-        <Button type="button" variant="outline" onClick={reject} disabled={disabled}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={reject}
+          disabled={disabled}
+          aria-busy={pending}
+        >
           Refuser
         </Button>
       </div>
