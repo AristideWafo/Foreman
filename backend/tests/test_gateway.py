@@ -1214,7 +1214,16 @@ def asked_for(
             AllowIf("R6-ecriture-staging", (PLAN,)),
         ),
         (request("write_registry", level=1), Deny("level_too_low", "R6-ecriture-staging")),
-        (request("write_registry", role="viewer"), Deny("role_not_allowed", "R6-ecriture-staging")),
+        # Rôle inconnu : refusé même sur une règle sans `roles` (R3), niveau 4.
+        (
+            asked_for("write_registry", purpose="resume", level=4, role="viewer"),
+            Deny("role_not_allowed"),
+        ),
+        # R5 ne contourne pas R8 : une remédiation irréversible par un développeur est refusée.
+        (
+            asked_for("write_registry", purpose="remediation", reversibility="irreversible"),
+            Deny("role_not_allowed", "R8-irreversible"),
+        ),
         # R7 : production, le développeur peut demander ; l'admin approuve.
         (
             request("write_registry", environment="production"),

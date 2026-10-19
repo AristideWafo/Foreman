@@ -42,18 +42,21 @@ rules:
 
   - id: R3-niveau4-reprise-et-rollback
     match: {class: write_registry, env: staging, purpose: [resume, rollback_own, remediation], reversibility: [reversible, compensable]}
+    roles: [developer, team_admin, org_admin]
     min_level: 4
     requires: [plan_approved]          # dans le périmètre du plan déjà approuvé
     decision: allow_if
 
   - id: R4-remediation-reversible
     match: {class: write_registry, purpose: remediation, reversibility: reversible}
+    roles: [developer, team_admin, org_admin]
     min_level: 3
     requires: [plan_approved]
     decision: allow_if
 
   - id: R5-remediation-autre
-    match: {class: write_registry, purpose: remediation}
+    match: {class: write_registry, purpose: remediation, reversibility: [reversible, compensable]}
+    roles: [developer, team_admin, org_admin]
     requires: [plan_approved, remediation_approved_by_admin]
     decision: allow_if
 
