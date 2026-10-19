@@ -416,6 +416,20 @@ class InMemoryExecutionStore:
         key = (e.project_id, step.idempotency_key)
         if not (key in self._s.idempotency and self._s.idempotency[key] is None):
             raise InvalidTransition
+        now = self._s.clock()
+        if any(  # l'ancien propriétaire (autre exécution, même clé) a-t-il encore un bail vivant ?
+            o.id != e.id
+            and o.project_id == e.project_id
+            and o.state == "running"
+            and o.lease_owner is not None
+            and o.lease_expires_at is not None
+            and o.lease_expires_at >= now
+            and any(
+                s.idempotency_key == step.idempotency_key and s.status == "running" for s in o.steps
+            )
+            for o in self._s.executions.values()
+        ):
+            raise InvalidTransition
         return TakenOverReservation()  # la mémoire ne lie pas la clé à une étape : rien à déplacer
 
     async def complete_step(
