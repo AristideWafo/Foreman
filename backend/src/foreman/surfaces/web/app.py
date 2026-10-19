@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -52,6 +53,28 @@ async def resume_executions(state: App, tasks: TaskRegistry) -> None:
         tasks.spawn(state.engine.run(ref.project_id, ref.execution_id, resumed=True))
 
 
+SWEEP_INTERVAL_SECONDS = 300
+
+
+async def sweep_expired_plans(state: App) -> None:
+    """Un balayage ; un stockage indisponible est journalisé (sans détail) et ignoré."""
+    if state.approvals is None:
+        return
+    try:
+        await state.approvals.expire_due()
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "balayage d'expiration impossible (%s)", type(exc).__name__
+        )
+
+
+async def sweep_loop(state: App) -> None:
+    """Annulée par `TaskRegistry.shutdown` ; chaque tour absorbe ses erreurs."""
+    while True:
+        await asyncio.sleep(SWEEP_INTERVAL_SECONDS)
+        await sweep_expired_plans(state)
+
+
 def create_app(app_state: App | None = None) -> FastAPI:
     """`app_state` permet d'injecter des adaptateurs (tests) ; sinon profil web."""
     state = app_state or configure(Profile.WEB)
@@ -62,6 +85,8 @@ def create_app(app_state: App | None = None) -> FastAPI:
         await state.lifecycle.start()  # migrations puis amorçage (profil web avec base)
         await state.members.sync(state.dev_members)  # remplace : un nom retiré perd son rôle
         await resume_executions(state, tasks)
+        await sweep_expired_plans(state)
+        tasks.spawn(sweep_loop(state))
         try:
             yield
         finally:

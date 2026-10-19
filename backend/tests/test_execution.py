@@ -362,3 +362,44 @@ async def test_a_production_plan_waits_for_an_admin_who_then_starts_the_executio
     assert isinstance(approved, Approved) and approved.created
     last = [e.data for e in await events.read_after(project, 0) if e.data.kind == "approval"][-1]
     assert (last.status, last.decided_by.name) == ("approved", "boss")  # type: ignore[union-attr]
+
+
+async def test_the_expiry_sweep_expires_a_pending_plan_once_and_emits_both_cards() -> None:
+    """S12 : un plan `dev_approved` échu passe `expired` ; cartes plan et approbation émises une
+    seule fois (horloge fixe), un second balayage n'ajoute rien."""
+    catalog = load_catalog(environment="staging")
+    projects = InMemoryProjectStore()
+    _, stores = in_memory_stores(projects=projects)
+    events = InMemoryEventLog()
+    project = (await projects.create("p")).id
+    step = DraftStep(
+        "Préparer",
+        "server.apply_playbook",
+        {
+            "environment": "production",
+            "project": "safe-eat",
+            "playbook": "bootstrap_project",
+            "mode": "apply",
+        },
+    )
+    draft = Draft(title="Prod", summary="s", environment="production", steps=[step])
+    now = datetime.now(UTC)
+    record, _ = await Planner(catalog, stores.plans, clock=lambda: now).propose(
+        project, draft, DEV_USER_ID
+    )
+    clock = [now]
+    service = ApprovalService(catalog, stores, events, dev_members(), clock=lambda: clock[0])
+    pending = await service.approve(project, record.id, record.content_hash, DEV_PRINCIPAL)
+    assert isinstance(pending, AwaitingAdmin)
+    assert await service.expire_due() == 0  # pas encore échu
+    clock[0] = record.expires_at + timedelta(seconds=1)
+    before = len(await events.read_after(project, 0))
+
+    assert await service.expire_due() == 1
+    assert await service.expire_due() == 0
+    new = [e.data for e in (await events.read_after(project, 0))[before:]]
+    assert [(c.kind, c.status) for c in new] == [("plan", "expired"), ("approval", "expired")]
+    assert new[0].invalidation is not None and new[0].invalidation.reason == "expired"  # type: ignore[union-attr]
+    assert new[0].invalidation.changes == []  # type: ignore[union-attr]
+    stored = await stores.plans.get(project, record.id)
+    assert stored is not None and stored.status == "expired"
