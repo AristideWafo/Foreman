@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.0](https://github.com/AristideWafo/Foreman/compare/v0.11.0...v0.12.0) (2026-10-19)
+
+
+### Features
+
+* approbation administrateur et rôle relu par la gateway (S4) ([2836695](https://github.com/AristideWafo/Foreman/commit/28366957540939f709c5fdf56320dfda002d0098))
+* **front:** carte d'approbation administrateur (S4) ([408b8e7](https://github.com/AristideWafo/Foreman/commit/408b8e7b6adf9b46224f484078e5a8500483e1eb))
+* matrice R1 à R10 et production (S4) ([073807b](https://github.com/AristideWafo/Foreman/commit/073807b88136a0a09fe2ea187d2e02f92006e1d3))
+* rôles, authentification de développement et migration 0003 (S4) ([c853ae3](https://github.com/AristideWafo/Foreman/commit/c853ae3fa1ea2cc9caeca5c18e26ec02357c36e6))
+
 ## [0.11.0](https://github.com/AristideWafo/Foreman/compare/v0.10.0...v0.11.0) (2026-10-19)
 
 
