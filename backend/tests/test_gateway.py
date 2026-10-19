@@ -332,7 +332,9 @@ async def start(
             requested_by=DEV_USER_ID,
         )
     )
-    approved = await world.stores.plans.approve(project, plan.id, plan.content_hash, DEV_USER_ID, 2)
+    approved = await world.stores.plans.approve(
+        project, plan.id, plan.content_hash, DEV_USER_ID, 2, now=datetime.now(UTC)
+    )
     assert isinstance(approved, Approved)
     lease = await world.stores.executions.claim_lease(approved.execution_id, "w1")
     assert lease is not None
@@ -688,12 +690,18 @@ async def test_a_production_write_waits_for_the_admin_then_runs_as_the_requester
         )
     )
     waiting = await world.stores.plans.approve(
-        project, plan.id, plan.content_hash, DEV_USER_ID, 2, start_execution=False
+        project,
+        plan.id,
+        plan.content_hash,
+        DEV_USER_ID,
+        2,
+        start_execution=False,
+        now=datetime.now(UTC),
     )
     assert isinstance(waiting, AwaitingAdmin)
     admin = DEV_USER_ID  # seul le rôle passé au dépôt compte ici
     approved = await world.stores.plans.approve_admin(
-        project, plan.id, plan.content_hash, admin, "team_admin", 2
+        project, plan.id, plan.content_hash, admin, "team_admin", 2, now=datetime.now(UTC)
     )
     assert isinstance(approved, Approved) and approved.created
     lease = await world.stores.executions.claim_lease(approved.execution_id, "w1")

@@ -393,6 +393,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             content=cast(dict[str, JsonValue], dict(record.content)),
             created_at=record.created_at,
             expires_at=record.expires_at,
+            invalidation=cast(Any, record.invalidation),
         )
 
     @router.get(
