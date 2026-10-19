@@ -275,3 +275,22 @@ test("S11, rejeu : 6 badges « déjà présente » et 8 étapes réussies sur la
     ),
   ).toBeVisible();
 });
+
+// --- Relancer un plan bloqué ----------------------------------------------------------------------
+
+test("exécution bloquée : bouton « Relancer le plan » ; exécution réussie : aucun", () => {
+  const done = replay(LAST_SEQ).items.find((i) => i.kind === "card" && i.card.kind === "execution");
+  const card = done?.kind === "card" ? (done.card as ExecutionCardData) : null;
+  expect(card?.state).toBe("succeeded");
+  const view = (state: ExecutionCardData["state"]) =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Card card={{ ...card!, state }} projectId={PROJECT_ID} retryText="Déploie Safe Eat" />
+      </QueryClientProvider>,
+    );
+  const ok = view("succeeded");
+  expect(screen.queryByRole("button", { name: "Relancer le plan" })).toBeNull();
+  ok.unmount();
+  view("blocked");
+  expect(screen.getByRole("button", { name: "Relancer le plan" })).toBeEnabled();
+});

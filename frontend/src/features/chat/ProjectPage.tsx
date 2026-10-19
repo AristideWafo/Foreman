@@ -18,6 +18,7 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { Card } from "../cards/Card";
+import { RETRYABLE_STATES } from "../cards/RetryPlan";
 import { useProjectEvents } from "../events/useProjectEvents";
 import { foldExecutions, type TimelineItem } from "../events/timeline";
 import { useProjects } from "../projects/useProjects";
@@ -36,7 +37,33 @@ function readFirstMessage(state: unknown): string | null {
   return null;
 }
 
-function TimelineEntry({ item, projectId }: { item: TimelineItem; projectId: string }) {
+/**
+ * Texte à renvoyer pour relancer la dernière exécution du projet (plan ou exécution seule) : le dernier
+ * message utilisateur qui la précède. Le flux n'expose pas de lien message -> plan, d'où ce choix.
+ */
+function findRetry(items: TimelineItem[]): { key: string; text: string } | null {
+  const isRun = (i: TimelineItem) =>
+    i.kind === "card" && (i.card.kind === "plan" || i.card.kind === "execution");
+  const last = items.map(isRun).lastIndexOf(true);
+  const item = items[last];
+  if (item?.kind !== "card") return null;
+  const state =
+    item.execution?.card.state ?? (item.card.kind === "execution" ? item.card.state : "");
+  if (!RETRYABLE_STATES.includes(state)) return null;
+  const users = items.slice(0, last).filter((i) => i.kind === "message" && i.role === "user");
+  const message = users[users.length - 1];
+  return message?.kind === "message" ? { key: item.key, text: message.text } : null;
+}
+
+function TimelineEntry({
+  item,
+  projectId,
+  retryText,
+}: {
+  item: TimelineItem;
+  projectId: string;
+  retryText?: string;
+}) {
   switch (item.kind) {
     case "message":
       return item.role === "user" ? (
@@ -71,6 +98,7 @@ function TimelineEntry({ item, projectId }: { item: TimelineItem; projectId: str
           projectId={projectId}
           logs={item.execution?.logs ?? item.logs}
           execution={item.execution?.card}
+          retryText={retryText}
         />
       );
     case "error":
@@ -88,6 +116,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   const { projects } = useProjects();
   const { items: events, turnRunning, connection, retry } = useProjectEvents(projectId);
   const items = useMemo(() => foldExecutions(events), [events]);
+  const retryTarget = useMemo(() => findRetry(items), [items]);
   const visible = useStaggered(items, (previous) => (previous.kind === "trace" ? TRACE_MS : 450));
   const [draft, setDraft] = useState("");
   const firstMessage = useRef(readFirstMessage(location.state));
@@ -170,7 +199,11 @@ export function ProjectPage({ projectId }: { projectId: string }) {
                       scrollAnchor={item.kind === "message" && item.role === "user"}
                       className="motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0"
                     >
-                      <TimelineEntry item={item} projectId={projectId} />
+                      <TimelineEntry
+                        item={item}
+                        projectId={projectId}
+                        retryText={retryTarget?.key === item.key ? retryTarget.text : undefined}
+                      />
                     </MessageScrollerItem>
                   ))}
                   {awaitingServer ? (

@@ -137,6 +137,18 @@ d'outils utilisés sur le maximum, durée écoulée sur le maximum), niveau d'au
 
 Le composant partagé `StepList` rend les étapes des deux cartes ; `ExternalLink` rend tout lien venu de l'API.
 
+## Relancer un plan bloqué
+
+Sur une exécution `blocked` ou `failed_compensated`, le pied de la carte (plan avec exécution repliée, ou
+exécution seule) montre un texte d'aide (« les ressources déjà créées sont réutilisées ») et un `Button`
+`outline` « Relancer le plan » (`ArrowPathIcon`, `data-icon="inline-start"`). L'action renvoie par
+`POST /api/projects/{id}/messages` (même appel que le chat) **le dernier message utilisateur qui précède la
+carte** : le flux d'événements n'expose aucun lien message -> plan. Le nouveau plan arrive par le flux, comme
+pour tout message. Pendant l'envoi : bouton désactivé, `aria-busy` (donc une seule relance à la fois) ; succès :
+ligne `role="status"` ; échec : `Alert` destructive. Affiché **uniquement sur la dernière carte plan ou
+exécution** de la conversation (jamais sur l'historique, ni sur une exécution réussie ou en cours) ; dès que le
+nouveau plan est émis, il devient la dernière carte et l'action disparaît.
+
 ## Carte de clarification (Semaine 3)
 
 Rendue depuis l'événement `card` de `kind = "clarification"` (remplacée par `card_id` à chaque réponse, jamais

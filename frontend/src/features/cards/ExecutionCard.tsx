@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { StepLogs } from "../events/timeline";
 import { FactList, type Fact } from "./FactList";
 import { ResourceList } from "./ResourceList";
+import { RETRYABLE_STATES, RetryPlan } from "./RetryPlan";
 import { StepList } from "./StepList";
 import { executionStateLabel } from "./vocabulary";
 
@@ -48,7 +49,17 @@ export function executionFacts(card: ExecutionCardData): Fact[] {
 }
 
 /** Exécution sans plan connu dans la conversation (repli) : état, étapes avec leur journal, faits. Lecture seule. */
-export function ExecutionCard({ card, logs }: { card: ExecutionCardData; logs: StepLogs }) {
+export function ExecutionCard({
+  card,
+  logs,
+  projectId,
+  retryText,
+}: {
+  card: ExecutionCardData;
+  logs: StepLogs;
+  projectId: string;
+  retryText?: string;
+}) {
   return (
     <Card role="group" aria-label="Exécution" className="ring-0">
       <CardHeading
@@ -71,6 +82,9 @@ export function ExecutionCard({ card, logs }: { card: ExecutionCardData; logs: S
           ]}
         />
       </CardContent>
+      {retryText && RETRYABLE_STATES.includes(card.state) ? (
+        <RetryPlan projectId={projectId} text={retryText} />
+      ) : null}
     </Card>
   );
 }
