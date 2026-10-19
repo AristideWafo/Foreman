@@ -29,6 +29,7 @@ from foreman.core.store import (
     AuditEntry,
     CompletedReservation,
     ExecutionRecord,
+    InvalidTransition,
     Lease,
     NewReservation,
     OrphanReservation,
@@ -206,7 +207,13 @@ class ExecutionEngine:
             # Réservée sans résultat : rejouée seulement si l'outil se rappelle sans risque.
             if not self._replayable(step.tool):
                 raise _Blocked(step.seq)
-            reservation = await stores.executions.take_over(lease, step.seq)
+            try:
+                reservation = await stores.executions.take_over(lease, step.seq)
+            except InvalidTransition:
+                # Course bénigne (ancien propriétaire libéré) : une seule nouvelle réservation.
+                reservation = await stores.executions.reserve_idempotency(lease, step.seq)
+                if isinstance(reservation, OrphanReservation):
+                    raise _Blocked(step.seq) from None
         if isinstance(reservation, CompletedReservation):
             # La clé a déjà abouti : on reprend son résultat, rien n'est rappelé.
             result = cast(Mapping[str, JsonValue], reservation.result)
