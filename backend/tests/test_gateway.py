@@ -191,7 +191,9 @@ class ExplodingAudit:
     async def append(self, entry: AuditEntry) -> None:
         raise RuntimeError(SECRET_URL)
 
-    async def list_for_project(self, project_id: UUID, limit: int = 200) -> list[AuditEntry]:
+    async def list_for_project(
+        self, project_id: UUID, limit: int = 200, *, execution_id: UUID | None = None
+    ) -> list[AuditEntry]:
         return []
 
 
@@ -208,8 +210,10 @@ class FlakyAudit:
             raise RuntimeError(SECRET_URL)
         await self._inner.append(entry)
 
-    async def list_for_project(self, project_id: UUID, limit: int = 200) -> list[AuditEntry]:
-        return await self._inner.list_for_project(project_id, limit)
+    async def list_for_project(
+        self, project_id: UUID, limit: int = 200, *, execution_id: UUID | None = None
+    ) -> list[AuditEntry]:
+        return await self._inner.list_for_project(project_id, limit, execution_id=execution_id)
 
 
 class ManualClock:

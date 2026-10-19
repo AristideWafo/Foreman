@@ -35,6 +35,8 @@ REF = {"$from": {"step": 1, "field": "group_id"}}
 class CountingGateway:
     """Gateway factice : une sortie par étape, et le compte des appels par numéro d'étape."""
 
+    idempotency_scope = ""
+
     def __init__(self, hang_once_at: int | None = None) -> None:
         self.calls: Counter[int] = Counter()
         self.parents: dict[int, object] = {}

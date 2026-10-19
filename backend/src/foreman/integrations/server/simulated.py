@@ -4,6 +4,7 @@ import asyncio
 import copy
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from uuid import uuid4
 
 from pydantic import JsonValue
 
@@ -53,6 +54,7 @@ class SimulatedServer:
     """
 
     def __init__(self) -> None:
+        self.epoch = uuid4().hex[:8]  # état en mémoire : voir `ToolAdapter` (époque d'adaptateur)
         self.projects: dict[ProjectKey, SimulatedServerProject] = {}
         self.runs: list[str] = []  # exécutions en mode apply, dans l'ordre
         self._results: dict[str, AdapterResult] = {}

@@ -49,6 +49,10 @@ class GatewayResult:
 
 
 class Gateway(Protocol):
+    # Suffixe de clé d'idempotence propre à cette instance d'adaptateurs non durables (faux en
+    # mémoire, voir `ToolAdapter`) : amnésiques au redémarrage, pas de rejeu d'un ancien résultat.
+    idempotency_scope: str
+
     async def call(self, call: GatewayCall) -> GatewayResult:
         """Exécute l'appel s'il passe les contrôles.
 

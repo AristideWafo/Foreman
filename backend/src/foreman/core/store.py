@@ -223,6 +223,12 @@ class Lease:
     execution_id: UUID
     owner: str
     epoch: int
+    # Portée d'idempotence des adaptateurs non durables (voir `Gateway.idempotency_scope`) : la
+    # clé réservée est `clé de l'étape + key_suffix`. Vide pour des adaptateurs durables.
+    key_suffix: str = ""
+
+    def key(self, step_key: str) -> str:
+        return step_key + self.key_suffix
 
 
 @dataclass(frozen=True, slots=True)
@@ -418,7 +424,9 @@ class AuditLog(Protocol):
         """Lève `StoreError` si l'entrée est invalide (rien n'est écrit)."""
         ...
 
-    async def list_for_project(self, project_id: UUID, limit: int = 200) -> list[AuditEntry]: ...
+    async def list_for_project(
+        self, project_id: UUID, limit: int = 200, *, execution_id: UUID | None = None
+    ) -> list[AuditEntry]: ...
 
 
 @dataclass(frozen=True, slots=True)

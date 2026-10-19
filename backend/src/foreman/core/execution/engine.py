@@ -13,6 +13,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from typing import Final, cast
 from uuid import UUID, uuid4
 
@@ -156,7 +157,7 @@ class ExecutionEngine:
                 log.warning("execution %s : bail illisible (%s)", execution_id, type(exc).__name__)
                 return None
             if lease is not None:
-                return lease
+                return replace(lease, key_suffix=self._gateway.idempotency_scope)
             if attempt < attempts:
                 await asyncio.sleep(self._resume_delay_s)
         return None

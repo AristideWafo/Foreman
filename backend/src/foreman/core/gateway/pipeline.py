@@ -171,6 +171,12 @@ class ToolGateway:
         self._catalog = catalog
         self._stores = stores
         self._adapters = adapters
+        epochs = sorted(
+            f"{name}.{epoch}"
+            for name, adapter in adapters.items()
+            if (epoch := getattr(adapter, "epoch", None)) is not None
+        )
+        self.idempotency_scope = "@" + ",".join(epochs) if epochs else ""
         self._members = members
         self._clock = clock
         budget = catalog.policy.budgets.per_execution
@@ -379,7 +385,9 @@ class ToolGateway:
         adapter = self._adapters[tool.connector]
         try:
             async with asyncio.timeout(tool.timeout_s):
-                raw = await adapter.execute(tool.tool, call.params, call.idempotency_key)
+                raw = await adapter.execute(
+                    tool.tool, call.params, call.idempotency_key + self.idempotency_scope
+                )
         except TimeoutError:
             return "timeout"
         except PermissionMissing:
