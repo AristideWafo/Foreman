@@ -6,7 +6,10 @@ export function ResourceList({
   resources,
   linked = false,
 }: {
-  resources: readonly (Omit<ResourceRef, "url"> & { url?: string | null })[];
+  resources: readonly (Omit<ResourceRef, "url" | "reused"> & {
+    url?: string | null;
+    reused?: boolean | null;
+  })[];
   linked?: boolean;
 }) {
   return (
