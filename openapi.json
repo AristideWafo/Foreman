@@ -1800,7 +1800,7 @@
   "paths": {
     "/api/me": {
       "get": {
-        "description": "Identit\u00e9 de l'appelant (S4 : utilisateur de d\u00e9veloppement unique).",
+        "description": "Identit\u00e9 de l'appelant, lue c\u00f4t\u00e9 serveur (r\u00f4le : `FOREMAN_DEV_MEMBERS`).",
         "operationId": "get_me_api_me_get",
         "responses": {
           "200": {

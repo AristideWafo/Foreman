@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
-from harness import Harness
+from harness import APPROVER, Harness
 
 from foreman.core.approval import ApprovalService
 from foreman.core.execution.engine import ExecutionEngine
@@ -122,7 +122,9 @@ async def approved_execution(
             DraftStep("Santé", "server.healthcheck", {"environment": "staging", "project": "aa"}),
         ],
     )
-    record, _ = await Planner(catalog, h.stores.plans, clock=far_future).propose(project, draft)
+    record, _ = await Planner(catalog, h.stores.plans, clock=far_future).propose(
+        project, draft, APPROVER
+    )
     events = InMemoryEventLog()
     approved = await ApprovalService(catalog, h.stores, events).approve(
         project, record.id, record.content_hash

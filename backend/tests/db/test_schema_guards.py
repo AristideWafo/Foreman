@@ -124,6 +124,33 @@ def test_a_done_reservation_must_carry_a_result(migrated: str) -> None:
 # --- États et bornes --------------------------------------------------------------------------
 
 
+def test_production_never_runs_at_autonomy_level_4_but_staging_may(migrated: str) -> None:
+    with connect(migrated) as conn:
+        project = seed_project(conn)
+        plans = [seed_plan(conn, project, v, f"sha256:{v:064d}") for v in (1, 2, 3)]
+    values = {"project_id": project, "state": "succeeded"}
+    with connect(migrated) as conn:  # staging niveau 4 et production niveau 3 : permis
+        conn.execute(
+            sa.insert(t.executions).values(
+                plan_id=plans[0], environment="staging", autonomy_level=4, **values
+            )
+        )
+        conn.execute(
+            sa.insert(t.executions).values(
+                plan_id=plans[1], environment="production", autonomy_level=3, **values
+            )
+        )
+    with (
+        pytest.raises(IntegrityError, match="executions_production_autonomy"),
+        connect(migrated) as conn,
+    ):
+        conn.execute(
+            sa.insert(t.executions).values(
+                plan_id=plans[2], environment="production", autonomy_level=4, **values
+            )
+        )
+
+
 def test_awaiting_approval_is_not_an_execution_state(migrated: str) -> None:
     with connect(migrated) as conn:
         project = seed_project(conn)

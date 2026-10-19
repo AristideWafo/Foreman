@@ -34,6 +34,7 @@ def plan_record(row: Any) -> PlanRecord:
         status=row.status,
         created_at=row.created_at,
         expires_at=row.expires_at,
+        requested_by=row.requested_by,
     )
 
 
@@ -68,6 +69,7 @@ class PostgresPlanStore:
                             content_hash=plan.content_hash,
                             skills_used=list(plan.skills_used),
                             expires_at=plan.expires_at,
+                            requested_by=plan.requested_by,
                         )
                         .returning(*t.plans.c)
                     )
@@ -166,6 +168,8 @@ class PostgresPlanStore:
                 plan_id=plan_id,
                 project_id=project_id,
                 autonomy_level=autonomy_level,
+                # Copie du plan : la base refuse le niveau 4 en production (CHECK).
+                environment=plan.content.get("environment"),
             )
         )
         steps = [s.bound_to(execution_id) for s in steps_of(plan.content)]

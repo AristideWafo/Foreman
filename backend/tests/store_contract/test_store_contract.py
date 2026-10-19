@@ -53,10 +53,11 @@ async def new_plan(
     return await h.stores.plans.create(
         NewPlan(
             project_id=project_id,
-            content={"steps": steps},
+            content={"environment": "staging", "steps": steps},
             content_hash=plan_hash or "sha256:" + uuid4().hex.ljust(64, "0"),
             skills_used=[],
             expires_at=expires_at,
+            requested_by=APPROVER,
         )
     )
 

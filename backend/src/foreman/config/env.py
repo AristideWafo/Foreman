@@ -19,3 +19,9 @@ DEFAULT_CATALOG_DIR: Final = "catalog"
 
 ENV_ENVIRONMENT: Final = "FOREMAN_ENVIRONMENT"
 DEFAULT_ENVIRONMENT: Final = "staging"
+
+# "none" (défaut) : utilisateur `dev`, en-tête ignoré. "proxy_header" : identité posée par Traefik.
+ENV_AUTH_MODE: Final = "FOREMAN_AUTH_MODE"
+DEFAULT_AUTH_MODE: Final = "none"
+# `nom:role,nom:role` : rôles des membres, lus du `.env` du serveur (jamais du dépôt).
+ENV_DEV_MEMBERS: Final = "FOREMAN_DEV_MEMBERS"

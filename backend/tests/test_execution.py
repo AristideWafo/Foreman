@@ -18,7 +18,7 @@ from foreman.core.gateway.pipeline import ToolGateway
 from foreman.core.gateway.port import GatewayCall, GatewayResult
 from foreman.core.planning import Draft, DraftStep, Planner, plan_card_id
 from foreman.core.ports import AdapterResult, ToolAdapter
-from foreman.core.store import ApprovalRefused, Approved, AuditEntry
+from foreman.core.store import DEV_USER_ID, ApprovalRefused, Approved, AuditEntry
 from foreman.infra.file_catalog import load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
 from foreman.integrations.dns.simulated import SimulatedDns
@@ -157,7 +157,7 @@ async def test_an_adapter_defect_blocks_the_execution_without_leaking_details(
             ),
         ],
     )
-    record, _ = await Planner(catalog, stores.plans).propose(project, draft)
+    record, _ = await Planner(catalog, stores.plans).propose(project, draft, DEV_USER_ID)
     approved = await ApprovalService(catalog, stores, events).approve(
         project, record.id, record.content_hash
     )
@@ -248,7 +248,9 @@ async def test_the_lease_is_renewed_during_a_long_call() -> None:
             )
         ],
     )
-    record, _ = await Planner(catalog, stores.plans, clock=far_future).propose(project, draft)
+    record, _ = await Planner(catalog, stores.plans, clock=far_future).propose(
+        project, draft, DEV_USER_ID
+    )
     approved = await ApprovalService(catalog, stores, events).approve(
         project, record.id, record.content_hash
     )
@@ -292,7 +294,7 @@ async def test_a_refused_approval_reissues_the_plan_card_from_the_stored_state()
         ],
     )
     record, _ = await Planner(catalog, stores.plans, clock=long_ago).propose(
-        project, draft
+        project, draft, DEV_USER_ID
     )  # expiré
     refused = await ApprovalService(catalog, stores, events).approve(
         project, record.id, record.content_hash

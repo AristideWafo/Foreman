@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 
 from foreman.core.ports import ConversationMessage, ModelReply, Provider, ToolCall
+from foreman.core.store import DEV_USER_ID
 from foreman.core.turn import TurnInProgress, TurnRequest, TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
@@ -62,7 +63,7 @@ async def play(provider: Provider, message: str = "salut") -> list[dict[str, Any
     log = InMemoryEventLog()
     project_id = uuid4()
     service = TurnService(provider, log, make_planner(), InMemoryProjectStore())
-    request = TurnRequest(user_id="u", project_id=project_id, message=message)
+    request = TurnRequest(user_id=DEV_USER_ID, project_id=project_id, message=message)
     await service.run(request, service.begin(project_id))
     return [e.model_dump(mode="json") for e in await log.read_after(project_id, 0)]
 
@@ -148,7 +149,7 @@ async def test_only_one_turn_at_a_time_per_project_and_the_guard_is_released() -
 
     first = service.begin(project_id)
     running = asyncio.create_task(
-        service.run(TurnRequest("u", project_id, "un"), first), name="premier-tour"
+        service.run(TurnRequest(DEV_USER_ID, project_id, "un"), first), name="premier-tour"
     )
     await asyncio.wait_for(provider.started.wait(), timeout=5)
     with pytest.raises(TurnInProgress):
@@ -171,7 +172,7 @@ async def test_silent_provider_times_out_and_frees_the_project() -> None:
         GatedProvider(), log, make_planner(), InMemoryProjectStore(), provider_timeout_s=0.05
     )
     turn = service.run(
-        TurnRequest(user_id="u", project_id=project_id, message="salut"),
+        TurnRequest(user_id=DEV_USER_ID, project_id=project_id, message="salut"),
         service.begin(project_id),
     )
     await asyncio.wait_for(turn, timeout=2)  # échec net si le délai du fournisseur disparaît

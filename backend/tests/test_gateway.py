@@ -319,6 +319,7 @@ async def start(
             content_hash="sha256:" + "ab" * 32,
             skills_used=[],
             expires_at=FUTURE,
+            requested_by=DEV_USER_ID,
         )
     )
     approved = await world.stores.plans.approve(project, plan.id, plan.content_hash, DEV_USER_ID, 2)

@@ -436,7 +436,9 @@ class Planner:
     def catalog(self) -> Catalog:
         return self._catalog
 
-    async def propose(self, project_id: UUID, draft: Draft) -> tuple[PlanRecord, PlanContent]:
+    async def propose(
+        self, project_id: UUID, draft: Draft, requested_by: UUID
+    ) -> tuple[PlanRecord, PlanContent]:
         """Valide, hache puis persiste. Un plan invalide n'écrit rien (`InvalidPlan`)."""
         content, digest = build_content(draft, project_id, self._catalog)
         record = await self._plans.create(
@@ -446,6 +448,7 @@ class Planner:
                 content_hash=digest,
                 skills_used=[s.model_dump(mode="json") for s in content.skills],
                 expires_at=self._clock() + PLAN_TTL,
+                requested_by=requested_by,
             )
         )
         return record, content

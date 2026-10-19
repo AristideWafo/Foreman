@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * Get Me
-         * @description Identité de l'appelant (S4 : utilisateur de développement unique).
+         * @description Identité de l'appelant, lue côté serveur (rôle : `FOREMAN_DEV_MEMBERS`).
          */
         get: operations["get_me_api_me_get"];
         put?: never;
