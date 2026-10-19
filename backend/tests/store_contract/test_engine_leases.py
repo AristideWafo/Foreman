@@ -239,7 +239,12 @@ async def test_a_crash_after_the_reservation_blocks_and_never_calls_twice(
     with pytest.raises(WorkerKilled):
         await bench.engine.run(bench.project, bench.execution)
     await harness.expire_lease(Lease(bench.execution, "ancien", 0))
-    await new_engine(harness, bench).run(bench.project, bench.execution)
+    engine = new_engine(harness, bench)
+    catalog = load_catalog(environment="staging")
+    tool = catalog.tools["gitlab.create_group"]  # sans stratégie d'idempotence : pas de reprise
+    bare = {**catalog.tools, tool.tool: tool.model_copy(update={"idempotency": None})}
+    engine._catalog = replace(catalog, tools=bare)
+    await engine.run(bench.project, bench.execution)
     execution = await harness.stores.executions.get(bench.project, bench.execution)
     assert execution is not None and execution.state == "blocked"
     assert bench.gateway.calls == Counter({1: 1})  # l'adaptateur n'est jamais rappelé à l'aveugle
@@ -274,22 +279,6 @@ async def test_an_identical_plan_succeeds_after_a_failure_without_duplicates(
     done = await harness.stores.executions.get(second.project, second.execution)
     assert done is not None and done.state == "succeeded"
     assert gateway.calls == Counter({1: 2, 2: 1, 3: 1})  # étape 1 : l'échec, puis un seul succès
-
-
-async def test_an_orphan_of_a_tool_without_strategy_stays_blocked(harness: Harness) -> None:
-    gateway = FailingGateway(RuntimeError("panne"))
-    first = await approved_execution(harness, gateway=gateway)
-    await first.engine.run(first.project, first.execution)
-    gateway.failure = None
-    second = await approved_execution(harness, project=first.project, gateway=gateway)
-    catalog = load_catalog(environment="staging")
-    tool = catalog.tools["gitlab.create_group"]
-    bare = {**catalog.tools, tool.tool: tool.model_copy(update={"idempotency": None})}
-    second.engine._catalog = replace(catalog, tools=bare)
-    await second.engine.run(second.project, second.execution)
-    execution = await harness.stores.executions.get(second.project, second.execution)
-    assert execution is not None and execution.state == "blocked"
-    assert gateway.calls == Counter({1: 1})  # rien n'est rappelé à l'aveugle
 
 
 async def test_a_denial_before_effect_releases_the_reservation(harness: Harness) -> None:

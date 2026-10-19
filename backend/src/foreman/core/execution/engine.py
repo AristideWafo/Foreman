@@ -33,6 +33,7 @@ from foreman.core.store import (
     NewReservation,
     OrphanReservation,
     PlanRecord,
+    Reservation,
     StaleLease,
     StepRecord,
     Stores,
@@ -198,7 +199,9 @@ class ExecutionEngine:
         started: float,
     ) -> None:
         stores = self._stores
-        reservation = await stores.executions.reserve_idempotency(lease, step.seq)
+        reservation: (
+            Reservation | TakenOverReservation
+        ) = await stores.executions.reserve_idempotency(lease, step.seq)
         if isinstance(reservation, OrphanReservation):
             # Réservée sans résultat : rejouée seulement si l'outil se rappelle sans risque.
             if not self._replayable(step.tool):
