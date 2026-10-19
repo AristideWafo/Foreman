@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.16.0](https://github.com/AristideWafo/Foreman/compare/v0.15.0...v0.16.0) (2026-10-19)
+
+
+### Features
+
+* **approval:** balayage d'expiration des plans (S12, [#209](https://github.com/AristideWafo/Foreman/issues/209)) ([ee9370b](https://github.com/AristideWafo/Foreman/commit/ee9370be61e3672635f89f5a48a96bc5bbd0f69c))
+* **approval:** balayage d'expiration des plans (S12) ([36f95d7](https://github.com/AristideWafo/Foreman/commit/36f95d7b370a1f3e354911a544378625346b29be))
+* **contract:** invalidation du plan et statuts expired/invalidated (S12, [#208](https://github.com/AristideWafo/Foreman/issues/208)) ([c8f2fbb](https://github.com/AristideWafo/Foreman/commit/c8f2fbb8156dce20004f16e460c54c4b4d23dc72))
+* **contract:** invalidation du plan et statuts expired/invalidated (S12) ([3c08c93](https://github.com/AristideWafo/Foreman/commit/3c08c937740acdfa966c3bdf298ac748beeb731f))
+* **front:** carte plan invalidé ou expiré, Refaire le plan (S12, [#45](https://github.com/AristideWafo/Foreman/issues/45)) ([fca88a6](https://github.com/AristideWafo/Foreman/commit/fca88a6e60e7b33a62c3bc6472ae4b8140fa55b9))
+* **front:** plan invalidé ou expiré, Refaire le plan (S12, [#45](https://github.com/AristideWafo/Foreman/issues/45)) ([f0fa92d](https://github.com/AristideWafo/Foreman/commit/f0fa92d0d27b5e1096323b4e835230742555b8c3))
+* **plan:** base du plan foreman.plan/2 et contrôle avant approbation (S12, [#43](https://github.com/AristideWafo/Foreman/issues/43)) ([64fa566](https://github.com/AristideWafo/Foreman/commit/64fa5662d52bbe27c3d1caacc9cbd71660dfc18f))
+* **plan:** base du plan foreman.plan/2 et invalidation avant approbation (S12, [#43](https://github.com/AristideWafo/Foreman/issues/43)) ([767aee0](https://github.com/AristideWafo/Foreman/commit/767aee0d926df92c0243b5971528fa74d45b8d99))
+* **store:** invalidation du plan, expiration écrite, horloge injectée (PR-B S12) ([4cf98ca](https://github.com/AristideWafo/Foreman/commit/4cf98cabb7bf49890157c7281534ab428c226dd0))
+* **store:** invalidation du plan, expiration écrite, horloge injectée (S12, [#43](https://github.com/AristideWafo/Foreman/issues/43)) ([3267505](https://github.com/AristideWafo/Foreman/commit/3267505c6b138f602ea5ce5c834ff9b195da894b))
+
+
+### Bug Fixes
+
+* **plan:** rejeu admin idempotent, historique d'un plan /1 illisible sans 500 (S12, [#43](https://github.com/AristideWafo/Foreman/issues/43)) ([97d887c](https://github.com/AristideWafo/Foreman/commit/97d887c1f3ded6287861a76d91168c5dd2120a7a))
+* **store:** audit horodaté par now, raison d'invalidation validée, doc de retour arrière ([a5ac3ec](https://github.com/AristideWafo/Foreman/commit/a5ac3ecca623e16b322bc15812a8e739b0e30a17))
+
 ## [0.15.0](https://github.com/AristideWafo/Foreman/compare/v0.14.0...v0.15.0) (2026-10-19)
 
 
