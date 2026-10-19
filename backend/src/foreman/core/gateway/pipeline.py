@@ -150,7 +150,9 @@ def _valid_result(raw: object) -> AdapterResult | None:
         return None
     if not isinstance(output, dict):
         return None
-    return AdapterResult(output=output, logs=list(raw.logs))
+    if raw.created is not None and not isinstance(raw.created, bool):
+        return None
+    return AdapterResult(output=output, logs=list(raw.logs), created=raw.created)
 
 
 class ToolGateway:
@@ -400,20 +402,15 @@ class ToolGateway:
         if isinstance(raw, str):
             raise CallFailed(raw)
         fields = frozenset(tool.redact)
-        resources = self._resources(call, tool, raw.output)
-        for (
-            resource
-        ) in resources:  # une ressource n'a qu'un maître : jamais celle d'un autre projet
-            if await self._stores.registry.exists_elsewhere(
-                call.project_id, resource.provider, resource.resource_type, resource.external_id
-            ):
-                raise CallFailed("foreign_resource")
+        resources, reused = await self._resources(call, tool, raw)
         masked = redact_value(dict(raw.output), fields)
         output = (
             masked
             if isinstance(masked, dict) and json_size(masked) <= MAX_OUTPUT_BYTES
             else truncated_output(masked if isinstance(masked, dict) else {})
         )
+        if reused:  # après la troncature (jamais perdu) ; écrase une clé `reused` de l'adaptateur
+            output = {**output, "reused": True}
         entry = self._entry(
             call,
             trace,
@@ -427,24 +424,38 @@ class ToolGateway:
             output=output, logs=filter_logs(raw.logs), resources=resources, audit=entry
         )
 
-    @staticmethod
-    def _resources(
-        call: GatewayCall, tool: ToolDefinition, output: Mapping[str, JsonValue]
-    ) -> tuple[NewResource, ...]:
-        """Ressources CRÉÉES par l'appel, lues sur la sortie brute (le masquage ne doit pas altérer
-        l'identifiant). Une mise à jour (portée `update`) ne crée rien."""
+    async def _resources(
+        self, call: GatewayCall, tool: ToolDefinition, raw: AdapterResult
+    ) -> tuple[tuple[NewResource, ...], bool]:
+        """Ressources CRÉÉES par l'appel (lues sur la sortie brute : le masquage ne doit pas
+        altérer l'identifiant) et `reused` (la ressource existait déjà au registre de ce projet).
+
+        Une mise à jour (portée `update`) ne crée rien. Une ressource retrouvée n'est réutilisée
+        que si ce projet la possède déjà ; sinon (autre projet, ou absente de tout registre) elle
+        n'est pas adoptée : `foreign_resource`.
+        """
         entry = tool.registry
         creates = tool.effective_scope(call.params).kind == "create"
         if entry is None or not creates or call.params.get(DRY_RUN_PARAM) == DRY_RUN_VALUE:
-            return ()  # lecture, mise à jour ou essai à blanc : rien n'est créé
+            return (), False  # lecture, mise à jour ou essai à blanc : rien n'est créé
+        if raw.created is None:
+            raise CallFailed("invalid_output")  # l'adaptateur doit dire créé ou retrouvé
+        output = raw.output
         external_id = _identifier(output.get(entry.external_id, call.params.get(entry.external_id)))
         if external_id is None:
             raise CallFailed("invalid_output")
-        return (
-            NewResource(
+        registry = self._stores.registry
+        args = (call.project_id, tool.connector, entry.resource_type, external_id)
+        if raw.created:
+            if await registry.exists_elsewhere(*args):  # une ressource n'a qu'un maître
+                raise CallFailed("foreign_resource")
+            new = NewResource(
                 tool.connector, entry.resource_type, external_id, safe_url(output.get("web_url"))
-            ),
-        )
+            )
+            return (new,), False
+        if await registry.contains(*args):
+            return (), True
+        raise CallFailed("foreign_resource")
 
     # --- Étape 10 : audit ----------------------------------------------------------------------
 
