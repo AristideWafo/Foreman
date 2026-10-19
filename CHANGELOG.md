@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.15.0](https://github.com/AristideWafo/Foreman/compare/v0.14.0...v0.15.0) (2026-10-19)
+
+
+### Features
+
+* **front:** relancer un plan dont l'exécution est bloquée ([a204f7b](https://github.com/AristideWafo/Foreman/commit/a204f7b0b72f0aed894dc82ecc3dd09070e1aec8))
+* **front:** relancer un plan dont l'exécution est bloquée ([2b22261](https://github.com/AristideWafo/Foreman/commit/2b22261d19e523e7594e155a1f7a426ae9c5f73d))
+
+
+### Bug Fixes
+
+* **execution:** époque de l'adaptateur seul dans sa clé et dernier refus de l'étape bloquée ([dbaa868](https://github.com/AristideWafo/Foreman/commit/dbaa8685c21920291a36b63909cb1456db3a5295))
+* **execution:** époque des faux + cause lisible d'une exécution bloquée ([2367355](https://github.com/AristideWafo/Foreman/commit/236735545a8b2c7e8cc60a4674ef8b364f82f1b1))
+* **execution:** époque des faux dans la clé d'idempotence et cause lisible d'un blocage ([890a7b0](https://github.com/AristideWafo/Foreman/commit/890a7b06923ed6e829e22030d5b3dbfa2ee40ac8))
+
 ## [0.14.0](https://github.com/AristideWafo/Foreman/compare/v0.13.0...v0.14.0) (2026-10-19)
 
 
