@@ -41,7 +41,7 @@ function readFirstMessage(state: unknown): string | null {
  * Texte à renvoyer pour relancer la dernière exécution du projet (plan ou exécution seule) : le dernier
  * message utilisateur qui la précède. Le flux n'expose pas de lien message -> plan, d'où ce choix.
  */
-function findRetry(items: TimelineItem[]): { key: string; text: string } | null {
+export function findRetry(items: TimelineItem[]): { key: string; text: string } | null {
   const isRun = (i: TimelineItem) =>
     i.kind === "card" && (i.card.kind === "plan" || i.card.kind === "execution");
   const last = items.map(isRun).lastIndexOf(true);

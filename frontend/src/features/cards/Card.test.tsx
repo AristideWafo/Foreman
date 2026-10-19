@@ -2,7 +2,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import type { CardData, ExecutionCardData, PlanCardData } from "../../api/events";
-import { applyEvent, initialTimeline, parseEvent, type TimelineState } from "../events/timeline";
+import {
+  applyEvent,
+  foldExecutions,
+  initialTimeline,
+  parseEvent,
+  type TimelineState,
+} from "../events/timeline";
+import { findRetry } from "../chat/ProjectPage";
 import { Card } from "./Card";
 // Fixture réel : exporté par `make s01-fixture` depuis le scénario `test_s01_nominal` (#31).
 import s01 from "./s01-events.json";
@@ -13,7 +20,7 @@ import s10 from "./s10-events.json";
 // Fixture réel : exporté par `make s11-fixture` depuis le scénario S11 (#42).
 import s11 from "./s11-events.json";
 
-// Fixture PROVISOIRE écrit à la main : sera remplacé par celui de `make s12-fixture` (PR-D, #44).
+// Fixture réel : exporté par `make s12-fixture` depuis le scénario S12 (#44).
 import s12 from "./s12-events.json";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000001";
@@ -300,14 +307,30 @@ test("exécution bloquée : bouton « Relancer le plan » ; exécution réussie 
 
 // --- Critère de fin : S12, plan invalidé ---------------------------------------------------------
 
-test("S12, plan invalidé : raison, changements, sans « Valider le plan » ; approbation « Invalidée »", () => {
-  renderCards(replay(5, s12));
-  const plan = screen.getByRole("group", { name: /^Plan :/ });
-  expect(within(plan).getByText("Invalidé")).toBeVisible();
-  expect(within(plan).getByText("Le catalogue a changé")).toBeVisible();
-  expect(within(plan).getByText("Référentiel : infra-staging")).toBeVisible();
-  expect(within(plan).queryByRole("button", { name: "Valider le plan" })).toBeNull();
-  const approval = screen.getByRole("group", { name: "Approbation administrateur" });
-  expect(within(approval).getByRole("status")).toHaveTextContent("Invalidée");
-  expect(within(approval).queryByRole("button")).toBeNull();
+test("S12, plan v1 invalidé : raison, changements, sans « Valider le plan » ; « Refaire le plan » seulement si non remplacé", () => {
+  const state = replay(46, s12); // seq 46 : plan v1 invalidé (project_changed), plan v2 déjà exécuté
+  const items = foldExecutions(state.items);
+  const plan = items.find((i) => i.kind === "card" && i.card.kind === "plan" && !i.execution);
+  if (plan?.kind !== "card") throw new Error("plan v1 absent");
+  // Plan v2 plus récent : findRetry ne propose rien pour v1.
+  expect(findRetry(items)).toBeNull();
+  const client = new QueryClient();
+  render(
+    <QueryClientProvider client={client}>
+      <Card card={plan.card} projectId={PROJECT_ID} logs={plan.logs} retryText="Crée le projet" />
+    </QueryClientProvider>,
+  );
+  const group = screen.getByRole("group", { name: /^Plan :/ });
+  expect(within(group).getByText("Invalidé")).toBeVisible();
+  expect(within(group).getByText("Le projet a changé depuis ce plan")).toBeVisible();
+  expect(within(group).getByText("Registre : gitlab_group")).toBeVisible();
+  expect(within(group).queryByRole("button", { name: "Valider le plan" })).toBeNull();
+  expect(within(group).getByRole("button", { name: "Refaire le plan" })).toBeEnabled();
+});
+
+test("S12, plan invalidé le plus récent : findRetry renvoie le message d'origine", () => {
+  const events = [...s12.slice(0, 4), { ...s12[45], seq: 5 }]; // seq contigus // message, plan v1 proposé, puis sa réémission invalidée
+  expect(findRetry(foldExecutions(replay(5, events).items))).toMatchObject({
+    text: "Crée le projet Safe Eat : GitLab, puis déploiement en staging.",
+  });
 });
