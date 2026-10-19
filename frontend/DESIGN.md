@@ -111,7 +111,7 @@ Composants partagés (`components/`) : `CardHeading` (en-tête de carte), `Colla
 
 Existants : shadcn (`Button`, `Card`, `Badge`, `Alert`, `Textarea`, `InputGroup`, `Sidebar`, `Tooltip`,
 `Separator`, `Collapsible`, `Skeleton`, `Sheet`, `ScrollArea`, `MessageScroller`, `Message`, `Bubble`,
-`Marker`, `Trace`, `ToggleGroup`) et applicatifs : `LinkButton`, `PageHeader`, `AppSidebar`, `MemoryModeBadge`. À créer au besoin :
+`Marker`, `Trace`, `ToggleGroup`) et applicatifs : `LinkButton`, `PageHeader`, `AppSidebar`, `MemoryModeBadge`, `UserRoleBadge`. À créer au besoin :
 `BrandLogo` (logos svgl). Une carte = un composant par `kind` dans `features/cards/`, avec repli.
 
 ## Cartes de plan et d'exécution (Semaine 2)
@@ -185,6 +185,13 @@ Le rôle de l'utilisateur vient de `GET /api/me` (`useMe`), jamais d'une règle 
 
 **Carte plan** : si `admin_approval_required`, l'action devient **« Valider et transmettre à l'admin »** ; sur 202
 (`ApprovalPending`), la ligne de statut dit « Validé. En attente d'un administrateur. ».
+
+## Badge nom et rôle (barre latérale)
+
+Pied du panneau de projets : le nom (tronqué si long) et un `Badge` `secondary` avec le rôle en français
+(Développeur, Admin d'équipe, Admin d'organisation), lus via `useMe` (`/api/me`). Pendant le chargement ou
+après un échec : un `Skeleton` discret, sans message d'erreur. Sur mobile le panneau est masqué : le nom et
+le rôle sont alors dans l'infobulle de l'entrée « Compte » du rail. Aucune décision d'accès n'en découle.
 
 ## Ressources déjà présentes (Semaine 5)
 

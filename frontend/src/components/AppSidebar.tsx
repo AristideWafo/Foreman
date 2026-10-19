@@ -12,6 +12,7 @@ import type { ComponentType, SVGProps } from "react";
 import { Link } from "react-router-dom";
 import { LinkButton } from "@/components/LinkButton";
 import { MemoryModeBadge } from "@/components/MemoryModeBadge";
+import { ROLE_LABELS, UserRoleBadge, type UserRole } from "@/components/UserRoleBadge";
 import {
   Sidebar,
   SidebarContent,
@@ -38,6 +39,8 @@ interface AppSidebarProps {
   homeActive: boolean;
   /** Le serveur n'a pas de base : badge d'avertissement en pied de panneau. */
   memoryMode?: boolean;
+  /** Utilisateur courant (`/api/me`), `undefined` tant qu'il n'est pas connu. */
+  me?: { name: string; role: UserRole };
 }
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -79,6 +82,7 @@ export function AppSidebar({
   activeProjectId,
   homeActive,
   memoryMode = false,
+  me,
 }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" className="overflow-hidden *:data-[sidebar=sidebar]:flex-row">
@@ -103,7 +107,10 @@ export function AppSidebar({
           <SidebarMenu>
             <RailItem label="Informations" icon={InformationCircleIcon} />
             <RailItem label="Paramètres" icon={Cog6ToothIcon} />
-            <RailItem label="Compte" icon={UserCircleIcon} />
+            <RailItem
+              label={me ? `${me.name}, ${ROLE_LABELS[me.role]}` : "Compte"}
+              icon={UserCircleIcon}
+            />
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
@@ -143,11 +150,10 @@ export function AppSidebar({
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        {memoryMode && (
-          <SidebarFooter className="border-t p-4">
-            <MemoryModeBadge />
-          </SidebarFooter>
-        )}
+        <SidebarFooter className="gap-3 border-t p-4">
+          {memoryMode && <MemoryModeBadge />}
+          <UserRoleBadge me={me} />
+        </SidebarFooter>
       </Sidebar>
     </Sidebar>
   );
