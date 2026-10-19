@@ -21,7 +21,7 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from foreman.core.catalog import Catalog
-from foreman.core.events import ApprovalCardData, PlanCardData, UserRef
+from foreman.core.events import ApprovalCardData, Invalidation, PlanCardData, UserRef
 from foreman.core.execution.cards import execution_card
 from foreman.core.identity import Principal, Role
 from foreman.core.planning import PlanContent, plan_card, plan_card_id, plan_changes
@@ -160,6 +160,31 @@ class ApprovalService:
         elif isinstance(result, ApprovalRefused) and result.reason != "not_found":
             await self._after_refusal(project_id, plan, content, reissue=False)
         return result
+
+    async def expire_due(self) -> int:
+        """Balayage : écrit `expired` (store) puis réémet la carte plan et, si une approbation
+        était en attente, sa carte. Le store ne rend que les plans qui viennent d'expirer : un
+        second appel n'émet rien. Les cartes sont un affichage : jamais d'exception à leur sujet."""
+        expired = await self._stores.plans.expire_due(self._clock())
+        for plan in expired:
+            try:
+                content = PlanContent.model_validate(plan.content)
+                card = plan_card(plan, content, self._catalog, plan_card_id(plan.id))
+                card = card.model_copy(update={"invalidation": Invalidation(reason="expired")})
+                await self._events.append(plan.project_id, plan.id, card)
+                rule_id = None
+                for event in await self._events.read_after(plan.project_id, 0):
+                    if isinstance(event.data, ApprovalCardData) and event.data.plan_id == plan.id:
+                        rule_id = event.data.rule_id
+                if rule_id is not None:
+                    await self._emit_approval_card(
+                        plan.project_id, plan, content, "expired", None, rule_id
+                    )
+            except Exception as exc:
+                log.warning(
+                    "plan %s : cartes d'expiration non émises (%s)", plan.id, type(exc).__name__
+                )
+        return len(expired)
 
     async def _refuse_if_stale(
         self, project_id: UUID, plan: PlanRecord, content: PlanContent, plan_hash: str
