@@ -376,7 +376,7 @@ def test_admin_approval_over_http_approves_then_replays_and_a_rejection_invalida
     with TestClient(create_app(state)) as client:
         dev_id = UUID(client.get("/api/me", headers=dev).json()["user_id"])
         project = client.post("/api/projects", json={}, headers=dev).json()["id"]
-        planner = Planner(state.catalog, state.stores.plans)  # type: ignore[arg-type]
+        planner = Planner(state.catalog, state.stores.plans, state.stores.registry)  # type: ignore[arg-type]
         plans = [
             asyncio.run(planner.propose(UUID(project), draft(t), dev_id))[0] for t in ("a", "b")
         ]

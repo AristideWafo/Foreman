@@ -25,7 +25,9 @@ from foreman.core.catalog import DRAFT_ALLOWED_ENVIRONMENTS, Catalog, SkillStatu
 from foreman.core.events import (
     CardStep,
     ExpectedResource,
+    Invalidation,
     PlanCardData,
+    PlanChange,
     Reversibility,
     Sha256,
     SkillRef,
@@ -39,9 +41,9 @@ from foreman.core.references import (
     is_reference,
     parse_reference,
 )
-from foreman.core.store import NewPlan, PlanRecord, PlanStore
+from foreman.core.store import NewPlan, PlanRecord, PlanStore, ResourceRecord, ResourceRegistry
 
-PLAN_SCHEMA: Final = "foreman.plan/1"
+PLAN_SCHEMA: Final = "foreman.plan/2"
 MAX_STEPS: Final = 20
 MAX_PLAN_BYTES: Final = 64 * 1024
 MAX_KEY_CHARS: Final = 300
@@ -85,12 +87,18 @@ class PlanReferentialContent(_Strict):
     sha256: Sha256
 
 
+class PlanBasis(_Strict):
+    """Base du projet figée à la proposition : approuver le hash, c'est approuver cette base."""
+
+    registry_sha256: Sha256
+
+
 class PlanContent(_Strict):
     """Contenu canonique haché. Tout champ ajouté change le hash de tous les plans."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
-    schema_: Annotated[Literal["foreman.plan/1"], Field(alias="schema")] = PLAN_SCHEMA
+    schema_: Annotated[Literal["foreman.plan/2"], Field(alias="schema")] = PLAN_SCHEMA
     project_id: UUID
     title: Annotated[str, Field(max_length=200)]
     summary: Annotated[str, Field(max_length=500)]
@@ -102,6 +110,7 @@ class PlanContent(_Strict):
     skills: list[PlanSkillContent]
     referentials: list[PlanReferentialContent]
     policy_sha256: Sha256
+    basis: PlanBasis
 
     def canonical(self) -> dict[str, Any]:
         return self.model_dump(mode="json", by_alias=True)
@@ -138,6 +147,12 @@ def canonical_json(value: object) -> bytes:
 
 def content_hash(content: Mapping[str, Any]) -> str:
     return "sha256:" + hashlib.sha256(canonical_json(content)).hexdigest()
+
+
+def registry_hash(rows: Sequence[ResourceRecord]) -> str:
+    """Empreinte du registre du projet : `(provider, resource_type, external_id)` triés."""
+    triples = sorted([r.provider, r.resource_type, r.external_id] for r in rows)
+    return content_hash({"registry": triples})
 
 
 # --- Validation -------------------------------------------------------------------------------
@@ -263,7 +278,9 @@ def _expected_name(params: Mapping[str, JsonValue], title: str) -> str:
     return title[:200]
 
 
-def build_content(draft: Draft, project_id: UUID, catalog: Catalog) -> tuple[PlanContent, str]:
+def build_content(
+    draft: Draft, project_id: UUID, catalog: Catalog, registry_sha256: str | None = None
+) -> tuple[PlanContent, str]:
     """Contenu canonique et hash, ou `InvalidPlan`. Pure : rien n'est lu ni écrit.
 
     Un plan sans `environment` est refusé : l'agent doit le demander (`ask_user`), le serveur ne
@@ -340,6 +357,7 @@ def build_content(draft: Draft, project_id: UUID, catalog: Catalog) -> tuple[Pla
             for ref in sorted(catalog.referentiels.values(), key=lambda r: r.name)
         ],
         policy_sha256=catalog.policy_sha256,
+        basis=PlanBasis(registry_sha256=registry_sha256 or registry_hash([])),
     )
     canonical = content.canonical()
     if _has_nul(canonical):
@@ -379,6 +397,38 @@ def _skills(names: Sequence[str], catalog: Catalog, environment: str) -> list[Pl
     return result
 
 
+MAX_CHANGES: Final = 20
+
+
+def plan_changes(
+    content: PlanContent, catalog: Catalog, registry_rows: Sequence[ResourceRecord]
+) -> list[PlanChange]:
+    """Ce qui a changé depuis la proposition. Pure. Des noms du catalogue ou des types de
+    ressource seulement : jamais un identifiant externe ni un contenu."""
+    changes: list[PlanChange] = []
+    if content.policy_sha256 != catalog.policy_sha256:
+        changes.append(PlanChange(kind="policy", name="policy"))
+    for ref in content.referentials:
+        current = catalog.referentiels.get(ref.name)
+        if current is None or current.sha256 != ref.sha256:
+            changes.append(PlanChange(kind="referential", name=ref.name))
+    for skill in content.skills:
+        current_skill = catalog.skills.get(skill.name)
+        if current_skill is None or (current_skill.version, current_skill.sha256) != (
+            skill.version,
+            skill.sha256,
+        ):
+            changes.append(PlanChange(kind="skill", name=skill.name))
+    for tool in dict.fromkeys((s.tool, s.tool_version) for s in content.steps):
+        current_tool = catalog.tools.get(tool[0])
+        if current_tool is None or current_tool.version != tool[1]:
+            changes.append(PlanChange(kind="tool", name=tool[0]))
+    if registry_hash(registry_rows) != content.basis.registry_sha256:
+        types = sorted({r.resource_type for r in registry_rows}) or ["registry"]
+        changes.extend(PlanChange(kind="registry", name=t[:100]) for t in types)
+    return changes[:MAX_CHANGES]
+
+
 # --- Persistance et carte ---------------------------------------------------------------------
 
 
@@ -413,6 +463,9 @@ def plan_card(
         skills=[SkillRef(name=s.name, version=s.version, sha256=s.sha256) for s in content.skills],
         expected_resources=content.expected_resources,
         approvable=record.status == "proposed",
+        invalidation=Invalidation.model_validate(record.invalidation)
+        if record.invalidation is not None
+        else None,
         admin_approval_required=True if environment.admin_approval_required else None,
     )
 
@@ -428,10 +481,15 @@ def _utc_now() -> datetime:
 
 class Planner:
     def __init__(
-        self, catalog: Catalog, plans: PlanStore, clock: Callable[[], datetime] = _utc_now
+        self,
+        catalog: Catalog,
+        plans: PlanStore,
+        registry: ResourceRegistry,
+        clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         self._catalog = catalog
         self._plans = plans
+        self._registry = registry
         self._clock = clock
 
     @property
@@ -442,7 +500,8 @@ class Planner:
         self, project_id: UUID, draft: Draft, requested_by: UUID
     ) -> tuple[PlanRecord, PlanContent]:
         """Valide, hache puis persiste. Un plan invalide n'écrit rien (`InvalidPlan`)."""
-        content, digest = build_content(draft, project_id, self._catalog)
+        rows = await self._registry.list_for_project(project_id)
+        content, digest = build_content(draft, project_id, self._catalog, registry_hash(rows))
         record = await self._plans.create(
             NewPlan(
                 project_id=project_id,

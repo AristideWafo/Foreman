@@ -127,7 +127,10 @@ async def turn(arguments: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[UU
     state, stores = in_memory_stores()
     log = InMemoryEventLog()
     service = TurnService(
-        ProposalProvider(arguments), log, Planner(catalog, stores.plans), InMemoryProjectStore()
+        ProposalProvider(arguments),
+        log,
+        Planner(catalog, stores.plans, stores.registry),
+        InMemoryProjectStore(),
     )
     project_id = uuid4()
     await service.run(TurnRequest(DEV_USER_ID, project_id, "salut"), service.begin(project_id))
