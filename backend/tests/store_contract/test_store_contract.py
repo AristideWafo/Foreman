@@ -227,6 +227,8 @@ async def test_invalidate_is_idempotent_checks_the_hash_and_leaves_an_audit(
     plan = await new_plan(harness, project)
     plans = harness.stores.plans
     reason = {"reason": "catalog_changed", "changes": [{"kind": "policy", "name": "matrix"}]}
+    with pytest.raises(StoreError):  # raison absente ou inconnue : refus net, rien d'écrit
+        await plans.invalidate(project, plan.id, plan.content_hash, {"reason": "nope"}, NOW)
     wrong = await plans.invalidate(project, plan.id, "sha256:" + "f" * 64, reason, NOW)
     assert wrong == ApprovalRefused("plan_hash_mismatch")
     assert await plans.invalidate(project, plan.id, plan.content_hash, reason, NOW) == Invalidated(
@@ -263,6 +265,10 @@ async def test_expiry_is_written_by_decisions_and_by_expire_due_on_the_injected_
         project, waiting.id, waiting.content_hash, APPROVER, 2, start_execution=False, now=NOW
     )
     decided = await new_plan(harness, project, expires_at=due)
+    replayed = await new_plan(harness, project, expires_at=due)
+    await plans.approve(
+        project, replayed.id, replayed.content_hash, APPROVER, 2, start_execution=False, now=NOW
+    )
     running = await new_plan(harness, project, expires_at=due)
     await plans.approve(project, running.id, running.content_hash, APPROVER, 2, now=NOW)
 
@@ -270,6 +276,9 @@ async def test_expiry_is_written_by_decisions_and_by_expire_due_on_the_injected_
     later = due + timedelta(seconds=1)
     refused = await plans.approve(project, decided.id, decided.content_hash, APPROVER, 2, now=later)
     assert refused == ApprovalRefused("plan_not_approvable")
+    assert await plans.approve(  # rejeu sur dev_approved échu : refusé, pas l'ancienne approbation
+        project, replayed.id, replayed.content_hash, APPROVER, 2, start_execution=False, now=later
+    ) == ApprovalRefused("plan_not_approvable")
     swept = await plans.expire_due(later)
     assert {p.id for p in swept} == {proposed.id, waiting.id}  # ni `decided` (fait), ni `running`
     assert all(p.status == "expired" and p.invalidation is None for p in swept)
@@ -280,7 +289,8 @@ async def test_expiry_is_written_by_decisions_and_by_expire_due_on_the_injected_
     audit = await harness.stores.audit.list_for_project(project)
     expired = [(a.plan_id, a.decision, a.rule_id, a.actor_kind) for a in audit]
     assert sorted(expired, key=str) == sorted(
-        [(p.id, "expired", "expired", "system") for p in (proposed, waiting, decided)], key=str
+        [(p.id, "expired", "expired", "system") for p in (proposed, waiting, decided, replayed)],
+        key=str,
     )  # une audit par plan, jamais deux
 
 

@@ -117,7 +117,10 @@ class ApprovalService:
         if isinstance(loaded, ApprovalRefused):
             return loaded
         plan, content = loaded
-        if plan.status == "dev_approved":
+        # Le statut reste `dev_approved` après l'approbation admin : un rejeu reste idempotent.
+        if plan.status == "dev_approved" and not await self._stores.plans.has_admin_approval(
+            plan.id, plan_hash
+        ):
             stale = await self._refuse_if_stale(project_id, plan, content, plan_hash)
             if stale is not None:
                 return stale

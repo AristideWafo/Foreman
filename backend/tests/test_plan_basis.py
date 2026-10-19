@@ -99,3 +99,17 @@ async def test_registry_change_after_dev_approval_invalidates_both_cards() -> No
     latest = {e.data.card_id: e.data.status for e in await events.read_after(project, 0)}
     assert latest[approval_card_id(record.id)] == "invalidated"
     assert latest[record.id.hex] == "invalidated"
+
+
+async def test_admin_replay_stays_idempotent_after_registry_changes() -> None:
+    state, stores, events, project, record, service = await setup()
+    await service.approve(project, record.id, record.content_hash, DEV_PRINCIPAL)
+    first = await service.approve_admin(project, record.id, record.content_hash, ADMIN)
+    assert isinstance(first, Approved) and first.created
+    cards = len(await events.read_after(project, 0))
+    add_resource(state, project)  # l'exécution elle-même change le registre
+    again = await service.approve_admin(project, record.id, record.content_hash, ADMIN)
+    assert isinstance(again, Approved) and not again.created
+    assert len(await events.read_after(project, 0)) == cards
+    plan = await stores.plans.get(project, record.id)
+    assert plan is not None and plan.status != "invalidated"

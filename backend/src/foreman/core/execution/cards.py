@@ -151,7 +151,10 @@ async def execution_card(
     plan = await stores.plans.get(project_id, execution.plan_id)
     if plan is None:
         return None
-    content = PlanContent.model_validate(plan.content)
+    try:
+        content = PlanContent.model_validate(plan.content)
+    except ValidationError:
+        return None  # plan d'un ancien schéma (/1) : illisible, jamais une 500
     by_seq = {s.seq: s for s in content.steps}
     steps = [
         CardStep(
