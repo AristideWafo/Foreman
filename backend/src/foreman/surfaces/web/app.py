@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from collections.abc import AsyncIterator, MutableMapping
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -75,7 +76,8 @@ def create_app(app_state: App | None = None) -> FastAPI:
 
     @api.get("/healthz", response_model=HealthResponse)
     async def healthz() -> HealthResponse:
-        version = os.environ.get(ENV_VERSION, "")[:32] or DEFAULT_VERSION
+        raw = os.environ.get(ENV_VERSION, "")
+        version = re.sub(r"[^A-Za-z0-9._+-]", "_", raw)[:32] or DEFAULT_VERSION
         return HealthResponse.model_validate(
             {
                 "status": "ok",

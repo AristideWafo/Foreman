@@ -83,6 +83,8 @@ def test_healthz_reports_the_version_from_the_environment(monkeypatch: pytest.Mo
     monkeypatch.setenv("FOREMAN_VERSION", "0.2.0")
     expected = {"status": "ok", "profile": "web", "persistence": "memory"}
     assert client.get("/healthz").json() == {**expected, "version": "0.2.0"}
+    monkeypatch.setenv("FOREMAN_VERSION", "1.0 (abc)")
+    assert client.get("/healthz").json() == {**expected, "version": "1.0__abc_"}
     monkeypatch.delenv("FOREMAN_VERSION")
     assert client.get("/healthz").json() == {**expected, "version": "dev"}
 
