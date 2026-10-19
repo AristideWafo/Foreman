@@ -103,6 +103,22 @@ class ExpectedResource(_Model):
     name: Annotated[str, Field(max_length=200)]
 
 
+InvalidationReason = Literal["admin_rejected", "catalog_changed", "project_changed", "expired"]
+PlanChangeKind = Literal["policy", "referential", "skill", "tool", "registry"]
+
+
+class PlanChange(_Model):
+    """Élément du catalogue ou du projet qui a changé : un nom, jamais une valeur."""
+
+    kind: PlanChangeKind
+    name: Annotated[str, Field(max_length=100)]
+
+
+class Invalidation(_Model):
+    reason: InvalidationReason
+    changes: Annotated[list[PlanChange], Field(max_length=20)] = []
+
+
 class PlanCardData(_Model):
     card_id: Annotated[str, Field(max_length=64)]
     # Sans valeur par défaut : le discriminant doit être requis dans le schéma publié.
@@ -127,6 +143,8 @@ class PlanCardData(_Model):
     admin_approval_required: Annotated[
         bool | None, Field(description="Vrai si l'environnement exige l'approbation d'un admin")
     ] = None
+    # Ajout S12 (additif en v1) : pourquoi le plan est invalidé ou expiré.
+    invalidation: Invalidation | None = None
 
 
 class Budget(_Model):
@@ -211,7 +229,7 @@ class ApprovalCardData(_Model):
     missing: Annotated[list[Requirement], Field(max_length=10)]
     approver_roles: Annotated[list[Role], Field(max_length=3)]
     requested_by: UserRef
-    status: Literal["pending", "approved", "rejected"]
+    status: Literal["pending", "approved", "rejected", "expired", "invalidated"]
     decided_by: UserRef | None = None
 
 

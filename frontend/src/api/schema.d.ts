@@ -286,7 +286,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "approved" | "rejected";
+            status: "pending" | "approved" | "rejected" | "expired" | "invalidated";
         };
         /**
          * ApprovalPending
@@ -746,6 +746,19 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** Invalidation */
+        Invalidation: {
+            /**
+             * Changes
+             * @default []
+             */
+            changes: components["schemas"]["PlanChange"][];
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "admin_rejected" | "catalog_changed" | "project_changed" | "expired";
+        };
         JsonValue: unknown;
         /** Link */
         Link: {
@@ -856,6 +869,8 @@ export interface components {
              * @default null
              */
             expected_resources: components["schemas"]["ExpectedResource"][] | null;
+            /** @default null */
+            invalidation: components["schemas"]["Invalidation"] | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -895,6 +910,19 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * PlanChange
+         * @description Élément du catalogue ou du projet qui a changé : un nom, jamais une valeur.
+         */
+        PlanChange: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "policy" | "referential" | "skill" | "tool" | "registry";
+            /** Name */
+            name: string;
+        };
         /** PlanView */
         PlanView: {
             /**
@@ -921,6 +949,7 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            invalidation?: components["schemas"]["Invalidation"] | null;
             /**
              * Status
              * @enum {string}

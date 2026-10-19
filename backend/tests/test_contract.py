@@ -73,6 +73,19 @@ NEW_EXAMPLES = {
             "approvable": True,
         },
     ),
+    "card (plan invalidé, Semaine 6)": (
+        "card",
+        {
+            **EXAMPLES["card"],
+            "plan_id": str(uuid4()),
+            "plan_hash": SHA,
+            "status": "invalidated",
+            "invalidation": {
+                "reason": "catalog_changed",
+                "changes": [{"kind": "skill", "name": "gitlab-project-creation"}],
+            },
+        },
+    ),
     "card (exécution)": (
         "card",
         {
@@ -431,3 +444,22 @@ def test_clarification_card_rejects_out_of_bounds_input() -> None:
     ):
         with pytest.raises(ValidationError):
             ADAPTER.validate_python(envelope("card", bad))
+
+
+def test_plan_view_roundtrips_invalidation_and_bounds_it() -> None:
+    now = datetime.now(UTC)
+    inv = {"reason": "expired", "changes": [{"kind": "registry", "name": "gitlab"}]}
+    view = {
+        "id": str(uuid4()),
+        "version": 1,
+        "status": "invalidated",
+        "content_hash": SHA,
+        "content": {},
+        "created_at": now,
+        "expires_at": now,
+        "invalidation": inv,
+    }
+    assert json.loads(PlanView.model_validate(view).model_dump_json())["invalidation"] == inv
+    too_many = {**inv, "changes": [{"kind": "tool", "name": "t"}] * 21}
+    with pytest.raises(ValidationError):
+        PlanView.model_validate({**view, "invalidation": too_many})

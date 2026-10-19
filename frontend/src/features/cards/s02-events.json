@@ -213,7 +213,8 @@
         }
       ],
       "approvable": true,
-      "admin_approval_required": null
+      "admin_approval_required": null,
+      "invalidation": null
     }
   },
   {
