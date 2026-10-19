@@ -49,7 +49,7 @@
           "id": "q1-1",
           "field": "environment",
           "prompt": "Sur quel environnement faut-il déployer Safe Eat ?",
-          "options": ["staging"],
+          "options": ["staging", "production"],
           "status": "open",
           "answer": null
         }
@@ -105,7 +105,7 @@
           "id": "q1-1",
           "field": "environment",
           "prompt": "Sur quel environnement faut-il déployer Safe Eat ?",
-          "options": ["staging"],
+          "options": ["staging", "production"],
           "status": "answered",
           "answer": "staging"
         }

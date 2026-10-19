@@ -16,7 +16,7 @@ input:
   type: object
   required: [environment, project, playbook, mode]
   properties:
-    environment: {enum: [staging]}    # production arrive avec sa règle (R7)
+    environment: {enum: [staging, production]}
     project:     {type: string, pattern: "^[a-z0-9][a-z0-9-]{1,40}$"}
     playbook:    {enum: [bootstrap_project, deploy_compose]}
     mode:        {enum: [check, apply]}

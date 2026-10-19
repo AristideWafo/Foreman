@@ -21,7 +21,7 @@ from uuid import UUID
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from foreman.core.catalog import Catalog, SkillStatus, ToolDefinition
+from foreman.core.catalog import DRAFT_ALLOWED_ENVIRONMENTS, Catalog, SkillStatus, ToolDefinition
 from foreman.core.events import (
     CardStep,
     ExpectedResource,
@@ -319,7 +319,7 @@ def build_content(draft: Draft, project_id: UUID, catalog: Catalog) -> tuple[Pla
                     name=_expected_name(proposed.params, proposed.title),
                 )
             )
-    skills = _skills(draft.skills or (), catalog)
+    skills = _skills(draft.skills or (), catalog, environment)
     environments = catalog.referentiels.get("environments")
     configured = environments.data.get("environments") if environments else None
     entry = configured.get(environment) if isinstance(configured, dict) else None
@@ -363,12 +363,14 @@ def _has_nul(value: object) -> bool:
     return False
 
 
-def _skills(names: Sequence[str], catalog: Catalog) -> list[PlanSkillContent]:
+def _skills(names: Sequence[str], catalog: Catalog, environment: str) -> list[PlanSkillContent]:
     result: list[PlanSkillContent] = []
     for name in dict.fromkeys(names):  # sans doublon, ordre conservé
         skill = catalog.skills.get(name)
-        if skill is None:
-            raise InvalidPlan
+        if skill is None or (
+            skill.status == "draft" and environment not in DRAFT_ALLOWED_ENVIRONMENTS
+        ):
+            raise InvalidPlan  # un Skill en brouillon n'est utilisable qu'en staging
         result.append(
             PlanSkillContent(
                 name=skill.name, version=skill.version, status=skill.status, sha256=skill.sha256

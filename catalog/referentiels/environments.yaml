@@ -1,6 +1,10 @@
-# Valeurs fictives. Le staging est le seul environnement du PoC.
+# Valeurs fictives. Staging et production : le plafond d'autonomie de production est 3.
 environments:
   staging:
     max_level: 4
     admin_approval_required: false
+    default_level: 2
+  production:
+    max_level: 3
+    admin_approval_required: true
     default_level: 2
