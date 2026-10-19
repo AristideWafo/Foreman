@@ -1,6 +1,10 @@
-import { CheckIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
+import {
+  CheckIcon,
+  ClipboardDocumentListIcon,
+  ExclamationTriangleIcon,
+} from "@heroicons/react/24/outline";
 import type { ExecutionCardData, PlanCardData } from "../../api/events";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CardHeading } from "@/components/CardHeading";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -12,7 +16,13 @@ import { FactList } from "./FactList";
 import { RETRYABLE_STATES, RetryPlan } from "./RetryPlan";
 import { StepList } from "./StepList";
 import { usePlanApproval } from "./usePlanApproval";
-import { executionStateLabel, planStatusLabel, shortHash } from "./vocabulary";
+import {
+  changeKindLabel,
+  executionStateLabel,
+  invalidationReasonLabel,
+  planStatusLabel,
+  shortHash,
+} from "./vocabulary";
 
 /** Action « Valider le plan » : un clic. Recréée (`key`) à chaque carte réémise. */
 function ApprovePlan({
@@ -61,6 +71,30 @@ function ApprovePlan({
   );
 }
 
+/** Plan invalidé ou expiré : la raison, ce qui a changé, et le rappel que les fournisseurs relèvent d'un autre contrôle. */
+function InvalidationNotice({ card }: { card: PlanCardData }) {
+  const reason = card.invalidation?.reason ?? (card.status === "expired" ? "expired" : null);
+  const changes = card.invalidation?.changes ?? [];
+  return (
+    <Alert>
+      <ExclamationTriangleIcon aria-hidden="true" />
+      <AlertTitle>{invalidationReasonLabel(reason) ?? "Plan invalidé"}</AlertTitle>
+      <AlertDescription>
+        {changes.length > 0 ? (
+          <ul className="list-disc pl-4">
+            {changes.map((c) => (
+              <li key={`${c.kind}:${c.name}`}>
+                {changeKindLabel(c.kind)} : {c.name}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p>La dérive chez les fournisseurs relève d'un autre contrôle, fait à l'exécution.</p>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 /**
  * Carte plan : ce que l'agent propose, et l'unique action « Valider le plan ». Une fois le plan validé,
  * l'exécution s'affiche dans cette même carte : mêmes étapes, statuts et journaux en direct.
@@ -82,6 +116,7 @@ export function PlanCard({
   const steps = execution?.steps ?? card.steps;
   const done = steps.filter((s) => s.status === "succeeded").length;
   const { plan_id: planId, plan_hash: planHash } = card;
+  const stale = !execution && (card.status === "invalidated" || card.status === "expired");
   const canApprove = !execution && card.approvable === true && card.status === "proposed";
   const stack = Object.entries(card.stack ?? {});
   const skills = card.skills ?? [];
@@ -98,6 +133,7 @@ export function PlanCard({
         description={card.summary}
       />
       <CardContent className="flex flex-col gap-4">
+        {stale ? <InvalidationNotice card={card} /> : null}
         <CollapsibleSection title={`Étapes : ${done} sur ${steps.length} terminées`}>
           <StepList steps={steps} logs={logs} />
         </CollapsibleSection>
@@ -154,6 +190,14 @@ export function PlanCard({
             adminRequired={card.admin_approval_required === true}
           />
         </CardFooter>
+      ) : null}
+      {retryText && stale ? (
+        <RetryPlan
+          projectId={projectId}
+          text={retryText}
+          label="Refaire le plan"
+          description="Ce plan ne peut plus être validé. Refaites-le pour obtenir un plan à jour."
+        />
       ) : null}
       {retryText && execution && RETRYABLE_STATES.includes(execution.state) ? (
         <RetryPlan projectId={projectId} text={retryText} />

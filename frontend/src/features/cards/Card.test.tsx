@@ -13,6 +13,9 @@ import s10 from "./s10-events.json";
 // Fixture réel : exporté par `make s11-fixture` depuis le scénario S11 (#42).
 import s11 from "./s11-events.json";
 
+// Fixture PROVISOIRE écrit à la main : sera remplacé par celui de `make s12-fixture` (PR-D, #44).
+import s12 from "./s12-events.json";
+
 const PROJECT_ID = "00000000-0000-4000-8000-000000000001";
 const PLAN_ID = "00000000-0000-4000-8000-000000000003";
 const PLAN_HASH = `sha256:${"0".repeat(63)}1`;
@@ -293,4 +296,18 @@ test("exécution bloquée : bouton « Relancer le plan » ; exécution réussie 
   ok.unmount();
   view("blocked");
   expect(screen.getByRole("button", { name: "Relancer le plan" })).toBeEnabled();
+});
+
+// --- Critère de fin : S12, plan invalidé ---------------------------------------------------------
+
+test("S12, plan invalidé : raison, changements, sans « Valider le plan » ; approbation « Invalidée »", () => {
+  renderCards(replay(5, s12));
+  const plan = screen.getByRole("group", { name: /^Plan :/ });
+  expect(within(plan).getByText("Invalidé")).toBeVisible();
+  expect(within(plan).getByText("Le catalogue a changé")).toBeVisible();
+  expect(within(plan).getByText("Référentiel : infra-staging")).toBeVisible();
+  expect(within(plan).queryByRole("button", { name: "Valider le plan" })).toBeNull();
+  const approval = screen.getByRole("group", { name: "Approbation administrateur" });
+  expect(within(approval).getByRole("status")).toHaveTextContent("Invalidée");
+  expect(within(approval).queryByRole("button")).toBeNull();
 });

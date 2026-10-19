@@ -1,0 +1,182 @@
+[
+  {
+    "v": 1,
+    "seq": 1,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:01Z",
+    "type": "message",
+    "data": {
+      "role": "user",
+      "text": "Déploie Safe Eat en production"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 2,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:02Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000003",
+      "kind": "plan",
+      "title": "Safe Eat : déploiement en production",
+      "summary": "Préparation du serveur de production, déploiement Compose, puis vérification de santé. Un administrateur doit approuver avant l'exécution.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Préparer le serveur de production",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        }
+      ],
+      "plan_id": "00000000-0000-4000-8000-000000000003",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "status": "proposed",
+      "environment": "production",
+      "autonomy_level": 2,
+      "stack": {
+        "backend": "go-api"
+      },
+      "skills": [],
+      "expected_resources": [
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        }
+      ],
+      "approvable": true,
+      "admin_approval_required": true,
+      "invalidation": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 3,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:00:03Z",
+    "type": "card",
+    "data": {
+      "card_id": "approval-00000000000040008000000000000003",
+      "kind": "approval",
+      "plan_id": "00000000-0000-4000-8000-000000000003",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "plan_card_id": "00000000000040008000000000000003",
+      "environment": "production",
+      "rule_id": "R7-ecriture-production",
+      "missing": ["admin_approved"],
+      "approver_roles": ["team_admin", "org_admin"],
+      "requested_by": {
+        "name": "dev"
+      },
+      "status": "pending",
+      "decided_by": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 4,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:04Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000003",
+      "kind": "plan",
+      "title": "Safe Eat : déploiement en production",
+      "summary": "Préparation du serveur de production, déploiement Compose, puis vérification de santé. Un administrateur doit approuver avant l'exécution.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Préparer le serveur de production",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        }
+      ],
+      "plan_id": "00000000-0000-4000-8000-000000000003",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "status": "invalidated",
+      "environment": "production",
+      "autonomy_level": 2,
+      "stack": {
+        "backend": "go-api"
+      },
+      "skills": [],
+      "expected_resources": [
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        }
+      ],
+      "approvable": false,
+      "admin_approval_required": true,
+      "invalidation": {
+        "reason": "catalog_changed",
+        "changes": [
+          {
+            "kind": "referential",
+            "name": "infra-staging"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "v": 1,
+    "seq": 5,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:00:05Z",
+    "type": "card",
+    "data": {
+      "card_id": "approval-00000000000040008000000000000003",
+      "kind": "approval",
+      "plan_id": "00000000-0000-4000-8000-000000000003",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "plan_card_id": "00000000000040008000000000000003",
+      "environment": "production",
+      "rule_id": "R7-ecriture-production",
+      "missing": ["admin_approved"],
+      "approver_roles": ["team_admin", "org_admin"],
+      "requested_by": {
+        "name": "dev"
+      },
+      "status": "invalidated",
+      "decided_by": null
+    }
+  }
+]

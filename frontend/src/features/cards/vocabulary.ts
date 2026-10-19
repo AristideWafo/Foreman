@@ -8,7 +8,14 @@ import {
   PlayCircleIcon,
 } from "@heroicons/react/24/outline";
 import type { ComponentType, SVGProps } from "react";
-import type { CardStep, ExecutionState, PlanStatus, StepStatus } from "../../api/events";
+import type {
+  CardStep,
+  ExecutionState,
+  PlanChange,
+  PlanCardData,
+  PlanStatus,
+  StepStatus,
+} from "../../api/events";
 
 export type Icon = ComponentType<SVGProps<SVGSVGElement>>;
 export type LineStatus = "running" | "error" | "pending" | undefined;
@@ -82,3 +89,21 @@ export function shortHash(hash: string): string {
   const head = (hex ?? "").slice(0, 12);
   return `${prefix ? `${prefix}:` : ""}${head}…`;
 }
+
+const INVALIDATION_REASON: Record<NonNullable<PlanCardData["invalidation"]>["reason"], string> = {
+  catalog_changed: "Le catalogue a changé",
+  project_changed: "Le projet a changé depuis ce plan",
+  admin_rejected: "Refusé par un administrateur",
+  expired: "Plan expiré",
+};
+export const invalidationReasonLabel = (value: string | null | undefined) =>
+  label(INVALIDATION_REASON, value);
+
+const CHANGE_KIND: Record<PlanChange["kind"], string> = {
+  policy: "Règle",
+  referential: "Référentiel",
+  skill: "Skill",
+  tool: "Outil",
+  registry: "Registre",
+};
+export const changeKindLabel = (value: string | null | undefined) => label(CHANGE_KIND, value);

@@ -3,6 +3,7 @@ import type { components } from "./schema";
 /** Enveloppe d'événement du flux SSE (union discriminée sur `type`). */
 export type ProjectEvent = components["schemas"]["Event"];
 export type PlanCardData = components["schemas"]["PlanCardData"];
+export type PlanChange = components["schemas"]["PlanChange"];
 export type ExecutionCardData = components["schemas"]["ExecutionCardData"];
 /** Données d'une carte : union discriminée sur `kind` (`plan`, `execution`, `clarification` ou `approval`). */
 export type ClarificationCardData = components["schemas"]["ClarificationCardData"];
