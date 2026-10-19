@@ -54,7 +54,9 @@ services:
       - traefik.http.routers.${PROJECT}.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}
       - traefik.http.routers.${PROJECT}.tls=true
       - traefik.http.routers.${PROJECT}.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
-      - traefik.http.routers.${PROJECT}.middlewares=${PROJECT}-auth,${PROJECT}-headers,${PROJECT}-compress
+      # Authentification : active par défaut. FOREMAN_AUTH_PREFIX= (défini et vide dans .env) retire le
+      # middleware du routeur : le site devient public. Choix explicite du propriétaire, voir DEPLOYMENT.md.
+      - traefik.http.routers.${PROJECT}.middlewares=${FOREMAN_AUTH_PREFIX-${PROJECT}-auth,}${PROJECT}-headers,${PROJECT}-compress
       - traefik.http.routers.${PROJECT}.service=${PROJECT}
 
       # Authentification HTTP sur tout le site, flux SSE compris (le navigateur renvoie les

@@ -56,6 +56,11 @@ Un verrou empêche deux déploiements simultanés d'un même projet.
 `FOREMAN_BASIC_AUTH_USERS` dans `/opt/<projet>/.env`, `deploy-custom.sh` et `docker compose` refusent de
 déployer : le site ne peut pas être publié ouvert par oubli. Un mot de passe en clair est refusé aussi.
 
+**Ouvrir le site (déconseillé, choix explicite).** Pour retirer l'authentification de façon durable (elle
+revient sinon à chaque déploiement), ajouter dans `/opt/<projet>/.env` la ligne `FOREMAN_AUTH_PREFIX=`
+(définie et vide). L'application est alors joignable par tout internet : à réserver à un essai, avec
+`FOREMAN_AUTH_MODE=none`. Pour remettre la protection, supprimer cette ligne et redéployer.
+
 1. Sur le serveur, générer l'empreinte (le mot de passe ne s'affiche pas et n'entre pas dans l'historique) :
 
    ```bash
