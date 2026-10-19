@@ -862,6 +862,19 @@ async def test_a_group_found_in_this_projects_registry_is_reused_without_a_new_r
     assert len(await world.stores.registry.list_for_project(first.project_id)) == 1
 
 
+async def test_the_gateway_overrides_a_reused_key_returned_by_the_adapter() -> None:
+    adapter = MalformedAdapter({"group_id": 1000, "reused": False}, [], created=True)
+    world = make_world(gitlab=adapter)
+    first = await start(world, ONE_GROUP)
+    await engine_step(world, first, 1)
+    await world.stores.executions.finish(first.lease, "succeeded")
+    adapter._created = False
+    again = [{**group_step(1, 1000, "safe-eat"), "idempotency_key": "k-replay"}]
+    second = await start(world, again, project_id=first.project_id)
+    result = await world.gateway.call(call_for(second))
+    assert result.output["reused"] is True and result.audit.result_redacted == result.output
+
+
 @pytest.mark.parametrize(
     "scenario",
     [
