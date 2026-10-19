@@ -29,6 +29,8 @@ EXPECTED_TABLES = {
     "audit_events",
     "project_events",
     "memberships",
+    "sessions",
+    "invitations",
 }
 HASH_A = "sha256:" + "a" * 64
 HASH_B = "sha256:" + "b" * 64
@@ -97,7 +99,7 @@ def seed_execution(conn: sa.Connection, plan_id: UUID, project_id: UUID, state: 
 def test_empty_database_gets_the_full_schema(blank_database_url: str) -> None:
     upgrade_head(blank_database_url)
     assert table_names(blank_database_url) == EXPECTED_TABLES
-    assert version(blank_database_url) == "0005"
+    assert version(blank_database_url) == "0006"
 
 
 def test_running_twice_changes_nothing(blank_database_url: str) -> None:
@@ -105,7 +107,7 @@ def test_running_twice_changes_nothing(blank_database_url: str) -> None:
     with connect(blank_database_url) as conn:
         conn.execute(sa.insert(t.teams).values(name="dev"))
     upgrade_head(blank_database_url)
-    assert version(blank_database_url) == "0005"
+    assert version(blank_database_url) == "0006"
     with connect(blank_database_url) as conn:
         assert conn.execute(sa.select(sa.func.count()).select_from(t.teams)).scalar() == 1
 
@@ -126,7 +128,7 @@ def test_two_concurrent_upgrades_both_succeed(blank_database_url: str) -> None:
         # Sans attendre : une migration bloquée est libérée par la suppression de la base.
         pool.shutdown(wait=False, cancel_futures=True)
     assert table_names(blank_database_url) == EXPECTED_TABLES
-    assert version(blank_database_url) == "0005"
+    assert version(blank_database_url) == "0006"
 
 
 def test_downgrade_to_base_removes_everything_then_upgrade_works_again(
