@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.14.0](https://github.com/AristideWafo/Foreman/compare/v0.13.0...v0.14.0) (2026-10-19)
+
+
+### Features
+
+* **contrat:** ResourceRef.reused (champ facultatif, v1) ([75ca474](https://github.com/AristideWafo/Foreman/commit/75ca4742823247672b66fcd561ae54e82c15fd72))
+* **contrat:** ResourceRef.reused (S11, PR-A) ([e66e8d4](https://github.com/AristideWafo/Foreman/commit/e66e8d454f386ce4f4bbe14f3bceb8b5c1f4b13a))
+* **execution:** reprise d'une réservation orpheline (D3, PR-C) ([88718ed](https://github.com/AristideWafo/Foreman/commit/88718edf0920961f59db0d75be0bdae78d646453))
+* **execution:** reprise d'une réservation orpheline (D3) ([7eba2e7](https://github.com/AristideWafo/Foreman/commit/7eba2e7dfd7ae04da2fe8f53d080e5fe8ec9939f)), closes [#188](https://github.com/AristideWafo/Foreman/issues/188)
+* **front:** badge « déjà présente » sur les ressources réutilisées (S11, [#42](https://github.com/AristideWafo/Foreman/issues/42)) ([3530fd8](https://github.com/AristideWafo/Foreman/commit/3530fd8cde521f41919c4b8df0887b12d78a18b0))
+* **front:** badge nom et rôle dans la barre latérale ([d0dbe3e](https://github.com/AristideWafo/Foreman/commit/d0dbe3e360eb6a35e4b376f1add5d253e1c367f0))
+* **front:** badge nom et rôle de l'utilisateur dans la barre latérale ([6e7e744](https://github.com/AristideWafo/Foreman/commit/6e7e7446cc129a6f98e05ab183ca7d8fed13d3be))
+* **front:** carte d'exécution S11, ressources déjà présentes ([91572c9](https://github.com/AristideWafo/Foreman/commit/91572c9ff4fe2cdde178df2284a5e65fd467bec4))
+* **gateway:** réutiliser une ressource retrouvée au registre du projet (S11, PR-B) ([ab47144](https://github.com/AristideWafo/Foreman/commit/ab47144c7d0b8ec81802557ff8ee7188801a6316))
+* **gateway:** une ressource retrouvée au registre du projet est réutilisée (S11) ([72c9892](https://github.com/AristideWafo/Foreman/commit/72c989237a6f461a5652d5f732ed8e608439f4f9))
+* **registry:** identité environnement/slug des server_project ([#177](https://github.com/AristideWafo/Foreman/issues/177)) ([8a59ca6](https://github.com/AristideWafo/Foreman/commit/8a59ca6e6eb6dc143cfa2e6a52563ee7f097af9f))
+* **registry:** identité environnement/slug des server_project ([#177](https://github.com/AristideWafo/Foreman/issues/177)) ([dabaf2a](https://github.com/AristideWafo/Foreman/commit/dabaf2a9c04d5ef000ac14a70459004949129712))
+
+
+### Bug Fixes
+
+* **catalog:** refuse un gabarit registry.external_id mal formé, docs 0004 ([b43f998](https://github.com/AristideWafo/Foreman/commit/b43f998ca02a3b751f2801de7b24449c85d72a07))
+* **execution:** reprise d'une réservation refusée tant que le bail du propriétaire est vivant ([235099f](https://github.com/AristideWafo/Foreman/commit/235099feae6a3ffb3c82e40ba49f5a168b34ce99))
+* **execution:** typage de la reprise, test de crash sans stratégie ([c9a3763](https://github.com/AristideWafo/Foreman/commit/c9a3763ec5428383410edd4c4a270ab0952cdedd))
+* **front:** champ reused requis dans ResourceRef (types, tests, fixtures formatées) ([d3fd75b](https://github.com/AristideWafo/Foreman/commit/d3fd75b9f561c3a8f87b82f0a61132bc8ee05a74))
+* **gateway:** la clé reused est ajoutée après la troncature de sortie ([537c6c7](https://github.com/AristideWafo/Foreman/commit/537c6c7420f5a2c240b33274b53f44d5afa112eb))
+
 ## [0.13.0](https://github.com/AristideWafo/Foreman/compare/v0.12.0...v0.13.0) (2026-10-19)
 
 
