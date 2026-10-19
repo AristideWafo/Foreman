@@ -566,6 +566,10 @@ def _registry_id_unknown(d: dict[str, Any]) -> None:
     d["registry"]["external_id"] = "no_such_field"
 
 
+def _registry_id_malformed_brace(d: dict[str, Any]) -> None:
+    d["registry"]["external_id"] = "{input.environment}/{input.project"
+
+
 def _write_without_registry(d: dict[str, Any]) -> None:
     del d["registry"]
 
@@ -584,6 +588,7 @@ def _root_not_object(d: dict[str, Any]) -> None:
         _playbook_scope_unknown_param,
         _playbook_irreversible_unknown_value,
         _registry_id_unknown,
+        _registry_id_malformed_brace,
         _write_without_registry,
         _root_not_object,
     ],

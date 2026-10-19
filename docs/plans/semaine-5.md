@@ -27,13 +27,13 @@ Plan écrit par l'agent `Plan` (Opus) d'après l'état réel de `prod` (après #
 | D1 | Comment l'adaptateur signale « déjà présent » | `AdapterResult.created: bool \| None` (port `core/ports.py`). Pour un outil `write_registry` de portée `create` qui n'est pas en mode `check`, `None` donne `invalid_output` : un adaptateur doit le dire |
 | D2 | Ce que fait la gateway avec une ressource trouvée | Si elle est au registre **de ce projet** : on la réutilise, aucune `NewResource`, audit `executed` avec `reused: true` dans le résultat masqué. Si elle est dans un autre projet : `foreign_resource` (inchangé). Si elle est marquée « gérée par Foreman » mais absente de tout registre : `foreign_resource` (l'adoption demande un admin, R4 et R5). On n'utilise **jamais** `ON CONFLICT DO NOTHING` dans `complete_step` : l'unicité en base reste le dernier filet |
 | D3 | Réservation orpheline | Reprise permise si l'outil est de classe `read` ou déclare `idempotency.strategy` ou `on_conflict` (catalogue). Nouvelle méthode `ExecutionStore.take_over(lease, seq)` : elle rattache la clé `reserved` à l'étape courante, dans une transaction. Les autres cas restent `blocked`. Un refus de la gateway **avant effet** (`CallDenied`) libère la réservation |
-| D4 | Identité `server_project` (#177) | Le YAML porte `registry.external_id: "{input.environment}/{input.project}"`, utilisé par `_resources` et par la portée `update`. **Migration 0004** : réécrit les lignes existantes depuis `executions.environment`. L'unicité globale ne change pas (l'unicité partielle `deleted_at IS NULL` attend UC15) |
+| D4 | Identité `server_project` (#177) | Seul `apply_playbook` porte l'identité composée (`healthcheck` est de classe `read`, sans registre). Le YAML porte `registry.external_id: "{input.environment}/{input.project}"`, utilisé par `_resources` et par la portée `update`. **Migration 0004** : réécrit les lignes existantes depuis `executions.environment`. L'unicité globale ne change pas (l'unicité partielle `deleted_at IS NULL` attend UC15) |
 | D5 | Deux POST `/messages` identiques | Deux tours et deux plans de même hash : c'est voulu (chaque plan est versionné). L'en-tête HTTP `Idempotency-Key` sur `/projects` et `/messages` sort du périmètre (P3, ticket). L'idempotence est garantie à l'exécution, pas au tour |
 
 ## Volet agentique
 
 - **Skills et prompt** : inchangés.
-- **Outils** : `apply_playbook.yaml` et `healthcheck.yaml` portent l'identité composée (D4) ; classes et réversibilités inchangées.
+- **Outils** : seul `apply_playbook.yaml` porte l'identité composée (D4) ; classes et réversibilités inchangées.
 - **Matrice et budgets** : inchangés.
 - **`Provider`** : aucun nouvel enregistrement. S11 **rejoue `s01.yaml`** (même message, donc même réponse et même hash de plan) : c'est exactement « la même demande ».
 - **Fakes** : `SimulatedGitLab` et `SimulatedServer` renseignent `created` ; le serveur rend `created=False` si le projet est déjà préparé. Pas de nouvel adaptateur.
