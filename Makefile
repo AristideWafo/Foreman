@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install check check-full check-imports test fmt api-types check-api-types s01-fixture s02-fixture s10-fixture s11-fixture
+.PHONY: help install check check-full check-imports test fmt api-types check-api-types s01-fixture s02-fixture s10-fixture s11-fixture s12-fixture
 
 BACKEND := cd backend && uv run
 
@@ -55,3 +55,7 @@ s10-fixture: ## Régénère le fixture des cartes S10 (production sans droit : p
 s11-fixture: ## Régénère le fixture des cartes S11 (même demande rejouée : ressources déjà présentes) pour le front
 	cd backend && uv run python scripts/export_s11_fixture.py > ../frontend/src/features/cards/s11-events.json
 	cd frontend && pnpm exec prettier --write src/features/cards/s11-events.json
+
+s12-fixture: ## Régénère le fixture des cartes S12 (plan invalidé : projet modifié) pour le front
+	cd backend && uv run python scripts/export_s12_fixture.py > ../frontend/src/features/cards/s12-events.json
+	cd frontend && pnpm exec prettier --write src/features/cards/s12-events.json
