@@ -57,7 +57,7 @@ async def test_the_same_request_after_a_restart_reuses_the_six_resources(
         again = await second.stores.registry.list_for_project(project)
         after = snapshot_fakes(second)
 
-    assert two.plan.plan_hash == one.plan.plan_hash and two.plan.plan_id != one.plan.plan_id
+    assert two.plan.plan_hash != one.plan.plan_hash and two.plan.plan_id != one.plan.plan_id
     final = [e.data for e in two.events if e.type == "card" and e.data.kind == "execution"][-1]
     assert final.state == "succeeded"
     assert len(final.resources) == 6 and all(r.reused for r in final.resources)

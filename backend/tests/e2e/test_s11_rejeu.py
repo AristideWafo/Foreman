@@ -23,8 +23,8 @@ async def test_s11_same_request_replayed_creates_nothing_twice() -> None:
     run = await run_s11()
     project_id, state = run.project_id, run.state
 
-    # 1-2. Même hash de plan, autre plan ; la seconde exécution réussit (pas `blocked`).
-    assert run.second.plan.plan_hash == run.first.plan.plan_hash
+    # 1-2. Autre plan, autre hash (D1 : base = registre rempli) ; 2e `succeeded`.
+    assert run.second.plan.plan_hash != run.first.plan.plan_hash
     assert run.second.plan.plan_id != run.first.plan.plan_id
     executions = [
         e.data for e in run.second.events if e.type == "card" and e.data.kind == "execution"

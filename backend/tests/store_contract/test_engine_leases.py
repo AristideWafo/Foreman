@@ -126,7 +126,7 @@ async def approved_execution(
             DraftStep("Santé", "server.healthcheck", {"environment": "staging", "project": "aa"}),
         ],
     )
-    record, _ = await Planner(catalog, h.stores.plans, clock=far_future).propose(
+    record, _ = await Planner(catalog, h.stores.plans, h.stores.registry, clock=far_future).propose(
         project, draft, APPROVER
     )
     events = InMemoryEventLog()

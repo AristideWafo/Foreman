@@ -160,7 +160,9 @@ async def test_an_adapter_defect_blocks_the_execution_without_leaking_details(
             ),
         ],
     )
-    record, _ = await Planner(catalog, stores.plans).propose(project, draft, DEV_USER_ID)
+    record, _ = await Planner(catalog, stores.plans, stores.registry).propose(
+        project, draft, DEV_USER_ID
+    )
     approved = await ApprovalService(catalog, stores, events, dev_members()).approve(
         project, record.id, record.content_hash, DEV_PRINCIPAL
     )
@@ -253,7 +255,7 @@ async def test_the_lease_is_renewed_during_a_long_call() -> None:
             )
         ],
     )
-    record, _ = await Planner(catalog, stores.plans, clock=far_future).propose(
+    record, _ = await Planner(catalog, stores.plans, stores.registry, clock=far_future).propose(
         project, draft, DEV_USER_ID
     )
     approved = await ApprovalService(catalog, stores, events, dev_members()).approve(
@@ -298,7 +300,7 @@ async def test_a_refused_approval_reissues_the_plan_card_from_the_stored_state()
             )
         ],
     )
-    record, _ = await Planner(catalog, stores.plans, clock=long_ago).propose(
+    record, _ = await Planner(catalog, stores.plans, stores.registry, clock=long_ago).propose(
         project, draft, DEV_USER_ID
     )  # expiré
     refused = await ApprovalService(catalog, stores, events, dev_members()).approve(
@@ -339,7 +341,9 @@ async def test_a_production_plan_waits_for_an_admin_who_then_starts_the_executio
             )
         ],
     )
-    record, _ = await Planner(catalog, stores.plans).propose(project, draft, DEV_USER_ID)
+    record, _ = await Planner(catalog, stores.plans, stores.registry).propose(
+        project, draft, DEV_USER_ID
+    )
     service = ApprovalService(catalog, stores, events, members)
     pending = await service.approve(project, record.id, record.content_hash, DEV_PRINCIPAL)
     assert isinstance(pending, AwaitingAdmin)
@@ -384,7 +388,7 @@ async def test_the_expiry_sweep_expires_a_pending_plan_once_and_emits_both_cards
     )
     draft = Draft(title="Prod", summary="s", environment="production", steps=[step])
     now = datetime.now(UTC)
-    record, _ = await Planner(catalog, stores.plans, clock=lambda: now).propose(
+    record, _ = await Planner(catalog, stores.plans, stores.registry, clock=lambda: now).propose(
         project, draft, DEV_USER_ID
     )
     clock = [now]

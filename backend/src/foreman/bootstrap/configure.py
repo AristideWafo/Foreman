@@ -139,7 +139,9 @@ def configure(profile: Profile) -> App:
         profile=profile,
         projects=projects,
         events=events,
-        turns=TurnService(provider, events, Planner(catalog, stores.plans), projects),
+        turns=TurnService(
+            provider, events, Planner(catalog, stores.plans, stores.registry), projects
+        ),
         stores=stores,
         lifecycle=lifecycle,
         persistence=persistence,
