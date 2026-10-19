@@ -213,6 +213,21 @@ le rôle sont alors dans l'infobulle de l'entrée « Compte » du rail. Aucune d
 Le résumé de l'exécution (« N ressources déjà présentes, aucune créée ») est écrit par le serveur et affiché tel quel
 dans « Résultat » ; le front n'applique aucune règle de décompte ni de wording.
 
+## Plan invalidé ou expiré (Semaine 6)
+
+Quand `PlanCardData.status` vaut `invalidated` ou `expired` (et qu'il n'y a pas d'exécution), la carte plan affiche en
+tête de contenu une `Alert` par défaut (`ExclamationTriangleIcon`). Titre = la raison (`invalidation.reason`, libellés de
+`vocabulary.ts`) : « Le catalogue a changé », « Le projet a changé depuis ce plan », « Refusé par un administrateur »,
+« Plan expiré ». Description : la liste des `invalidation.changes` (« Référentiel : infra-staging », kind en français puis
+nom), puis une phrase : la dérive chez les fournisseurs relève d'un autre contrôle, fait à l'exécution.
+
+- **Pas de bouton « Valider »** : le serveur envoie `approvable: false`.
+- **Pied de carte « Refaire le plan »** (`RetryPlan`, bouton `outline`, `ArrowPathIcon`) : renvoie le dernier message
+  utilisateur. Proposé seulement sur le dernier plan de la conversation (`findRetry`), jamais sur un plan déjà remplacé.
+- **Carte d'approbation** : `status = expired` ou `invalidated` affiche « Expirée » / « Invalidée » (`role="status"`),
+  sans bouton.
+- Aucune couleur brute ; tokens shadcn, clair, sombre et mobile comme le reste.
+
 ## États d'un écran
 
 Chargement (une ligne de texte), vide (une phrase qui dit quoi faire), erreur (`Alert` + « Réessayer »),

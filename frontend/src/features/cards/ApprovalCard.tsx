@@ -58,6 +58,13 @@ export function ApprovalCard({ card, projectId }: { card: ApprovalCardData; proj
         {card.decided_by ? `${verb} par ${card.decided_by.name}` : verb}
       </p>
     );
+  } else if (card.status === "expired" || card.status === "invalidated") {
+    status = (
+      <p role="status" className="flex items-center gap-2 text-sm">
+        <MinusCircleIcon aria-hidden="true" />
+        {card.status === "expired" ? "Expirée" : "Invalidée"}
+      </p>
+    );
   } else if (!canDecide) {
     status = (
       <p role="status" className="text-sm">
