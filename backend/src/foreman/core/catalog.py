@@ -46,6 +46,7 @@ SkillStatus = Literal["draft", "published"]
 
 _NAME_RE: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _PLACEHOLDER_RE: Final = re.compile(r"\{([^{}]*)\}")
+_TEMPLATE_RE: Final = re.compile(r"(\{input\.[a-z_]+\}|[^{}])+")
 _KEY_VARIABLES: Final = frozenset({"project_id", "execution_id", "step_seq"})
 # Liste blanche des mots-clés JSON Schema : tout le reste (patternProperties, unevaluated*,
 # dependentSchemas, not, if/then/else, $ref, prefixItems...) est refusé, donc ne peut pas contourner
@@ -195,8 +196,26 @@ class Idempotency(_Strict):
 
 class RegistryEntry(_Strict):
     resource_type: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*$")]
-    external_id: Annotated[str, Field(min_length=1)]
+    external_id: Annotated[
+        str, Field(min_length=1)
+    ]  # un champ, ou un gabarit "{input.x}/{input.y}"
     marking: Annotated[str, Field(min_length=1)]
+
+    def identify(self, params: Mapping[str, Any], output: Mapping[str, Any] | None = None) -> Any:
+        """Valeur brute de l'identifiant (sortie puis paramètres), ou `None` si un champ manque.
+
+        Un gabarit n'utilise que des paramètres d'entrée : il est composé en texte.
+        """
+        if "{" not in self.external_id:
+            return (output or {}).get(self.external_id, params.get(self.external_id))
+        parts = [
+            params.get(name[len("input.") :]) for name in _PLACEHOLDER_RE.findall(self.external_id)
+        ]
+        if any(isinstance(v, bool) or not isinstance(v, int | str) or v == "" for v in parts):
+            return None
+        return _PLACEHOLDER_RE.sub(
+            lambda m: str(params[m.group(1)[len("input.") :]]), self.external_id
+        )
 
     @field_validator("marking")
     @classmethod
@@ -268,8 +287,13 @@ class ToolDefinition(_Strict):
         self._check_class(names)
         self._check_scopes(names)
         if self.registry is not None:
-            known = names | set(self.output)
-            if self.registry.external_id not in known:
+            external_id = self.registry.external_id
+            if "{" in external_id:
+                wanted = _PLACEHOLDER_RE.findall(external_id)
+                known = all(w[len("input.") :] in names for w in wanted)
+                if not (_TEMPLATE_RE.fullmatch(external_id) and known):
+                    raise ValueError("registry.external_id: gabarit limité aux champs {input.x}")
+            elif external_id not in names | set(self.output):
                 raise ValueError("registry.external_id doit être un champ de input ou de output")
         if self.idempotency is not None:
             self._check_key(self.idempotency.key, names)

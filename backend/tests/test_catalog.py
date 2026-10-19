@@ -534,7 +534,7 @@ def test_apply_playbook_resolves_reversibility_and_scope_per_playbook() -> None:
 def test_apply_playbook_targets_staging_and_production_and_registers_the_project_slug() -> None:
     source = tool_source("server.apply_playbook")
     assert source["input"]["properties"]["environment"] == {"enum": ["staging", "production"]}
-    assert source["registry"]["external_id"] == "project"
+    assert source["registry"]["external_id"] == "{input.environment}/{input.project}"
     assert "run_id" in source["output"]
 
 
@@ -566,6 +566,10 @@ def _registry_id_unknown(d: dict[str, Any]) -> None:
     d["registry"]["external_id"] = "no_such_field"
 
 
+def _registry_id_malformed_brace(d: dict[str, Any]) -> None:
+    d["registry"]["external_id"] = "{input.environment}/{input.project"
+
+
 def _write_without_registry(d: dict[str, Any]) -> None:
     del d["registry"]
 
@@ -584,6 +588,7 @@ def _root_not_object(d: dict[str, Any]) -> None:
         _playbook_scope_unknown_param,
         _playbook_irreversible_unknown_value,
         _registry_id_unknown,
+        _registry_id_malformed_brace,
         _write_without_registry,
         _root_not_object,
     ],

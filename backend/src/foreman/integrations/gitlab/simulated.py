@@ -191,6 +191,7 @@ class SimulatedGitLab:
         return AdapterResult(
             output={"group_id": group.id, "web_url": group.web_url},
             logs=[f"groupe {group.full_path} {verb}"],
+            created=created,
         )
 
     async def _create_project(self, params: Mapping[str, JsonValue]) -> AdapterResult:
@@ -232,4 +233,5 @@ class SimulatedGitLab:
         return AdapterResult(
             output={"project_id": project.id, "web_url": project.web_url},
             logs=[f"dépôt {project.path} {verb} (boilerplate {project.boilerplate})"],
+            created=created,
         )

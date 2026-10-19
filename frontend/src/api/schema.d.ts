@@ -976,6 +976,12 @@ export interface components {
             /** Resource Type */
             resource_type: string;
             /**
+             * Reused
+             * @description Vrai si la ressource existait déjà (rejeu), non créée
+             * @default null
+             */
+            reused: boolean | null;
+            /**
              * Url
              * @default null
              */

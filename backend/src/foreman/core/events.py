@@ -141,6 +141,9 @@ class ResourceRef(_Model):
     resource_type: Annotated[str, Field(max_length=50)]
     name: Annotated[str, Field(max_length=200)]
     url: Url | None = None
+    reused: Annotated[
+        bool | None, Field(description="Vrai si la ressource existait déjà (rejeu), non créée")
+    ] = None
 
 
 class Link(_Model):

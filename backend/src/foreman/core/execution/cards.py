@@ -48,13 +48,35 @@ def _safe_url(url: str | None) -> str | None:
         return None
 
 
-def _resource_ref(resource: ResourceRecord) -> ResourceRef:
+def _resource_ref(resource: ResourceRecord, execution_id: UUID) -> ResourceRef:
     return ResourceRef(
         provider=resource.provider[:50],
         resource_type=resource.resource_type[:50],
         name=resource.external_id[:200],
         url=_safe_url(resource.external_url),
+        reused=True if resource.execution_id != execution_id else None,
     )
+
+
+def _step_resources(
+    catalog: Catalog, execution: ExecutionRecord, registry: list[ResourceRecord]
+) -> list[ResourceRecord]:
+    """Ressources de l'exécution, lues depuis les RÉSULTATS des étapes réussies (une étape rejouée
+    ou réutilisée n'a plus de ligne à son nom au registre : la ressource appartient à l'exécution
+    qui l'a créée)."""
+    known = {(r.provider, r.resource_type, r.external_id): r for r in registry}
+    found: list[ResourceRecord] = []
+    for step in execution.steps:
+        tool = catalog.tools.get(step.tool)
+        if step.status != "succeeded" or tool is None or tool.registry is None or not step.result:
+            continue
+        if tool.effective_scope(step.params).kind != "create" or step.params.get("mode") == "check":
+            continue
+        value = tool.registry.identify(step.params, step.result)
+        record = known.get((tool.connector, tool.registry.resource_type, str(value)))
+        if record is not None:
+            found.append(record)
+    return found
 
 
 def _result(
@@ -68,6 +90,8 @@ def _result(
         ][:MAX_LINKS]
         total = len(execution.steps)
         summary = f"{total} étapes réussies sur {total} en {content.environment}."
+        if refs and all(r.reused for r in refs):
+            summary += f" {len(refs)} ressources déjà présentes, aucune créée."
         return ExecutionResult(summary=summary, links=links)
     if execution.state == "blocked":
         unfinished = [s.seq for s in execution.steps if s.status != "succeeded"]
@@ -103,7 +127,8 @@ async def execution_card(
         if s.seq in by_seq
     ]
     registry = await stores.registry.list_for_project(project_id)
-    refs = [_resource_ref(r) for r in registry if r.execution_id == execution_id][:MAX_RESOURCES]
+    owned = _step_resources(catalog, execution, registry)
+    refs = [_resource_ref(r, execution_id) for r in owned][:MAX_RESOURCES]
     budget = catalog.policy.budgets.per_execution
     started = sum(1 for s in execution.steps if s.status != "pending")
     return ExecutionCardData(

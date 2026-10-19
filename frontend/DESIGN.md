@@ -193,6 +193,14 @@ Pied du panneau de projets : le nom (tronqué si long) et un `Badge` `secondary`
 après un échec : un `Skeleton` discret, sans message d'erreur. Sur mobile le panneau est masqué : le nom et
 le rôle sont alors dans l'infobulle de l'entrée « Compte » du rail. Aucune décision d'accès n'en découle.
 
+## Ressources déjà présentes (Semaine 5)
+
+`ResourceList` affiche un `Badge` `secondary` « déjà présente » après le type de chaque ressource dont
+`reused === true` (champ facultatif de `ResourceRef`). Rien d'autre ne change : même liste, même lien.
+
+Le résumé de l'exécution (« N ressources déjà présentes, aucune créée ») est écrit par le serveur et affiché tel quel
+dans « Résultat » ; le front n'applique aucune règle de décompte ni de wording.
+
 ## États d'un écran
 
 Chargement (une ligne de texte), vide (une phrase qui dit quoi faire), erreur (`Alert` + « Réessayer »),

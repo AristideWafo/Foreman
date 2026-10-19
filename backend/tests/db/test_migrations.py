@@ -97,7 +97,7 @@ def seed_execution(conn: sa.Connection, plan_id: UUID, project_id: UUID, state: 
 def test_empty_database_gets_the_full_schema(blank_database_url: str) -> None:
     upgrade_head(blank_database_url)
     assert table_names(blank_database_url) == EXPECTED_TABLES
-    assert version(blank_database_url) == "0003"
+    assert version(blank_database_url) == "0004"
 
 
 def test_running_twice_changes_nothing(blank_database_url: str) -> None:
@@ -105,7 +105,7 @@ def test_running_twice_changes_nothing(blank_database_url: str) -> None:
     with connect(blank_database_url) as conn:
         conn.execute(sa.insert(t.teams).values(name="dev"))
     upgrade_head(blank_database_url)
-    assert version(blank_database_url) == "0003"
+    assert version(blank_database_url) == "0004"
     with connect(blank_database_url) as conn:
         assert conn.execute(sa.select(sa.func.count()).select_from(t.teams)).scalar() == 1
 
@@ -126,7 +126,7 @@ def test_two_concurrent_upgrades_both_succeed(blank_database_url: str) -> None:
         # Sans attendre : une migration bloquée est libérée par la suppression de la base.
         pool.shutdown(wait=False, cancel_futures=True)
     assert table_names(blank_database_url) == EXPECTED_TABLES
-    assert version(blank_database_url) == "0003"
+    assert version(blank_database_url) == "0004"
 
 
 def test_downgrade_to_base_removes_everything_then_upgrade_works_again(
@@ -295,3 +295,30 @@ def test_0003_fills_environment_from_the_plan_and_downgrades_without_losing_exec
     downgrade(blank_database_url, "0002")
     with connect(blank_database_url) as conn:
         assert conn.execute(sa.text("SELECT count(*) FROM executions")).scalar() == 2
+
+
+def test_0004_prefixes_server_projects_with_their_environment_and_downgrades(
+    blank_database_url: str,
+) -> None:
+    upgrade_head(blank_database_url)
+    downgrade(blank_database_url, "0003")
+    with connect(blank_database_url) as conn:
+        project = seed_project(conn)
+        execution = seed_execution(conn, seed_plan(conn, project), project, "succeeded")
+        conn.execute(
+            sa.insert(t.managed_resources).values(
+                project_id=project,
+                execution_id=execution,
+                provider="server",
+                resource_type="server_project",
+                external_id="safe-eat",
+            )
+        )
+    upgrade_head(blank_database_url)
+    with connect(blank_database_url) as conn:
+        assert conn.execute(sa.select(t.managed_resources.c.external_id)).scalar() == (
+            "staging/safe-eat"
+        )
+    downgrade(blank_database_url, "0003")
+    with connect(blank_database_url) as conn:
+        assert conn.execute(sa.select(t.managed_resources.c.external_id)).scalar() == "safe-eat"

@@ -185,6 +185,11 @@ Si le mot de passe contient des caractères spéciaux, les encoder dans l'URL (`
 - **Migration `0002_event_log`** (journal du chat) : elle ajoute `project_events` et `projects.last_event_seq`, sans
   réécriture de table ni verrou long. Le `pg_dump` automatique ci-dessus est donc pris **avant** elle ; **pas de retour
   arrière d'image sans restaurer ce dump** (l'ancienne image ne reconnaît plus la révision `0002`).
+- **Migration `0004`** (identité `server_project` = `<environnement>/<projet>`) : réécrit `managed_resources.external_id`.
+  Migrer puis redémarrer **sans exécution en vol** (une exécution entre `0004` et le nouveau code enregistrerait
+  l'ancienne identité). Contrôle après migration, qui doit rendre `0` :
+  `SELECT count(*) FROM managed_resources WHERE resource_type='server_project' AND external_id NOT LIKE '%/%';`
+  `healthcheck.yaml` n'est pas modifié (classe `read`, sans registre).
 - **Retour arrière après une migration** : le retour arrière automatique du script ne restaure que l'image, jamais la base.
   Si le déploiement ajoute une migration Alembic, l'ancienne image **ne redémarre plus** (révision inconnue d'Alembic).
   Il faut restaurer le dump pris avant ce déploiement **avant** de relancer l'ancienne image. `pg_restore --clean` ne
