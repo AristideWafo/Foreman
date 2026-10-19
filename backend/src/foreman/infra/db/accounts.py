@@ -136,6 +136,7 @@ class PostgresAccountStore:
             await conn.execute(
                 sa.update(_U).where(_U.c.id == user_id).values(disabled_at=sa.func.now())
             )
+            await conn.execute(sa.delete(t.sessions).where(t.sessions.c.user_id == user_id))
 
     async def create_invitation(
         self,
@@ -193,6 +194,21 @@ class PostgresAccountStore:
                 raise InvalidInvitation("invitation invalide")  # annule aussi la consommation
             # L'auteur doit toujours avoir le droit d'accorder ce rôle (il a pu être rétrogradé).
             require_grant(await self._actor_role(conn, inv.invited_by, inv.team_id), inv.role)
+            # Premier mot de passe d'un compte créé sans (CLI `admin create`) : pas de doublon.
+            existing = (
+                await conn.execute(
+                    sa.select(_U.c.id, _U.c.name, _U.c.password_hash, _U.c.disabled_at)
+                    .where(sa.func.lower(_U.c.email) == email.lower())
+                    .with_for_update()
+                )
+            ).one_or_none()
+            if existing is not None:
+                if existing.password_hash is not None or existing.disabled_at is not None:
+                    raise InvalidInvitation("invitation invalide")
+                await conn.execute(
+                    sa.update(_U).where(_U.c.id == existing.id).values(password_hash=password_hash)
+                )
+                return Account(existing.id, email.lower(), existing.name, None, inv.invited_by)
             account = await self._insert_account(
                 conn,
                 email,

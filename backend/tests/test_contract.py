@@ -246,6 +246,9 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
         "/api/projects/{project_id}/plans/{plan_id}/approvals",
         "/api/projects/{project_id}/plans/{plan_id}/admin-approvals",
         "/api/me",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/accept-invite",
         "/api/projects/{project_id}/executions/{execution_id}",
         "/api/projects/{project_id}/questions/{question_id}",
     }

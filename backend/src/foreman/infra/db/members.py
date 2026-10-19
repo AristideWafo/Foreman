@@ -41,9 +41,15 @@ class PostgresMemberStore:
 
     async def sync(self, members: Sequence[Member]) -> None:
         """Remplace les rôles de l'équipe en une transaction. Les `users` ne sont jamais supprimés
-        (les plans et approbations les référencent) ; seul le rôle disparaît."""
+        (les plans et approbations les référencent) ; seul le rôle disparaît.
+
+        No-op dès qu'un compte a un mot de passe : l'amorçage n'efface pas ce que l'UI a géré.
+        """
         try:
             async with self._engine.begin() as conn:
+                managed = sa.select(t.users.c.id).where(t.users.c.password_hash.is_not(None))
+                if (await conn.execute(managed.limit(1))).first() is not None:
+                    return
                 await conn.execute(
                     sa.delete(t.memberships).where(t.memberships.c.team_id == self._team_id)
                 )

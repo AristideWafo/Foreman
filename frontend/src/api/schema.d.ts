@@ -4,6 +4,57 @@
  */
 
 export interface paths {
+    "/api/auth/accept-invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Invite */
+        post: operations["accept_invite_api_auth_accept_invite_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_api_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_api_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me": {
         parameters: {
             query?: never;
@@ -13,7 +64,7 @@ export interface paths {
         };
         /**
          * Get Me
-         * @description Identité de l'appelant, lue côté serveur (rôle : `FOREMAN_DEV_MEMBERS`).
+         * @description Identité de l'appelant, lue côté serveur (rôle : `FOREMAN_DEV_MEMBERS` ou compte).
          */
         get: operations["get_me_api_me_get"];
         put?: never;
@@ -227,6 +278,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptInviteRequest */
+        AcceptInviteRequest: {
+            /** Email */
+            email: string;
+            /** Name */
+            name: string;
+            /** Password */
+            password: string;
+            /** Token */
+            token: string;
+        };
         /** AdminApprovalRequest */
         AdminApprovalRequest: {
             /**
@@ -522,7 +584,7 @@ export interface components {
              * Error
              * @enum {string}
              */
-            error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented" | "plan_hash_mismatch" | "plan_not_approvable" | "execution_in_progress" | "question_closed" | "unauthenticated" | "forbidden" | "policy_denied";
+            error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented" | "plan_hash_mismatch" | "plan_not_approvable" | "execution_in_progress" | "question_closed" | "unauthenticated" | "forbidden" | "policy_denied" | "too_many_requests";
         };
         Event: components["schemas"]["MessageEvent"] | components["schemas"]["CardEvent"] | components["schemas"]["ExecutionStepEvent"] | components["schemas"]["ExecutionLogEvent"] | components["schemas"]["TurnStatusEvent"] | components["schemas"]["ErrorEvent"];
         /**
@@ -767,8 +829,17 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** LoginRequest */
+        LoginRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+        };
         /** Me */
         Me: {
+            /** Csrf Token */
+            csrf_token?: string | null;
             /** Name */
             name: string;
             /**
@@ -1083,6 +1154,203 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    accept_invite_api_auth_accept_invite_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInviteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Identifiants invalides (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Origine ou jeton CSRF refusé (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Mode `session` inactif */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête ou invitation invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Trop d'échecs (`too_many_requests`) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    login_api_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Identifiants invalides (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Origine ou jeton CSRF refusé (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Mode `session` inactif */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête ou invitation invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Trop d'échecs (`too_many_requests`) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    logout_api_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Identifiants invalides (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Origine ou jeton CSRF refusé (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Mode `session` inactif */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête ou invitation invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Trop d'échecs (`too_many_requests`) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_me_api_me_get: {
         parameters: {
             query?: never;

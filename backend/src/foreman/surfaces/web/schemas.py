@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from foreman.core.accounts import PASSWORD_MAX, PASSWORD_MIN
 from foreman.core.events import (
     Budget,
     ExecutionResult,
@@ -49,6 +50,7 @@ ErrorCode = Literal[
     "unauthenticated",
     "forbidden",
     "policy_denied",
+    "too_many_requests",
 ]
 
 
@@ -118,6 +120,24 @@ class Me(BaseModel):
     user_id: Annotated[str, Field(max_length=100)]
     name: Annotated[str, Field(max_length=100)]
     role: Role
+    # Seulement en mode `session` : à renvoyer dans `X-Foreman-CSRF` sur toute méthode non sûre.
+    csrf_token: Annotated[str | None, Field(max_length=100)] = None
+
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: Annotated[str, Field(min_length=3, max_length=254)]
+    password: Annotated[str, Field(min_length=1, max_length=PASSWORD_MAX)]
+
+
+class AcceptInviteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: Annotated[str, Field(min_length=1, max_length=100)]
+    email: Annotated[str, Field(min_length=3, max_length=254)]
+    name: Annotated[str, Field(min_length=1, max_length=100)]
+    password: Annotated[str, Field(min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)]
 
 
 class HealthResponse(BaseModel):

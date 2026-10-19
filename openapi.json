@@ -1,6 +1,43 @@
 {
   "components": {
     "schemas": {
+      "AcceptInviteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 12,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "email",
+          "name",
+          "password"
+        ],
+        "title": "AcceptInviteRequest",
+        "type": "object"
+      },
       "AdminApprovalRequest": {
         "additionalProperties": false,
         "properties": {
@@ -624,7 +661,8 @@
               "question_closed",
               "unauthenticated",
               "forbidden",
-              "policy_denied"
+              "policy_denied",
+              "too_many_requests"
             ],
             "title": "Error",
             "type": "string"
@@ -1220,8 +1258,43 @@
         "title": "Link",
         "type": "object"
       },
+      "LoginRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
       "Me": {
         "properties": {
+          "csrf_token": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Csrf Token"
+          },
           "name": {
             "maxLength": 100,
             "title": "Name",
@@ -1912,9 +1985,221 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/auth/accept-invite": {
+      "post": {
+        "operationId": "accept_invite_api_auth_accept_invite_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInviteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Identifiants invalides (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Origine ou jeton CSRF refus\u00e9 (`forbidden`)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Mode `session` inactif"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate ou invitation invalide"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Trop d'\u00e9checs (`too_many_requests`)"
+          }
+        },
+        "summary": "Accept Invite",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Identifiants invalides (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Origine ou jeton CSRF refus\u00e9 (`forbidden`)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Mode `session` inactif"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate ou invitation invalide"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Trop d'\u00e9checs (`too_many_requests`)"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logout_api_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Identifiants invalides (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Origine ou jeton CSRF refus\u00e9 (`forbidden`)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Mode `session` inactif"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate ou invitation invalide"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Trop d'\u00e9checs (`too_many_requests`)"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/me": {
       "get": {
-        "description": "Identit\u00e9 de l'appelant, lue c\u00f4t\u00e9 serveur (r\u00f4le : `FOREMAN_DEV_MEMBERS`).",
+        "description": "Identit\u00e9 de l'appelant, lue c\u00f4t\u00e9 serveur (r\u00f4le : `FOREMAN_DEV_MEMBERS` ou compte).",
         "operationId": "get_me_api_me_get",
         "responses": {
           "200": {

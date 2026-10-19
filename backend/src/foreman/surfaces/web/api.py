@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Annotated, Any, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import JsonValue
 
@@ -317,10 +317,15 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             approval_id=approved.approval_id, execution_id=approved.execution_id
         )
 
-    @router.get("/me", response_model=Me, responses=_ERRORS)
-    async def get_me(caller: Caller) -> Me:
-        """Identité de l'appelant, lue côté serveur (rôle : `FOREMAN_DEV_MEMBERS`)."""
-        return Me(user_id=str(caller.user_id), name=caller.name, role=caller.role)
+    @router.get("/me", response_model=Me, response_model_exclude_none=True, responses=_ERRORS)
+    async def get_me(caller: Caller, request: Request) -> Me:
+        """Identité de l'appelant, lue côté serveur (rôle : `FOREMAN_DEV_MEMBERS` ou compte)."""
+        return Me(
+            user_id=str(caller.user_id),
+            name=caller.name,
+            role=caller.role,
+            csrf_token=getattr(request.state, "csrf_token", None),
+        )
 
     @router.post(
         "/projects/{project_id}/questions/{question_id}",

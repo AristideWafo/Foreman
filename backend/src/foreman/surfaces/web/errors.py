@@ -14,6 +14,7 @@ CODES: dict[int, ErrorCode] = {
     405: "method_not_allowed",
     409: "turn_in_progress",
     422: "invalid_request",
+    429: "too_many_requests",
     501: "not_implemented",
     503: "capacity_exceeded",
 }
