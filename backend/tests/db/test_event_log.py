@@ -94,7 +94,9 @@ async def test_event_time_does_not_depend_on_the_database_time_zone(
     blank_database_url: str,
 ) -> None:
     await asyncio.to_thread(upgrade_head, blank_database_url)
-    url = make_url(blank_database_url).set(query={"options": "-c timezone=Pacific/Kiritimati"})
+    url = make_url(blank_database_url).update_query_dict(
+        {"options": "-c timezone=Pacific/Kiritimati"}
+    )
     eng = make_engine(url.render_as_string(hide_password=False))
     try:
         await seed_dev_identity(eng)

@@ -48,6 +48,7 @@ from foreman.core.store import (
     Stores,
     TakenOverReservation,
     UnknownProject,
+    checked_invalidation,
     ensure_audit_scope,
     steps_of,
     system_audit,
@@ -322,7 +323,7 @@ class InMemoryPlanStore:
         if record.status != "dev_approved" or entry.execution_id:
             return ApprovalRefused("plan_not_approvable")
         entry.admin_rejection_id = uuid4()
-        self._invalidate(entry, ADMIN_REJECTED)
+        self._invalidate(entry, checked_invalidation(ADMIN_REJECTED))
         return Rejected(entry.admin_rejection_id, created=True)
 
     async def invalidate(
@@ -333,6 +334,7 @@ class InMemoryPlanStore:
         invalidation: Mapping[str, object],
         now: datetime,
     ) -> InvalidationResult:
+        invalidation = checked_invalidation(invalidation)
         entry = self._s.plans.get(plan_id)
         if entry is None or entry.record.project_id != project_id:
             return ApprovalRefused("not_found")

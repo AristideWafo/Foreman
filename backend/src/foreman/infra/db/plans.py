@@ -27,6 +27,7 @@ from foreman.core.store import (
     Rejected,
     StoreError,
     UnknownProject,
+    checked_invalidation,
     steps_of,
     system_audit,
 )
@@ -205,7 +206,7 @@ class PostgresPlanStore:
                 return ApprovalRefused("plan_not_approvable")
             if plan.status != "dev_approved" or await _execution_id(conn, plan_id):
                 return ApprovalRefused("plan_not_approvable")
-            await _invalidate(conn, plan, ADMIN_REJECTED)
+            await _invalidate(conn, plan, ADMIN_REJECTED, now)
             approval_id = await _insert_approval(
                 conn, plan_id, plan_hash, "admin", approver_id, "rejected"
             )
@@ -221,6 +222,8 @@ class PostgresPlanStore:
         invalidation: Mapping[str, object],
         now: datetime,
     ) -> InvalidationResult:
+        invalidation = checked_invalidation(invalidation)
+
         async def work(conn: AsyncConnection) -> InvalidationResult:
             plan = await _locked_plan(conn, project_id, plan_id)
             if plan is None:
@@ -233,7 +236,7 @@ class PostgresPlanStore:
                 return ApprovalRefused("plan_not_approvable")
             if plan.status not in _OPEN or await _execution_id(conn, plan_id):
                 return ApprovalRefused("plan_not_approvable")
-            await _invalidate(conn, plan, invalidation)
+            await _invalidate(conn, plan, invalidation, now)
             return Invalidated(created=True)
 
         return await self._transaction("plan.invalidate", work)
@@ -331,14 +334,16 @@ async def _expire_one(conn: AsyncConnection, row: Any, now: datetime) -> PlanRec
     return replace(plan_record(plan), status="expired")
 
 
-async def _invalidate(conn: AsyncConnection, plan: Any, invalidation: Mapping[str, object]) -> None:
+async def _invalidate(
+    conn: AsyncConnection, plan: Any, invalidation: Mapping[str, object], now: datetime
+) -> None:
     await conn.execute(
         sa.update(t.plans)
         .where(t.plans.c.id == plan.id)
         .values(status="invalidated", invalidation=dict(invalidation))
     )
     entry = system_audit(plan_record(plan), "invalidated", str(invalidation["reason"]))
-    await conn.execute(sa.insert(t.audit_events).values(**audit_values(entry)))
+    await conn.execute(sa.insert(t.audit_events).values(at=now, **audit_values(entry)))
 
 
 async def _insert_approval(
