@@ -20,6 +20,7 @@ from foreman.core.planning import Draft, DraftStep, Planner
 from foreman.core.store import Approved, AuditEntry, Lease, Reservation, Stores
 from foreman.infra.file_catalog import load_catalog
 from foreman.infra.in_memory import InMemoryEventLog
+from support import DEV_PRINCIPAL, dev_members
 
 
 def far_future() -> datetime:
@@ -126,8 +127,8 @@ async def approved_execution(
         project, draft, APPROVER
     )
     events = InMemoryEventLog()
-    approved = await ApprovalService(catalog, h.stores, events).approve(
-        project, record.id, record.content_hash
+    approved = await ApprovalService(catalog, h.stores, events, dev_members()).approve(
+        project, record.id, record.content_hash, DEV_PRINCIPAL
     )
     assert isinstance(approved, Approved)
     gateway = gateway or CountingGateway()

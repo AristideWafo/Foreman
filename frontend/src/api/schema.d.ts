@@ -150,7 +150,9 @@ export interface paths {
         put?: never;
         /**
          * Admin Approve Plan
-         * @description Un administrateur approuve ou refuse un plan en attente (pas encore implémenté).
+         * @description Un administrateur approuve (crée l'exécution et la démarre) ou refuse un plan.
+         *
+         *     Seuls les rôles de `approvers.admin` le peuvent (sinon 403, rien n'est écrit).
          */
         post: operations["admin_approve_plan_api_projects__project_id__plans__plan_id__admin_approvals_post"];
         delete?: never;
@@ -170,7 +172,9 @@ export interface paths {
         put?: never;
         /**
          * Approve Plan
-         * @description Le développeur valide son plan (staging) : l'approbation porte sur le hash affiché.
+         * @description Le développeur valide son plan : l'approbation porte sur le hash affiché.
+         *
+         *     Si l'environnement exige un administrateur, la validation est écrite sans exécution (202).
          */
         post: operations["approve_plan_api_projects__project_id__plans__plan_id__approvals_post"];
         delete?: never;
@@ -1669,6 +1673,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Rejeu idempotent d'une approbation (mêmes identifiants), ou refus (`decision: rejected`, corps `ApprovalRejected`) : le plan est invalidé */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalAccepted"];
+                };
+            };
             /** @description Successful Response */
             201: {
                 headers: {
@@ -1705,7 +1718,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `plan_hash_mismatch`, `plan_not_approvable` ou `policy_denied` */
+            /** @description `plan_hash_mismatch`, `plan_not_approvable` (expiré, invalidé, pas encore validé par le développeur) ou `execution_in_progress` */
             409: {
                 headers: {
                     [name: string]: unknown;

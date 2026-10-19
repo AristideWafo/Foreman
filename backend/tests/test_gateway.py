@@ -43,6 +43,7 @@ from foreman.core.store import (
     DEV_USER_ID,
     Approved,
     AuditEntry,
+    AwaitingAdmin,
     Lease,
     NewPlan,
     NewResource,
@@ -55,6 +56,7 @@ from foreman.infra.in_memory import InMemoryProjectStore, MemoryState, in_memory
 from foreman.integrations.dns.simulated import SimulatedDns
 from foreman.integrations.gitlab.simulated import SimulatedGitLab
 from foreman.integrations.server.simulated import SimulatedServer
+from support import dev_members
 
 CATALOG_ROOT = Path(__file__).resolve().parents[2] / "catalog"
 FUTURE = datetime(2100, 1, 1, tzinfo=UTC)
@@ -289,6 +291,7 @@ def make_world(
         catalog=catalog,
         stores=stores,
         adapters={"gitlab": gitlab_counter, "server": server_counter, "dns": dns},
+        members=dev_members(),
         **options,
     )
     return World(catalog, stores, state, projects, gitlab_counter, server_counter, gateway)
@@ -549,10 +552,10 @@ async def target_is_not_in_the_registry() -> tuple[World, Refusal]:
     return world, Refusal(call_for(started), "scope_violation")
 
 
-async def write_outside_staging() -> tuple[World, Refusal]:
+async def production_write_without_admin_approval() -> tuple[World, Refusal]:
     world = make_world()
     started = await start(world, ONE_GROUP, environment="production")
-    return world, Refusal(call_for(started), "policy_denied")
+    return world, Refusal(call_for(started), "approval_required")
 
 
 async def level_is_capped_by_the_environment() -> tuple[World, Refusal]:
@@ -574,7 +577,7 @@ async def environment_requires_an_administrator() -> tuple[World, Refusal]:
     autonomy = base.policy.autonomy.model_copy(update={"environments": {"staging": strict}})
     world = make_world(with_policy(base, autonomy=autonomy))
     started = await start(world, ONE_GROUP)
-    return world, Refusal(call_for(started), "policy_denied")
+    return world, Refusal(call_for(started), "approval_required")
 
 
 async def requirement_cannot_be_met() -> tuple[World, Refusal]:
@@ -587,7 +590,7 @@ async def requirement_cannot_be_met() -> tuple[World, Refusal]:
     ]
     world = make_world(with_policy(base, rules=rules))
     started = await start(world, ONE_GROUP)
-    return world, Refusal(call_for(started), "policy_denied")
+    return world, Refusal(call_for(started), "approval_required")
 
 
 def tight_budget(**updates: int) -> Catalog:
@@ -635,7 +638,7 @@ async def time_budget_is_spent() -> tuple[World, Refusal]:
         parent_belongs_to_another_project,
         slug_belongs_to_another_project,
         target_is_not_in_the_registry,
-        write_outside_staging,
+        production_write_without_admin_approval,
         level_is_capped_by_the_environment,
         environment_requires_an_administrator,
         requirement_cannot_be_met,
@@ -655,6 +658,49 @@ async def test_a_refused_call_never_reaches_the_adapter_and_is_audited(scenario:
     assert logged[-1].result_redacted == {"code": refusal.code}
     if refusal.code == "unknown_context":
         assert logged[-1].execution_id is None  # ne se rattache à aucune exécution réelle
+    if refusal.code == "approval_required" and scenario is production_write_without_admin_approval:
+        assert (logged[-1].rule_id, logged[-1].actor) == (
+            "R7-ecriture-production",
+            str(DEV_USER_ID),
+        )
+
+
+async def test_a_production_write_waits_for_the_admin_then_runs_as_the_requester() -> None:
+    """R7 : l'approbation admin ouvre l'exécution ; l'audit nomme le DEMANDEUR (pas l'admin).
+    Le refus sans admin est couvert par `production_write_without_admin_approval`."""
+    world = make_world()
+    project = (await world.projects.create("p")).id
+    plan = await world.stores.plans.create(
+        NewPlan(
+            project_id=project,
+            content={"environment": "production", "steps": ONE_GROUP},
+            content_hash="sha256:" + "cd" * 32,
+            skills_used=[],
+            expires_at=FUTURE,
+            requested_by=DEV_USER_ID,
+        )
+    )
+    waiting = await world.stores.plans.approve(
+        project, plan.id, plan.content_hash, DEV_USER_ID, 2, start_execution=False
+    )
+    assert isinstance(waiting, AwaitingAdmin)
+    admin = DEV_USER_ID  # seul le rôle passé au dépôt compte ici
+    approved = await world.stores.plans.approve_admin(
+        project, plan.id, plan.content_hash, admin, "team_admin", 2
+    )
+    assert isinstance(approved, Approved) and approved.created
+    lease = await world.stores.executions.claim_lease(approved.execution_id, "w1")
+    assert lease is not None
+    await world.stores.executions.reserve_idempotency(lease, 1)
+    started = Started(project, approved.execution_id, plan, lease)
+    result = await world.gateway.call(call_for(started))
+    assert world.gitlab.calls == 1 and result.audit.decision == "executed"
+    allowed = (await world.stores.audit.list_for_project(project))[0]
+    assert (allowed.decision, allowed.rule_id, allowed.actor) == (
+        "allow",
+        "R7-ecriture-production",
+        str(DEV_USER_ID),
+    )
 
 
 # --- 2. Exécution réelle : chaîne de bout en bout avec le « moteur » --------------------------

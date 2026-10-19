@@ -14,6 +14,7 @@ from uuid import UUID
 # Identités de développement (utilisateur `dev` du mode `none`) : fixes, upsert sûr.
 DEV_USER_ID: Final = UUID("00000000-0000-4000-8000-00000000d001")
 DEV_TEAM_ID: Final = UUID("00000000-0000-4000-8000-00000000d002")
+DEV_USER_NAME: Final = "dev"  # nom du membre du mode `none`
 DEV_USER_EMAIL: Final = "dev@foreman.local"
 DEV_TEAM_NAME: Final = "dev"
 
@@ -126,13 +127,40 @@ class Approved:
 
 
 @dataclass(frozen=True, slots=True)
+class AwaitingAdmin:
+    """Validation développeur écrite SANS exécution : il manque l'approbation d'un admin."""
+
+    approval_id: UUID
+    created: bool  # faux : déjà validé par le développeur, même identifiant rendu
+
+
+@dataclass(frozen=True, slots=True)
+class Rejected:
+    """Refus de l'administrateur : le plan est `invalidated`."""
+
+    approval_id: UUID
+    created: bool
+
+
+@dataclass(frozen=True, slots=True)
 class ApprovalRefused:
     reason: Literal[
-        "not_found", "plan_hash_mismatch", "plan_not_approvable", "execution_in_progress"
+        "not_found",
+        "plan_hash_mismatch",
+        "plan_not_approvable",
+        "execution_in_progress",
+        "forbidden",  # le rôle ne peut pas donner cette approbation : rien n'est écrit
+        "policy_denied",  # une étape du plan est interdite au rôle du demandeur
     ]
 
 
-ApprovalResult = Approved | ApprovalRefused
+ApprovalResult = Approved | AwaitingAdmin | ApprovalRefused
+AdminApprovalResult = Approved | ApprovalRefused
+AdminRejectionResult = Rejected | ApprovalRefused
+
+# Rôles qui peuvent donner l'approbation admin (défense en profondeur : la matrice `approvers`
+# est la source, le dépôt refuse en plus un développeur).
+ADMIN_ROLES: Final = ("team_admin", "org_admin")
 
 
 class PlanStore(Protocol):
@@ -149,8 +177,41 @@ class PlanStore(Protocol):
         plan_hash: str,
         approver_id: UUID,
         autonomy_level: int,
+        start_execution: bool = True,
     ) -> ApprovalResult:
-        """Atomique : plan `dev_approved` + approbation + exécution + étapes `pending`."""
+        """Atomique : plan `dev_approved` + approbation + exécution + étapes `pending`.
+
+        Sans `start_execution`, seuls le plan et l'approbation sont écrits (`AwaitingAdmin`) :
+        l'exécution naît de `approve_admin`.
+        """
+        ...
+
+    async def approve_admin(
+        self,
+        project_id: UUID,
+        plan_id: UUID,
+        plan_hash: str,
+        approver_id: UUID,
+        approver_role: str,
+        autonomy_level: int,
+    ) -> AdminApprovalResult:
+        """Atomique : approbation `admin` + exécution + étapes. Idempotent. Un développeur est
+        refusé (`forbidden`, rien d'écrit) ; le plan doit être `dev_approved` et non expiré."""
+        ...
+
+    async def reject_admin(
+        self,
+        project_id: UUID,
+        plan_id: UUID,
+        plan_hash: str,
+        approver_id: UUID,
+        approver_role: str,
+    ) -> AdminRejectionResult:
+        """Atomique : approbation `admin` refusée + plan `invalidated`. Idempotent."""
+        ...
+
+    async def has_admin_approval(self, plan_id: UUID, plan_hash: str) -> bool:
+        """Une approbation `admin` approuvée existe pour ce plan ET ce hash."""
         ...
 
 

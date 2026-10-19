@@ -151,6 +151,10 @@ class MemberStore(Protocol):
         """Rôle du membre, ou `None` s'il est inconnu."""
         ...
 
+    async def name_of(self, user_id: UUID) -> str | None:
+        """Nom du membre (carte d'approbation), ou `None` s'il est inconnu."""
+        ...
+
     async def sync(self, members: Sequence[Member]) -> None:
         """REMPLACE l'ensemble des membres : un nom retiré perd son rôle."""
         ...

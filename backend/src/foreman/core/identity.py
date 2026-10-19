@@ -20,10 +20,11 @@ def member_id(name: str) -> UUID:
 class Member:
     name: str
     role: Role
+    id: UUID | None = None  # explicite pour `dev` (mode `none`) ; sinon dérivé du nom
 
     @property
     def user_id(self) -> UUID:
-        return member_id(self.name)
+        return self.id or member_id(self.name)
 
 
 class Principal(BaseModel):

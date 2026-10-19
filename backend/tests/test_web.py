@@ -90,7 +90,7 @@ def test_healthz_reports_the_version_from_the_environment(monkeypatch: pytest.Mo
     assert client.get("/healthz").json() == {**expected, "version": "dev"}
 
 
-def test_me_is_the_dev_identity_and_admin_approvals_are_not_implemented() -> None:
+def test_me_is_the_dev_identity_and_a_developer_cannot_give_the_admin_approval() -> None:
     client = TestClient(create_app())
     assert client.get("/api/me").json() == {
         "user_id": str(DEV_USER_ID),
@@ -101,7 +101,7 @@ def test_me_is_the_dev_identity_and_admin_approvals_are_not_implemented() -> Non
         f"/api/projects/{uuid4()}/plans/{uuid4()}/admin-approvals",
         json={"plan_hash": "sha256:" + "a" * 64, "decision": "approved"},
     )
-    assert (response.status_code, response.json()) == (501, {"error": "not_implemented"})
+    assert (response.status_code, response.json()) == (403, {"error": "forbidden"})
 
 
 async def test_projects_are_listed_newest_first() -> None:

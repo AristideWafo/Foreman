@@ -6,7 +6,7 @@ from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import JsonValue
 
 from foreman.bootstrap.configure import App
@@ -15,7 +15,7 @@ from foreman.core.execution.cards import execution_card
 from foreman.core.identity import Principal
 from foreman.core.ports import CapacityExceeded
 from foreman.core.projects import Project
-from foreman.core.store import ApprovalRefused
+from foreman.core.store import ApprovalRefused, AwaitingAdmin
 from foreman.core.turn import QuestionRefused, TurnInProgress, TurnRequest
 from foreman.surfaces.web.auth import make_current_principal
 from foreman.surfaces.web.errors import ApiError
@@ -23,6 +23,7 @@ from foreman.surfaces.web.schemas import (
     AdminApprovalRequest,
     ApprovalAccepted,
     ApprovalPending,
+    ApprovalRejected,
     ApprovalRequest,
     CreateProjectRequest,
     ErrorResponse,
@@ -84,6 +85,13 @@ class EventStreamResponse(StreamingResponse):
 def _frame(event: AnyEvent) -> bytes:
     """`id:` = seq, pas de champ `event:`, `data:` = l'enveloppe JSON (une seule ligne)."""
     return f"id: {event.seq}\nretry: {RETRY_MS}\ndata: {event.model_dump_json()}\n\n".encode()
+
+
+_REFUSALS: dict[str, int] = {"not_found": 404, "forbidden": 403}  # le reste : 409
+
+
+def _refused(refusal: ApprovalRefused) -> ApiError:
+    return ApiError(_REFUSALS.get(refusal.reason, 409), refusal.reason)
 
 
 def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
@@ -232,16 +240,24 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         },
     )
     async def approve_plan(
-        project_id: UUID, plan_id: UUID, body: ApprovalRequest, response: Response
-    ) -> ApprovalAccepted:
-        """Le développeur valide son plan (staging) : l'approbation porte sur le hash affiché."""
+        project_id: UUID, plan_id: UUID, body: ApprovalRequest, response: Response, caller: Caller
+    ) -> ApprovalAccepted | JSONResponse:
+        """Le développeur valide son plan : l'approbation porte sur le hash affiché.
+
+        Si l'environnement exige un administrateur, la validation est écrite sans exécution (202).
+        """
         if app.approvals is None or app.engine is None:
             raise ApiError(501, "not_implemented")
-        result = await app.approvals.approve(project_id, plan_id, body.plan_hash)
+        result = await app.approvals.approve(project_id, plan_id, body.plan_hash, caller)
         if isinstance(result, ApprovalRefused):
-            if result.reason == "not_found":
-                raise ApiError(404, "not_found")
-            raise ApiError(409, result.reason)
+            raise _refused(result)
+        if isinstance(result, AwaitingAdmin):
+            pending = ApprovalPending(
+                approval_id=result.approval_id,
+                status="approval_required",
+                missing=["admin_approved"],
+            )
+            return JSONResponse(status_code=202, content=pending.model_dump(mode="json"))
         if result.created:
             # Les cartes sont déjà émises (plan puis exécution) : le moteur peut partir.
             tasks.spawn(app.engine.run(project_id, result.execution_id))
@@ -255,17 +271,51 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         response_model=ApprovalAccepted,
         responses={
             **_ERRORS,
+            200: {
+                "model": ApprovalAccepted,
+                "description": (
+                    "Rejeu idempotent d'une approbation (mêmes identifiants), ou refus "
+                    "(`decision: rejected`, corps `ApprovalRejected`) : le plan est invalidé"
+                ),
+            },
             409: {
                 "model": ErrorResponse,
-                "description": "`plan_hash_mismatch`, `plan_not_approvable` ou `policy_denied`",
+                "description": (
+                    "`plan_hash_mismatch`, `plan_not_approvable` (expiré, invalidé, pas encore "
+                    "validé par le développeur) ou `execution_in_progress`"
+                ),
             },
         },
     )
     async def admin_approve_plan(
-        project_id: UUID, plan_id: UUID, body: AdminApprovalRequest
-    ) -> ApprovalAccepted:
-        """Un administrateur approuve ou refuse un plan en attente (pas encore implémenté)."""
-        raise ApiError(501, "not_implemented")
+        project_id: UUID,
+        plan_id: UUID,
+        body: AdminApprovalRequest,
+        response: Response,
+        caller: Caller,
+    ) -> ApprovalAccepted | ApprovalRejected:
+        """Un administrateur approuve (crée l'exécution et la démarre) ou refuse un plan.
+
+        Seuls les rôles de `approvers.admin` le peuvent (sinon 403, rien n'est écrit).
+        """
+        if app.approvals is None or app.engine is None:
+            raise ApiError(501, "not_implemented")
+        if body.decision == "rejected":
+            rejected = await app.approvals.reject_admin(project_id, plan_id, body.plan_hash, caller)
+            if isinstance(rejected, ApprovalRefused):
+                raise _refused(rejected)
+            response.status_code = 200
+            return ApprovalRejected(approval_id=rejected.approval_id, status="rejected")
+        approved = await app.approvals.approve_admin(project_id, plan_id, body.plan_hash, caller)
+        if isinstance(approved, ApprovalRefused):
+            raise _refused(approved)
+        if approved.created:
+            tasks.spawn(app.engine.run(project_id, approved.execution_id))
+        else:
+            response.status_code = 200  # rejeu idempotent
+        return ApprovalAccepted(
+            approval_id=approved.approval_id, execution_id=approved.execution_id
+        )
 
     @router.get("/me", response_model=Me, responses=_ERRORS)
     async def get_me(caller: Caller) -> Me:
