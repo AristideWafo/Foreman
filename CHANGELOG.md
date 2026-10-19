@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.13.0](https://github.com/AristideWafo/Foreman/compare/v0.12.0...v0.13.0) (2026-10-19)
+
+
+### Features
+
+* **deploy:** FOREMAN_AUTH_PREFIX= retire le basicAuth de façon durable ([#182](https://github.com/AristideWafo/Foreman/issues/182)) ([0b0ec24](https://github.com/AristideWafo/Foreman/commit/0b0ec2462cd9b6afdb5247b1a5a9c36a38a02469))
+
+
+### Bug Fixes
+
+* **gitlab:** le faux GitLab ne réutilise plus d'identifiants après un redémarrage ([7a5b911](https://github.com/AristideWafo/Foreman/commit/7a5b911ac2bceb197634efcda242bc3df2472efd))
+* le faux GitLab ne réutilise plus d'identifiants après un redémarrage ([1232f30](https://github.com/AristideWafo/Foreman/commit/1232f303bff6fb0ac3e6d3e2de28abdf5b8e4f06))
+
 ## [0.12.0](https://github.com/AristideWafo/Foreman/compare/v0.11.0...v0.12.0) (2026-10-19)
 
 
