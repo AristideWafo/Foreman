@@ -26,13 +26,14 @@ from foreman.core.execution.cards import execution_card
 from foreman.core.identity import Principal, Role
 from foreman.core.planning import PlanContent, plan_card, plan_card_id, plan_changes
 from foreman.core.policy.matrix import Deny, PolicyRequest, effective_level, evaluate, requirements
-from foreman.core.ports import EventLog, MemberStore
+from foreman.core.ports import EventLog, MemberStore, requester_role
 from foreman.core.store import (
     AdminApprovalResult,
     AdminRejectionResult,
     ApprovalRefused,
     ApprovalResult,
     Approved,
+    AuditEntry,
     AwaitingAdmin,
     Invalidated,
     PlanRecord,
@@ -117,6 +118,8 @@ class ApprovalService:
         if isinstance(loaded, ApprovalRefused):
             return loaded
         plan, content = loaded
+        if not await self._may_decide_admin(approver, plan, self_ok=False):
+            return ApprovalRefused("forbidden")
         # Le statut reste `dev_approved` après l'approbation admin : un rejeu reste idempotent.
         if plan.status == "dev_approved" and not await self._stores.plans.has_admin_approval(
             plan.id, plan_hash
@@ -134,6 +137,8 @@ class ApprovalService:
             now=self._clock(),
         )
         if isinstance(result, Approved) and result.created:
+            if approver.user_id == plan.requested_by:
+                await self._audit_self_validation(project_id, plan, approver)
             await self._announce_decision(project_id, plan, content, "approved", approver)
             await self._announce(project_id, plan_id, result.execution_id, content)
         elif isinstance(result, ApprovalRefused) and result.reason != "not_found":
@@ -150,6 +155,8 @@ class ApprovalService:
         if isinstance(loaded, ApprovalRefused):
             return loaded
         plan, content = loaded
+        if not await self._may_decide_admin(approver, plan, self_ok=True):
+            return ApprovalRefused("forbidden")
         result = await self._stores.plans.reject_admin(
             project_id, plan_id, plan_hash, approver.user_id, approver.role, now=self._clock()
         )
@@ -160,6 +167,42 @@ class ApprovalService:
         elif isinstance(result, ApprovalRefused) and result.reason != "not_found":
             await self._after_refusal(project_id, plan, content, reissue=False)
         return result
+
+    async def _may_decide_admin(
+        self, approver: Principal, plan: PlanRecord, *, self_ok: bool
+    ) -> bool:
+        """`org_admin` : toujours (fallback de chaque équipe). Sinon, jamais son propre plan
+        (`self_ok` faux) et, pour une équipe personnelle, seulement l'approbateur désigné."""
+        if approver.role == "org_admin":
+            return True
+        if not self_ok and approver.user_id == plan.requested_by:
+            return False
+        project = await self._stores.projects.get(plan.project_id)
+        if project is None:
+            return False
+        designated = await self._members.designated_admins(project.team_id)
+        return designated is None or approver.user_id in designated
+
+    async def _audit_self_validation(
+        self, project_id: UUID, plan: PlanRecord, approver: Principal
+    ) -> None:
+        """Trace explicite : un org_admin a validé son propre plan. La décision est déjà écrite."""
+        try:
+            await self._stores.audit.append(
+                AuditEntry(
+                    actor_kind="user",
+                    project_id=project_id,
+                    plan_id=plan.id,
+                    plan_hash=plan.content_hash,
+                    actor=str(approver.user_id),
+                    tool="plan.approve_admin",
+                    decision="auto-validation",
+                )
+            )
+        except Exception as exc:
+            log.error(
+                "plan %s : audit d'auto-validation non écrit (%s)", plan.id, type(exc).__name__
+            )
 
     async def expire_due(self) -> int:
         """Balayage : écrit `expired` (store) puis réémet la carte plan et, si une approbation
@@ -264,7 +307,9 @@ class ApprovalService:
         `None` si aucune étape ne l'exige, ou un refus `policy_denied` si une étape est interdite
         au demandeur (par exemple R8 pour un développeur) ou si le demandeur est inconnu.
         """
-        role = None if plan.requested_by is None else await self._members.role_of(plan.requested_by)
+        role = await requester_role(
+            self._stores.projects, self._members, plan.requested_by, plan.project_id
+        )
         if role is None:
             return ApprovalRefused("policy_denied")
         matrix = self._catalog.policy
