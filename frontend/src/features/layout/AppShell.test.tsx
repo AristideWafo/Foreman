@@ -35,3 +35,20 @@ test("aucun badge pour postgres", async () => {
   await screen.findByText("Aucun projet pour l'instant.");
   expect(screen.queryByRole("status")).not.toBeInTheDocument();
 });
+
+test("le nom et le rôle de l'utilisateur s'affichent", async () => {
+  vi.stubGlobal("fetch", (url: string) =>
+    Promise.resolve(
+      Response.json(
+        url === "/api/me"
+          ? { name: "Ada", role: "team_admin", user_id: "u1" }
+          : url === "/healthz"
+            ? { persistence: "postgres" }
+            : [],
+      ),
+    ),
+  );
+  renderShell();
+  expect(await screen.findByText("Admin d'équipe")).toBeInTheDocument();
+  expect(screen.getByText("Ada")).toBeInTheDocument();
+});

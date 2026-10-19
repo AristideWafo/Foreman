@@ -2,6 +2,7 @@ import { Outlet, useMatch } from "react-router-dom";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useMe } from "../cards/useMe";
 import { useMemoryMode } from "../health/useHealth";
 import { useProjects } from "../projects/useProjects";
 
@@ -9,6 +10,7 @@ import { useProjects } from "../projects/useProjects";
 export function AppShell() {
   const { projects } = useProjects();
   const memoryMode = useMemoryMode();
+  const me = useMe();
   const match = useMatch("/projects/:projectId");
   const activeProjectId = match?.params.projectId ?? null;
   return (
@@ -22,6 +24,7 @@ export function AppShell() {
           activeProjectId={activeProjectId}
           homeActive={activeProjectId === null}
           memoryMode={memoryMode}
+          me={me}
         />
         <SidebarInset className="min-h-0 overflow-hidden">
           <Outlet />
