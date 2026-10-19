@@ -82,7 +82,9 @@ async def run_plan(
             ),
         ],
     )
-    record, _ = await Planner(catalog(), stores.plans).propose(project, draft, DEV_USER_ID)
+    record, _ = await Planner(catalog(), stores.plans, stores.registry).propose(
+        project, draft, DEV_USER_ID
+    )
     approved = await ApprovalService(catalog(), stores, events, dev_members()).approve(
         project, record.id, record.content_hash, DEV_PRINCIPAL
     )

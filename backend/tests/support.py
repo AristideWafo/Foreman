@@ -11,7 +11,7 @@ from foreman.infra.in_memory import InMemoryMemberStore, in_memory_stores
 def make_planner() -> Planner:
     """À appeler dans un test (le dossier du catalogue vient de la fixture `catalog_dir_env`)."""
     catalog = load_catalog(environment="staging")
-    return Planner(catalog, in_memory_stores()[1].plans)
+    return Planner(catalog, (s := in_memory_stores()[1]).plans, s.registry)
 
 
 def user(*texts: str) -> list[ConversationMessage]:

@@ -21,10 +21,10 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from foreman.core.catalog import Catalog
-from foreman.core.events import ApprovalCardData, UserRef
+from foreman.core.events import ApprovalCardData, PlanCardData, UserRef
 from foreman.core.execution.cards import execution_card
 from foreman.core.identity import Principal, Role
-from foreman.core.planning import PlanContent, plan_card, plan_card_id
+from foreman.core.planning import PlanContent, plan_card, plan_card_id, plan_changes
 from foreman.core.policy.matrix import Deny, PolicyRequest, effective_level, evaluate, requirements
 from foreman.core.ports import EventLog, MemberStore
 from foreman.core.store import (
@@ -34,6 +34,7 @@ from foreman.core.store import (
     ApprovalResult,
     Approved,
     AwaitingAdmin,
+    Invalidated,
     PlanRecord,
     Rejected,
     Stores,
@@ -82,6 +83,10 @@ class ApprovalService:
         if content.environment not in self._catalog.policy.autonomy.environments:
             await self._reissue_plan_card(project_id, plan, content)
             return ApprovalRefused("plan_not_approvable")
+        if plan.status == "proposed":
+            stale = await self._refuse_if_stale(project_id, plan, content, plan_hash)
+            if stale is not None:
+                return stale
         precheck = await self._precheck(plan, content)
         if isinstance(precheck, ApprovalRefused):
             return precheck
@@ -99,9 +104,7 @@ class ApprovalService:
         elif isinstance(result, AwaitingAdmin) and result.created:
             await self._announce_pending(project_id, plan, content, str(precheck))
         elif isinstance(result, ApprovalRefused) and result.reason != "not_found":
-            # Le front attend la carte plan réémise plutôt que de deviner l'état après un 409.
-            current = await self._stores.plans.get(project_id, plan_id)
-            await self._reissue_plan_card(project_id, current or plan, content)
+            await self._after_refusal(project_id, plan, content)
         return result
 
     async def approve_admin(
@@ -114,6 +117,10 @@ class ApprovalService:
         if isinstance(loaded, ApprovalRefused):
             return loaded
         plan, content = loaded
+        if plan.status == "dev_approved":
+            stale = await self._refuse_if_stale(project_id, plan, content, plan_hash)
+            if stale is not None:
+                return stale
         result = await self._stores.plans.approve_admin(
             project_id,
             plan_id,
@@ -127,8 +134,7 @@ class ApprovalService:
             await self._announce_decision(project_id, plan, content, "approved", approver)
             await self._announce(project_id, plan_id, result.execution_id, content)
         elif isinstance(result, ApprovalRefused) and result.reason != "not_found":
-            current = await self._stores.plans.get(project_id, plan_id)
-            await self._reissue_plan_card(project_id, current or plan, content)
+            await self._after_refusal(project_id, plan, content)
         return result
 
     async def reject_admin(
@@ -148,7 +154,67 @@ class ApprovalService:
             await self._announce_decision(project_id, plan, content, "rejected", approver)
             current = await self._stores.plans.get(project_id, plan_id)
             await self._reissue_plan_card(project_id, current or plan, content)
+        elif isinstance(result, ApprovalRefused) and result.reason != "not_found":
+            await self._after_refusal(project_id, plan, content, reissue=False)
         return result
+
+    async def _refuse_if_stale(
+        self, project_id: UUID, plan: PlanRecord, content: PlanContent, plan_hash: str
+    ) -> ApprovalRefused | None:
+        """D1/D2 : avant toute écriture d'approbation, le catalogue et le registre doivent être
+        ceux de la proposition. Sinon le plan est invalidé (idempotent) et la décision refusée."""
+        rows = await self._stores.registry.list_for_project(project_id)
+        changes = plan_changes(content, self._catalog, rows)
+        if not changes:
+            return None
+        reason = (
+            "project_changed" if all(c.kind == "registry" for c in changes) else "catalog_changed"
+        )
+        invalidation = {"reason": reason, "changes": [c.model_dump() for c in changes]}
+        result = await self._stores.plans.invalidate(
+            project_id, plan.id, plan_hash, invalidation, now=self._clock()
+        )
+        if isinstance(result, Invalidated):
+            if result.created:
+                await self._close_cards(project_id, plan, content, "invalidated")
+            return ApprovalRefused("plan_not_approvable")
+        if result.reason == "plan_not_approvable":  # échu : le dépôt l'a écrit `expired`
+            await self._after_refusal(project_id, plan, content)
+        return result
+
+    async def _after_refusal(
+        self, project_id: UUID, plan: PlanRecord, content: PlanContent, *, reissue: bool = True
+    ) -> None:
+        """Le front attend la carte plan réémise plutôt que de deviner l'état après un 409. Un plan
+        échu écrit `expired` par le dépôt ferme aussi sa carte d'approbation, une seule fois."""
+        current = await self._stores.plans.get(project_id, plan.id)
+        if current is not None and current.status == "expired":
+            await self._close_cards(project_id, current, content, "expired")
+        elif reissue and not (current and current.status == "invalidated"):  # carte déjà émise
+            await self._reissue_plan_card(project_id, current or plan, content)
+
+    async def _close_cards(
+        self,
+        project_id: UUID,
+        plan: PlanRecord,
+        content: PlanContent,
+        status: Literal["expired", "invalidated"],
+    ) -> None:
+        """Cartes plan et approbation (si elle existait) à l'état terminal, sans doublon."""
+        latest: dict[str, str | None] = {}
+        rule_id = "inconnue"
+        for event in await self._events.read_after(project_id, 0):
+            data = event.data
+            if isinstance(data, PlanCardData) and data.plan_id == plan.id:
+                latest["plan"] = data.status
+            elif isinstance(data, ApprovalCardData) and data.plan_id == plan.id:
+                latest["approval"] = data.status
+                rule_id = data.rule_id
+        if latest.get("plan") != status:
+            current = await self._stores.plans.get(project_id, plan.id)
+            await self._reissue_plan_card(project_id, current or plan, content)
+        if "approval" in latest and latest["approval"] != status:
+            await self._emit_approval_card(project_id, plan, content, status, None, rule_id)
 
     async def _load(
         self, project_id: UUID, plan_id: UUID
@@ -258,7 +324,7 @@ class ApprovalService:
         project_id: UUID,
         plan: PlanRecord,
         content: PlanContent,
-        status: Literal["pending", "approved", "rejected"],
+        status: Literal["pending", "approved", "rejected", "expired", "invalidated"],
         decided_by: UserRef | None,
         rule_id: str,
     ) -> None:
