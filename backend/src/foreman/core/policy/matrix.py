@@ -11,9 +11,7 @@ from typing import Literal
 from foreman.core.catalog import PolicyMatrix, Purpose, Reversibility, ToolClass
 from foreman.core.events import Requirement
 
-DenyReason = Literal[
-    "unknown_environment", "role_not_allowed", "level_too_low", "never_autonomous", "no_rule"
-]
+DenyReason = Literal["unknown_environment", "role_not_allowed", "level_too_low", "no_rule"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,10 +54,28 @@ def effective_level(matrix: PolicyMatrix, environment: str, requested: int) -> i
     return 0 if config is None else min(requested, config.max_level)
 
 
+def requirements(
+    matrix: PolicyMatrix, verdict: Verdict, environment: str
+) -> tuple[Requirement, ...]:
+    """Exigences d'un verdict : règle, plus `admin_approved` si l'environnement l'exige.
+
+    `Allow` et `Deny` n'en ont aucune. `never_autonomous` n'intervient pas ici : la règle porte
+    déjà `admin_approved` (contrainte de validation du catalogue).
+    """
+    if not isinstance(verdict, AllowIf):
+        return ()
+    config = matrix.autonomy.environments.get(environment)
+    if config is not None and config.admin_approval_required:
+        return tuple(dict.fromkeys((*verdict.requires, "admin_approved")))
+    return verdict.requires
+
+
 def evaluate(matrix: PolicyMatrix, request: PolicyRequest) -> Verdict:
     """Première règle qui s'applique, dans l'ordre du fichier ; sinon refus."""
     if request.environment not in matrix.autonomy.environments:
         return Deny("unknown_environment")
+    if request.role not in matrix.roles:
+        return Deny("role_not_allowed")
     near_miss: Deny | None = None
     for rule in matrix.rules:
         match = rule.match
@@ -72,8 +88,6 @@ def evaluate(matrix: PolicyMatrix, request: PolicyRequest) -> Verdict:
             or (match.purpose is not None and request.purpose not in match.purpose)
         ):
             continue
-        if rule.never_autonomous:
-            return Deny("never_autonomous", rule.id)
         if rule.roles is not None and request.role not in rule.roles:
             near_miss = near_miss or Deny("role_not_allowed", rule.id)
             continue

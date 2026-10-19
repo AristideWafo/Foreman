@@ -26,7 +26,7 @@ async def test_s02_asks_for_the_environment_then_plans_for_the_answer() -> None:
     ask_cards = [e.data for e in run.after_ask if e.type == "card"]
     assert [c.kind for c in ask_cards] == ["clarification"]
     assert [(q.field, q.options, q.status) for q in ask_cards[0].questions] == [  # type: ignore[union-attr]
-        ("environment", ["staging"], "open")
+        ("environment", ["staging", "production"], "open")
     ]
     assert [(q.id, q.status) for q in run.questions_after_ask] == [("q1-1", "open")]
 

@@ -1,14 +1,30 @@
-# Matrice minimale du PoC (semaine 2) : R1, R2, R6 et refus par défaut.
-# Les règles R3 à R5 et R7 à R10 arrivent avec leurs scénarios.
+# Matrice de la gateway (semaine 4) : R1 à R10 dans l'ordre de la spec, spécifiques avant généraux.
+# La première règle dont match, roles et min_level correspondent s'applique ; défaut : refus.
+#
+# Écarts assumés avec le YAML de la spec (décision D7 du plan de la semaine 4) :
+#   - R3 est `allow_if [plan_approved]` et non `allow` : une écriture n'est jamais `allow`
+#     (« dans le périmètre du plan approuvé »).
+#   - R5 porte `class: write_registry` et `requires: [plan_approved, remediation_approved_by_admin]` :
+#     une règle est liée à sa classe, et toute écriture du registre exige plan_approved.
+#   - `never_autonomous` (R10) n'est plus un refus : c'est une contrainte de validation (la règle est
+#     `allow_if` avec `admin_approved`, que le niveau d'autonomie ne satisfait jamais).
+#   - `autonomy.org_ceiling` reste inutilisé : le plafond effectif est `max_level` par environnement.
 version: 1
 default: deny
 
 roles: [developer, team_admin, org_admin]
 
+# Qui peut donner chaque approbation (le front lit cette liste, il ne la code pas en dur).
+approvers:
+  developer: [developer, team_admin, org_admin]
+  admin: [team_admin, org_admin]
+
 autonomy:
-  org_ceiling: 3                      # l'org plafonne ; le staging peut dépasser via max_level
+  org_ceiling: 3                      # inutilisé : voir plus haut
   environments:
-    staging: {max_level: 4, admin_approval_required: false}
+    staging:    {max_level: 4, admin_approval_required: false}
+    production: {max_level: 3, admin_approval_required: true}   # max_level > 3 refusé au chargement
+  # admin_approval_required: true ajoute admin_approved à tout 'requires' d'une écriture
 
 classes:
   read:           "Lecture seule, ressources existantes comprises"
@@ -24,9 +40,56 @@ rules:
   - {id: R1-lecture,   match: {class: read},    min_level: 1, decision: allow}
   - {id: R2-controle,  match: {class: control},               decision: allow}
 
+  - id: R3-niveau4-reprise-et-rollback
+    match: {class: write_registry, env: staging, purpose: [resume, rollback_own, remediation], reversibility: [reversible, compensable]}
+    roles: [developer, team_admin, org_admin]
+    min_level: 4
+    requires: [plan_approved]          # dans le périmètre du plan déjà approuvé
+    decision: allow_if
+
+  - id: R4-remediation-reversible
+    match: {class: write_registry, purpose: remediation, reversibility: reversible}
+    roles: [developer, team_admin, org_admin]
+    min_level: 3
+    requires: [plan_approved]
+    decision: allow_if
+
+  - id: R5-remediation-autre
+    match: {class: write_registry, purpose: remediation, reversibility: [reversible, compensable]}
+    roles: [developer, team_admin, org_admin]
+    requires: [plan_approved, remediation_approved_by_admin]
+    decision: allow_if
+
   - id: R6-ecriture-staging
     match: {class: write_registry, env: staging, reversibility: [reversible, compensable]}
     roles: [developer, team_admin, org_admin]
     min_level: 2
     requires: [plan_approved]
+    decision: allow_if
+
+  - id: R7-ecriture-production
+    match: {class: write_registry, env: production, reversibility: [reversible, compensable]}
+    roles: [developer, team_admin, org_admin]
+    min_level: 2
+    requires: [plan_approved, admin_approved]
+    decision: allow_if
+
+  - id: R8-irreversible
+    match: {class: write_registry, reversibility: irreversible}
+    roles: [team_admin, org_admin]
+    min_level: 2
+    requires: [plan_approved, admin_approved]
+    decision: allow_if
+
+  - id: R9-hors-registre
+    match: {class: write_foreign}
+    roles: [team_admin, org_admin]
+    requires: [adoption_approved_by_admin]
+    decision: allow_if
+
+  - id: R10-destructif
+    match: {class: destructive}
+    roles: [team_admin, org_admin]
+    requires: [admin_approved]
+    never_autonomous: true            # même au niveau 4 : contrainte de validation (admin_approved)
     decision: allow_if

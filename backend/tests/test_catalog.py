@@ -93,8 +93,8 @@ def test_the_shipped_catalog_loads_every_s1_tool_skill_and_referentiel() -> None
 def test_the_matrix_loads_with_default_deny_and_the_minimal_rules() -> None:
     policy = load_catalog(CATALOG_DIR, environment="staging").policy
     assert policy.default == "deny"
-    assert [r.id for r in policy.rules] == ["R1-lecture", "R2-controle", "R6-ecriture-staging"]
-    r6 = policy.rules[2]
+    assert [r.id.split("-")[0] for r in policy.rules] == [f"R{i}" for i in range(1, 11)]
+    r6 = next(r for r in policy.rules if r.id.startswith("R6"))
     assert r6.requires == ["plan_approved"]
     assert r6.min_level == 2
     assert policy.budgets.per_execution.max_tool_calls == 60
@@ -115,7 +115,8 @@ def test_the_referentiels_hold_the_fictitious_s1_facts() -> None:
         "points_to": "server-staging-1",
     }
     assert refs["environments"].data["environments"] == {
-        "staging": {"max_level": 4, "admin_approval_required": False, "default_level": 2}
+        "staging": {"max_level": 4, "admin_approval_required": False, "default_level": 2},
+        "production": {"max_level": 3, "admin_approval_required": True, "default_level": 2},
     }
 
 
@@ -530,9 +531,9 @@ def test_apply_playbook_resolves_reversibility_and_scope_per_playbook() -> None:
         tool.effective_reversibility({"playbook": "rm_rf"})
 
 
-def test_apply_playbook_is_staging_only_and_registers_the_project_slug() -> None:
+def test_apply_playbook_targets_staging_and_production_and_registers_the_project_slug() -> None:
     source = tool_source("server.apply_playbook")
-    assert source["input"]["properties"]["environment"] == {"enum": ["staging"]}
+    assert source["input"]["properties"]["environment"] == {"enum": ["staging", "production"]}
     assert source["registry"]["external_id"] == "project"
     assert "run_id" in source["output"]
 
@@ -688,8 +689,19 @@ def _write_rule_bent_to_read(d: dict[str, Any]) -> None:
     rule["requires"] = []
 
 
+def _production_at_level_four(d: dict[str, Any]) -> None:
+    d["autonomy"]["environments"]["production"]["max_level"] = 4
+
+
+def _never_autonomous_without_admin(d: dict[str, Any]) -> None:
+    _rule(d, "R10-destructif")["requires"] = ["plan_approved"]
+
+
+def _never_autonomous_flag_removed(d: dict[str, Any]) -> None:
+    del _rule(d, "R10-destructif")["never_autonomous"]
+
+
 def _staging_rule_moved_to_production(d: dict[str, Any]) -> None:
-    d["autonomy"]["environments"]["production"] = {"max_level": 3, "admin_approval_required": True}
     _rule(d, "R6-ecriture-staging")["match"]["env"] = "production"
 
 
@@ -705,6 +717,9 @@ def _staging_rule_moved_to_production(d: dict[str, Any]) -> None:
         _read_rule_bent_to_write,
         _write_rule_bent_to_read,
         _staging_rule_moved_to_production,
+        _production_at_level_four,
+        _never_autonomous_without_admin,
+        _never_autonomous_flag_removed,
     ],
 )
 def test_a_matrix_weakening_a_rule_is_refused(mutate: Callable[[dict[str, Any]], None]) -> None:

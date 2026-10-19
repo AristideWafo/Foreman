@@ -35,6 +35,7 @@ from foreman.core.policy.matrix import (
     PolicyRequest,
     Verdict,
     evaluate,
+    requirements,
 )
 from foreman.core.ports import AdapterResult, ForeignResource, ToolAdapter
 from foreman.core.references import resolve_params
@@ -1174,24 +1175,102 @@ def request(
     )
 
 
+PLAN, ADMIN = "plan_approved", "admin_approved"
+REMEDIATION = "remediation_approved_by_admin"
+
+
+def asked_for(
+    tool_class: ToolClass,
+    *,
+    purpose: str | None = None,
+    **kwargs: Any,
+) -> PolicyRequest:
+    return replace(request(tool_class, **kwargs), purpose=purpose)  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize(
     ("asked", "expected"),
     [
         (request("read", reversibility="not_applicable", level=1), Allow("R1-lecture")),
         (request("control", reversibility="not_applicable"), Allow("R2-controle")),
+        # R3 : niveau 4 en staging pour reprise, rollback et remédiation réversible.
+        (
+            asked_for("write_registry", purpose="resume", level=4),
+            AllowIf("R3-niveau4-reprise-et-rollback", (PLAN,)),
+        ),
+        # R4 : remédiation réversible dès le niveau 3 (production comprise).
+        (
+            asked_for("write_registry", purpose="remediation", environment="production", level=3),
+            AllowIf("R4-remediation-reversible", (PLAN,)),
+        ),
+        # R5 : toute autre remédiation passe par l'admin.
+        (
+            asked_for("write_registry", purpose="remediation", reversibility="compensable"),
+            AllowIf("R5-remediation-autre", (PLAN, REMEDIATION)),
+        ),
+        # R6 : staging, tous les rôles, niveau 2.
         (
             request("write_registry", reversibility="compensable"),
-            AllowIf("R6-ecriture-staging", ("plan_approved",)),
+            AllowIf("R6-ecriture-staging", (PLAN,)),
         ),
         (request("write_registry", level=1), Deny("level_too_low", "R6-ecriture-staging")),
-        (request("write_registry", role="viewer"), Deny("role_not_allowed", "R6-ecriture-staging")),
-        (request("write_registry", reversibility="irreversible"), Deny("no_rule")),
-        (request("write_foreign"), Deny("no_rule")),
-        (request("destructive"), Deny("no_rule")),
-        (request("write_registry", environment="production"), Deny("unknown_environment")),
+        # Rôle inconnu : refusé même sur une règle sans `roles` (R3), niveau 4.
+        (
+            asked_for("write_registry", purpose="resume", level=4, role="viewer"),
+            Deny("role_not_allowed"),
+        ),
+        # R5 ne contourne pas R8 : une remédiation irréversible par un développeur est refusée.
+        (
+            asked_for("write_registry", purpose="remediation", reversibility="irreversible"),
+            Deny("role_not_allowed", "R8-irreversible"),
+        ),
+        # R7 : production, le développeur peut demander ; l'admin approuve.
+        (
+            request("write_registry", environment="production"),
+            AllowIf("R7-ecriture-production", (PLAN, ADMIN)),
+        ),
+        (
+            request("write_registry", environment="production", level=1),
+            Deny("level_too_low", "R7-ecriture-production"),
+        ),
+        # R8 : irréversible réservé aux admins, y compris en staging.
+        (
+            request("write_registry", reversibility="irreversible", role="team_admin"),
+            AllowIf("R8-irreversible", (PLAN, ADMIN)),
+        ),
+        (
+            request("write_registry", reversibility="irreversible"),
+            Deny("role_not_allowed", "R8-irreversible"),
+        ),
+        # R9 et R10 : admins seulement. R10 reste un AllowIf avec admin_approved, même au niveau 4.
+        (
+            request("write_foreign", role="org_admin"),
+            AllowIf("R9-hors-registre", ("adoption_approved_by_admin",)),
+        ),
+        (request("write_foreign"), Deny("role_not_allowed", "R9-hors-registre")),
+        (request("destructive", role="team_admin", level=4), AllowIf("R10-destructif", (ADMIN,))),
+        (request("destructive", level=4), Deny("role_not_allowed", "R10-destructif")),
+        # Refus par défaut.
+        (request("write_registry", environment="qa"), Deny("unknown_environment")),
     ],
 )
-def test_the_minimal_matrix_allows_only_what_it_names(
+def test_the_matrix_decides_by_role_level_environment_and_class(
     asked: PolicyRequest, expected: Verdict
 ) -> None:
     assert evaluate(minimal_matrix(), asked) == expected
+
+
+def test_requirements_add_the_admin_approval_an_environment_demands() -> None:
+    matrix = minimal_matrix()
+    staging_write = evaluate(matrix, request("write_registry"))
+    production_write = evaluate(matrix, request("write_registry", environment="production"))
+    foreign_in_production = evaluate(
+        matrix, request("write_foreign", environment="production", role="team_admin")
+    )
+    assert requirements(matrix, staging_write, "staging") == (PLAN,)
+    assert requirements(matrix, production_write, "production") == (PLAN, ADMIN)
+    assert requirements(matrix, foreign_in_production, "production") == (
+        "adoption_approved_by_admin",
+        ADMIN,
+    )
+    assert requirements(matrix, Allow("R1-lecture"), "production") == ()

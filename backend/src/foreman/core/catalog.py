@@ -32,6 +32,7 @@ REGISTRY_MARKING: Final = "managed-by=foreman"
 DRAFT_ALLOWED_ENVIRONMENTS: Final = frozenset({"staging"})
 SKILL_SECTIONS: Final = ("# Objectif", "# Instructions", "# Règles", "# Résultat attendu")
 MAX_CATALOG_FILE_BYTES: Final = 64 * 1024
+MAX_PRODUCTION_LEVEL: Final = 3  # la production n'est jamais pleinement autonome (niveau 4)
 
 
 ToolClass = Literal["read", "write_registry", "write_foreign", "destructive", "control"]
@@ -479,6 +480,14 @@ class Rule(_Strict):
                 raise ValueError("une écriture n'est jamais allow : allow_if avec exigences")
             if tool_class == "write_registry" and "plan_approved" not in self.requires:
                 raise ValueError("une écriture dans le registre exige plan_approved")
+        if self.never_autonomous and (
+            self.decision != "allow_if" or "admin_approved" not in self.requires
+        ):
+            raise ValueError("never_autonomous exige allow_if avec admin_approved")
+        if tool_class == "destructive" and (
+            "admin_approved" not in self.requires or not self.never_autonomous
+        ):
+            raise ValueError("une règle destructive exige admin_approved et never_autonomous")
         bound_class, bound_env = RULE_BINDINGS[self.id]
         if tool_class != bound_class:
             raise ValueError(f"la règle {self.id} porte sur la classe {bound_class}")
@@ -490,6 +499,13 @@ class Rule(_Strict):
 class EnvironmentAutonomy(_Strict):
     max_level: Annotated[int, Field(ge=1, le=4)]
     admin_approval_required: bool
+
+
+class Approvers(_Strict):
+    """Rôles autorisés à donner chaque approbation : le front lit cette liste."""
+
+    developer: Annotated[list[str], Field(min_length=1)]
+    admin: Annotated[list[str], Field(min_length=1)]
 
 
 class Autonomy(_Strict):
@@ -514,6 +530,7 @@ class PolicyMatrix(_Strict):
     version: Literal[1]
     default: Literal["deny"]
     roles: Annotated[list[str], Field(min_length=1)]
+    approvers: Approvers
     autonomy: Autonomy
     classes: dict[str, str]
     budgets: Budgets
@@ -526,6 +543,11 @@ class PolicyMatrix(_Strict):
             raise ValueError("identifiant de règle en double")
         if set(self.classes) != set(get_args(ToolClass)):
             raise ValueError("classes : les cinq classes d'outils sont attendues")
+        if not set(self.approvers.developer + self.approvers.admin) <= set(self.roles):
+            raise ValueError("approvers : rôle inconnu")
+        production = self.autonomy.environments.get("production")
+        if production is not None and production.max_level > MAX_PRODUCTION_LEVEL:
+            raise ValueError("production : max_level supérieur à 3 refusé")
         for rule in self.rules:
             unknown_env = set(rule.match.env or []) - set(self.autonomy.environments)
             if unknown_env:
