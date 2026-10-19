@@ -16,7 +16,8 @@ Source : `dev platform .md` (décisions D1 à D15, scénarios S1 à S12, étapes
 | Semaine 2 — scénario S1 | code fusionné dans `prod` (0.5.0 à 0.6.0) : persistance PostgreSQL, gateway, moteur, approbation, cartes ; ~~#127 (persistance après redéploiement) et #32 (carte vue) fermés~~ ; #27 et #31 : critères à aligner |
 | ~~Semaine 3 — scénario S2~~ | code terminé et fusionné dans `prod` (0.9.0) : journal d'événements persisté (migration 0002), badge « Mode mémoire », clarification (`ask_user`, questions ouvertes), scénario S2 et carte de clarification ; **reste à vérifier** sur env-perso : chat intact après redéploiement (#127), `/healthz` → `persistence: postgres` |
 | ~~Semaine 4 — scénario S10~~ | code terminé et fusionné dans `prod` (#167 à #172) : matrice R1 à R10, rôles et authentification de développement (migration 0003), approbation administrateur, scénario S10 et carte d'approbation ; **reste** : PR-G (suivi de la revue du journal, #176), badge de rôle dans la barre latérale, contrôle serveur Traefik avant `proxy_header` |
-| Semaines 5 et 6, essai jetable, fournisseurs réels, scénarios d'échec, évaluation | à venir |
+| **Semaine 5 — scénario S11** | **en cours** : plan dans `docs/plans/semaine-5.md` (trous d'idempotence, PR-A à PR-H) |
+| Semaine 6, essai jetable, fournisseurs réels, scénarios d'échec, évaluation | à venir |
 
 ## ~~Phase 0 — Squelette du dépôt (terminée)~~
 
@@ -51,7 +52,7 @@ depuis le journal.
 | **Semaine 2 — S1** (**en cours**) | Chemin nominal sur fakes : schéma SQL en migrations Alembic, registre des ressources, journal append-only, gateway minimale, moteur d'exécution (plan haché, étapes idempotentes), 3 Skills de départ. Cartes plan et exécution. | S1 vert en CI, cartes visibles |
 | ~~**Semaine 3 — S2**~~ | ~~Clarification : l'agent redemande les environnements manquants, questions ouvertes du projet, reprise de la conversation. Carte de clarification.~~ | ~~S2 vert en CI~~ |
 | ~~**Semaine 4 — S10**~~ (**terminé**) | Matrice YAML R1 à R10, rôles, niveaux d'autonomie, `approval_required` transmis à l'admin. Carte d'approbation. Authentification de développement avec rôles. | S10 vert en CI |
-| **Semaine 5 — S11** | Idempotence de bout en bout : même demande rejouée, aucune ressource en double (contraintes d'unicité, clés d'idempotence). | S11 vert en CI |
+| **Semaine 5 — S11** (**en cours**) | Idempotence de bout en bout : même demande rejouée, aucune ressource en double (contraintes d'unicité, clés d'idempotence). | S11 vert en CI |
 | **Semaine 6 — S12** | Approbation sur le hash, plan invalidé si l'état change, expiration. Carte « plan invalidé ». | S12 vert en CI |
 | **Essai jetable** | Bootstrap et wrapper Compose sur un conteneur SSH local : exécution, cas d'abus (Compose privilégié, montage hors projet, arguments hostiles), compte rendu dans `docs/spikes/`. | Compte rendu validé, conception ajustée si besoin |
 | **Fournisseurs réels** | GitLab : connecteur, sondes, lectures, `create_group`, `create_project`, `set_variable`, `delete_created`. Serveur : bootstrap, wrapper, `server.apply_playbook` (ansible-runner en flux), `inspect`, `healthcheck`. Vercel et DNS selon vos comptes. | S1 réel en staging |
