@@ -265,6 +265,26 @@ class PostgresExecutionStore:
                 ).one_or_none()
                 if step is None:
                     raise InvalidTransition
+                # Reprise refusée tant que l étape détentrice a un bail vivant (autre exécution).
+                alive = await conn.execute(
+                    sa.select(t.executions.c.id)
+                    .select_from(
+                        t.step_idempotency.join(
+                            t.execution_steps,
+                            t.execution_steps.c.id == t.step_idempotency.c.step_id,
+                        ).join(t.executions, t.executions.c.id == t.execution_steps.c.execution_id)
+                    )
+                    .where(
+                        t.step_idempotency.c.project_id == execution.project_id,
+                        t.step_idempotency.c.key == step.idempotency_key,
+                        t.executions.c.id != lease.execution_id,
+                        t.executions.c.state == "running",
+                        t.executions.c.lease_owner.is_not(None),
+                        t.executions.c.lease_expires_at >= sa.func.now(),
+                    )
+                )
+                if alive.first() is not None:
+                    raise InvalidTransition
                 moved = await conn.execute(
                     sa.update(t.step_idempotency)
                     .where(

@@ -46,6 +46,7 @@ SkillStatus = Literal["draft", "published"]
 
 _NAME_RE: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _PLACEHOLDER_RE: Final = re.compile(r"\{([^{}]*)\}")
+_TEMPLATE_RE: Final = re.compile(r"(\{input\.[a-z_]+\}|[^{}])+")
 _KEY_VARIABLES: Final = frozenset({"project_id", "execution_id", "step_seq"})
 # Liste blanche des mots-clés JSON Schema : tout le reste (patternProperties, unevaluated*,
 # dependentSchemas, not, if/then/else, $ref, prefixItems...) est refusé, donc ne peut pas contourner
@@ -289,7 +290,8 @@ class ToolDefinition(_Strict):
             external_id = self.registry.external_id
             if "{" in external_id:
                 wanted = _PLACEHOLDER_RE.findall(external_id)
-                if not all(w.startswith("input.") and w[len("input.") :] in names for w in wanted):
+                known = all(w[len("input.") :] in names for w in wanted)
+                if not (_TEMPLATE_RE.fullmatch(external_id) and known):
                     raise ValueError("registry.external_id: gabarit limité aux champs {input.x}")
             elif external_id not in names | set(self.output):
                 raise ValueError("registry.external_id doit être un champ de input ou de output")
