@@ -10,6 +10,8 @@ import s01 from "./s01-events.json";
 import s02 from "./s02-events.json";
 // Fixture réel : exporté par `make s10-fixture` depuis le scénario S10 (#39).
 import s10 from "./s10-events.json";
+// Fixture réel : exporté par `make s11-fixture` depuis le scénario S11 (#42).
+import s11 from "./s11-events.json";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000001";
 const PLAN_ID = "00000000-0000-4000-8000-000000000003";
@@ -258,4 +260,18 @@ test("S10, team_admin : boutons « Approuver » et « Refuser » ; approuvée, p
   renderCards(replay(8, s10)); // seq 8 : approuvée par admin
   expect(screen.getByRole("status")).toHaveTextContent("Approuvée par admin");
   expect(screen.queryByRole("button", { name: "Approuver" })).toBeNull();
+});
+
+// --- Critère de fin : S11, la carte d'exécution marque les ressources déjà présentes ------------------------
+
+test("S11, rejeu : 6 badges « déjà présente » et 8 étapes réussies sur la dernière carte d'exécution", () => {
+  renderCards(replay(78, s11)); // seq 78 : seconde exécution, terminée
+  const card = screen.getAllByRole("group", { name: "Exécution" }).at(-1)!;
+  expect(within(card).getAllByText("déjà présente")).toHaveLength(6);
+  // Résumé fourni par le serveur, affiché tel quel.
+  expect(
+    within(card).getByText(
+      "8 étapes réussies sur 8 en staging. 6 ressources déjà présentes, aucune créée.",
+    ),
+  ).toBeVisible();
 });

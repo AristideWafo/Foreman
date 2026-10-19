@@ -186,6 +186,14 @@ Le rôle de l'utilisateur vient de `GET /api/me` (`useMe`), jamais d'une règle 
 **Carte plan** : si `admin_approval_required`, l'action devient **« Valider et transmettre à l'admin »** ; sur 202
 (`ApprovalPending`), la ligne de statut dit « Validé. En attente d'un administrateur. ».
 
+## Ressources déjà présentes (Semaine 5)
+
+`ResourceList` affiche un `Badge` `secondary` « déjà présente » après le type de chaque ressource dont
+`reused === true` (champ facultatif de `ResourceRef`). Rien d'autre ne change : même liste, même lien.
+
+Le résumé de l'exécution (« N ressources déjà présentes, aucune créée ») est écrit par le serveur et affiché tel quel
+dans « Résultat » ; le front n'applique aucune règle de décompte ni de wording.
+
 ## États d'un écran
 
 Chargement (une ligne de texte), vide (une phrase qui dit quoi faire), erreur (`Alert` + « Réessayer »),
