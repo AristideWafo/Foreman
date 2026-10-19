@@ -9,6 +9,7 @@ import type { StepLogs } from "../events/timeline";
 import { executionFacts } from "./ExecutionCard";
 import { ResourceList } from "./ResourceList";
 import { FactList } from "./FactList";
+import { RETRYABLE_STATES, RetryPlan } from "./RetryPlan";
 import { StepList } from "./StepList";
 import { usePlanApproval } from "./usePlanApproval";
 import { executionStateLabel, planStatusLabel, shortHash } from "./vocabulary";
@@ -69,11 +70,14 @@ export function PlanCard({
   projectId,
   execution,
   logs = {},
+  retryText,
 }: {
   card: PlanCardData;
   projectId: string;
   execution?: ExecutionCardData;
   logs?: StepLogs;
+  /** Message à renvoyer si cette exécution est bloquée (dernière exécution du projet seulement). */
+  retryText?: string;
 }) {
   const steps = execution?.steps ?? card.steps;
   const done = steps.filter((s) => s.status === "succeeded").length;
@@ -150,6 +154,9 @@ export function PlanCard({
             adminRequired={card.admin_approval_required === true}
           />
         </CardFooter>
+      ) : null}
+      {retryText && execution && RETRYABLE_STATES.includes(execution.state) ? (
+        <RetryPlan projectId={projectId} text={retryText} />
       ) : null}
     </Card>
   );

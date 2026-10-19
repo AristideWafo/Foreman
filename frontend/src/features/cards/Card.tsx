@@ -14,18 +14,29 @@ export function Card({
   projectId,
   logs = NO_LOGS,
   execution,
+  retryText,
 }: {
   card: CardData;
   projectId: string;
   logs?: StepLogs;
   /** Exécution de ce plan : affichée dans la carte plan. */
   execution?: ExecutionCardData;
+  /** Message à renvoyer pour relancer une exécution bloquée (dernière exécution seulement). */
+  retryText?: string;
 }) {
   switch (card.kind) {
     case "plan":
-      return <PlanCard card={card} projectId={projectId} execution={execution} logs={logs} />;
+      return (
+        <PlanCard
+          card={card}
+          projectId={projectId}
+          execution={execution}
+          logs={logs}
+          retryText={retryText}
+        />
+      );
     case "execution":
-      return <ExecutionCard card={card} logs={logs} />;
+      return <ExecutionCard card={card} logs={logs} projectId={projectId} retryText={retryText} />;
     case "clarification":
       return <ClarificationCard card={card} projectId={projectId} />;
     case "approval":
