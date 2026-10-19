@@ -404,13 +404,13 @@ class ToolGateway:
         fields = frozenset(tool.redact)
         resources, reused = await self._resources(call, tool, raw)
         masked = redact_value(dict(raw.output), fields)
-        if reused and isinstance(masked, dict):
-            masked = {**masked, "reused": True}  # lu par la carte d'exécution et l'audit
         output = (
             masked
             if isinstance(masked, dict) and json_size(masked) <= MAX_OUTPUT_BYTES
             else truncated_output(masked if isinstance(masked, dict) else {})
         )
+        if reused:  # après la troncature (jamais perdu) ; écrase une clé `reused` de l'adaptateur
+            output = {**output, "reused": True}
         entry = self._entry(
             call,
             trace,

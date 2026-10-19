@@ -186,8 +186,13 @@
       "plan_card_id": "00000000000040008000000000000003",
       "environment": "production",
       "rule_id": "R7-ecriture-production",
-      "missing": ["admin_approved"],
-      "approver_roles": ["team_admin", "org_admin"],
+      "missing": [
+        "admin_approved"
+      ],
+      "approver_roles": [
+        "team_admin",
+        "org_admin"
+      ],
       "requested_by": {
         "name": "dev"
       },
@@ -211,7 +216,10 @@
       "environment": "production",
       "rule_id": "R7-ecriture-production",
       "missing": [],
-      "approver_roles": ["team_admin", "org_admin"],
+      "approver_roles": [
+        "team_admin",
+        "org_admin"
+      ],
       "requested_by": {
         "name": "dev"
       },
@@ -561,7 +569,9 @@
     "data": {
       "card_id": "00000000000040008000000000000004",
       "step": 3,
-      "lines": ["healthcheck : ok"]
+      "lines": [
+        "healthcheck : ok"
+      ]
     }
   },
   {
