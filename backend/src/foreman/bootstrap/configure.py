@@ -134,7 +134,7 @@ def configure(profile: Profile) -> App:
         members = InMemoryMemberStore(dev_members)  # pas de démarrage asynchrone : déjà synchronisé
         lifecycle = NoLifecycle()
     # 4. Services du cœur
-    gateway = build_gateway(catalog, stores, members)
+    gateway = build_gateway(catalog, stores, members, durable_registry=persistence == "postgres")
     return App(
         profile=profile,
         projects=projects,

@@ -7,6 +7,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from pydantic import JsonValue
 
+from foreman.bootstrap.adapters import build_adapters
 from foreman.core.ports import AdapterError, ForeignResource, ToolAdapter
 from foreman.core.references import resolve_params
 from foreman.core.turn import ProposePlanArguments
@@ -296,3 +297,14 @@ async def test_server_state_is_keyed_by_environment_and_project() -> None:
         "server.healthcheck", {"environment": "staging", "project": "safe-eat"}, "h"
     )
     assert staging.output["status"] == "ok"
+
+
+async def test_gitlab_two_server_starts_never_reuse_the_same_identifiers() -> None:
+    # Le registre survit au redémarrage, pas le faux : sans base aléatoire, `foreign_resource`.
+    catalog = load_catalog(catalog_dir_from_env(), environment="staging")
+    ids = []
+    for _ in range(2):
+        gitlab = build_adapters(catalog, durable_registry=True)["gitlab"]
+        group = await gitlab.execute("gitlab.create_group", GROUP, "k1")
+        ids.append(group.output["group_id"])
+    assert ids[0] != ids[1]
