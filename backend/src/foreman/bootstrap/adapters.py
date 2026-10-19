@@ -7,7 +7,7 @@ faux (GitLab, serveur, DNS) ; les vrais connecteurs les remplaceront ici et null
 
 from foreman.core.catalog import Catalog
 from foreman.core.gateway.pipeline import ToolGateway
-from foreman.core.ports import ToolAdapter
+from foreman.core.ports import MemberStore, ToolAdapter
 from foreman.core.store import Stores
 from foreman.integrations.dns.simulated import SimulatedDns
 from foreman.integrations.gitlab.simulated import SimulatedGitLab
@@ -23,5 +23,7 @@ def build_adapters(catalog: Catalog) -> dict[str, ToolAdapter]:
     }
 
 
-def build_gateway(catalog: Catalog, stores: Stores) -> ToolGateway:
-    return ToolGateway(catalog=catalog, stores=stores, adapters=build_adapters(catalog))
+def build_gateway(catalog: Catalog, stores: Stores, members: MemberStore) -> ToolGateway:
+    return ToolGateway(
+        catalog=catalog, stores=stores, adapters=build_adapters(catalog), members=members
+    )

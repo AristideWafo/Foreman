@@ -26,6 +26,7 @@ from jsonschema import Draft202012Validator
 from pydantic import JsonValue
 
 from foreman.core.catalog import Catalog, ToolDefinition
+from foreman.core.events import Requirement
 from foreman.core.gateway.budget import CallBudget
 from foreman.core.gateway.errors import CallDenied, CallFailed, DenialCode, FailureCode
 from foreman.core.gateway.port import GatewayCall, GatewayResult
@@ -46,11 +47,13 @@ from foreman.core.policy.matrix import (
     PolicyRequest,
     effective_level,
     evaluate,
+    requirements,
 )
 from foreman.core.ports import (
     AdapterError,
     AdapterResult,
     ForeignResource,
+    MemberStore,
     PermissionMissing,
     ToolAdapter,
 )
@@ -69,8 +72,6 @@ from foreman.core.store import (
 
 log = logging.getLogger(__name__)
 
-# Pas encore de rôles ni d'authentification (semaine 10) : le développeur valide son propre plan.
-DEFAULT_ROLE: Final = "developer"
 ACTOR_KIND: Final = "engine"
 MAX_TOOL_NAME_AUDIT: Final = 100
 MAX_EXTERNAL_ID: Final = 200
@@ -96,6 +97,7 @@ class _Trace:
     plan_hash: str | None = None
     tool: ToolDefinition | None = None
     rule_id: str | None = None
+    actor: str | None = None  # le demandeur du plan (identifiant), connu dès que le plan est lu
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,7 +160,7 @@ class ToolGateway:
         catalog: Catalog,
         stores: Stores,
         adapters: Mapping[str, ToolAdapter],
-        role: str = DEFAULT_ROLE,
+        members: MemberStore,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         missing = {t.connector for t in catalog.tools.values()} - set(adapters)
@@ -167,7 +169,7 @@ class ToolGateway:
         self._catalog = catalog
         self._stores = stores
         self._adapters = adapters
-        self._role = role
+        self._members = members
         self._clock = clock
         budget = catalog.policy.budgets.per_execution
         self._budget = CallBudget(budget.max_tool_calls, budget.max_minutes * 60.0, clock)
@@ -239,6 +241,11 @@ class ToolGateway:
         environment = plan.content.get("environment")  # 4
         if not isinstance(environment, str):
             raise _Refusal("unknown_context")
+        # Le rôle est celui du DEMANDEUR du plan, relu à chaque appel : l'agent n'a jamais plus de
+        # droits que lui, et un membre retiré perd son accès. Inconnu : refus (fermé par défaut).
+        role = None if plan.requested_by is None else await self._members.role_of(plan.requested_by)
+        if role is None:
+            raise _Refusal("policy_denied")
         matrix = self._catalog.policy
         verdict = evaluate(
             matrix,
@@ -246,20 +253,17 @@ class ToolGateway:
                 tool_class=tool.tool_class,
                 environment=environment,
                 reversibility=tool.effective_reversibility(call.params),
-                role=self._role,
+                role=role,
                 level=effective_level(matrix, environment, execution.autonomy_level),
             ),
         )
         if isinstance(verdict, Deny):
             raise _Refusal("policy_denied", verdict.rule_id)
         trace.rule_id = verdict.rule_id
-        # Seule l'approbation du développeur existe : un environnement qui exige un administrateur
-        # n'autorise aucune écriture (la lecture, `Allow`, reste permise).
-        if isinstance(verdict, AllowIf) and (
-            matrix.autonomy.environments[environment].admin_approval_required
-        ):
-            raise _Refusal("policy_denied", verdict.rule_id)
-        self._check_approval(call, plan, execution, step, verdict)  # 5
+        self._check_plan(call, plan, execution, step, verdict)  # 5 (le plan et l'appel)
+        await self._check_requirements(  # 5 (les exigences de la règle)
+            plan, requirements(matrix, verdict, environment), verdict.rule_id
+        )
         await self._check_invariants(call, tool, environment)  # 6
         if not self._budget.consume(call.execution_id):  # 7
             raise _Refusal("budget_exceeded", verdict.rule_id)
@@ -276,6 +280,7 @@ class ToolGateway:
         if plan is None or step is None:
             raise _Refusal("unknown_context")
         trace.plan_id, trace.plan_hash = plan.id, plan.content_hash
+        trace.actor = None if plan.requested_by is None else str(plan.requested_by)
         # Le bail doit être celui de l'appelant ici et maintenant (propriétaire et époque).
         lease = Lease(call.execution_id, call.lease_owner, call.lease_epoch)
         if not await self._stores.executions.renew(lease):
@@ -289,7 +294,7 @@ class ToolGateway:
         return execution, plan, step
 
     @staticmethod
-    def _check_approval(
+    def _check_plan(
         call: GatewayCall,
         plan: PlanRecord,
         execution: ExecutionRecord,
@@ -315,9 +320,24 @@ class ToolGateway:
             or _canonical(dict(call.params)) != _canonical(expected)
         ):
             raise _Refusal("call_differs_from_step", verdict.rule_id)
-        # Seule approbation disponible cette semaine : celle du développeur sur le plan.
-        if isinstance(verdict, AllowIf) and not set(verdict.requires) <= {"plan_approved"}:
-            raise _Refusal("policy_denied", verdict.rule_id)
+
+    async def _check_requirements(
+        self, plan: PlanRecord, needed: tuple[Requirement, ...], rule_id: str
+    ) -> None:
+        """Chaque exigence de la règle doit être remplie ; ce qui n'est pas satisfait est refusé.
+
+        `plan_approved` : le statut `dev_approved` est déjà contrôlé par `_check_plan`.
+        `admin_approved` : une approbation `admin` approuvée existe pour CE plan et CE hash.
+        Les autres exigences (adoption, remédiation) n'ont pas encore de mécanisme : refusées.
+        """
+        for requirement in needed:
+            if requirement == "plan_approved":
+                continue
+            if requirement == "admin_approved":
+                if not await self._stores.plans.has_admin_approval(plan.id, plan.content_hash):
+                    raise _Refusal("approval_required", rule_id)
+                continue
+            raise _Refusal("policy_denied", rule_id)
 
     async def _check_invariants(
         self, call: GatewayCall, tool: ToolDefinition, plan_environment: str
@@ -448,7 +468,7 @@ class ToolGateway:
             execution_id=call.execution_id,
             step_seq=call.step_seq,
             plan_hash=trace.plan_hash,
-            actor=self._role,
+            actor=trace.actor,
             tool=tool.tool if tool is not None else mask_text(call.tool)[:MAX_TOOL_NAME_AUDIT],
             tool_class=tool.tool_class if tool is not None else None,
             decision=decision,

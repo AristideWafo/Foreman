@@ -12,13 +12,17 @@ from foreman.core.identity import Member, Role
 from foreman.core.ports import CapacityExceeded, ProjectStore
 from foreman.core.projects import Project
 from foreman.core.store import (
+    ADMIN_ROLES,
     LEASE_TTL_S,
     MAX_AUDIT_DURATION_MS,
     MAX_RESUMABLE,
+    AdminApprovalResult,
+    AdminRejectionResult,
     ApprovalRefused,
     ApprovalResult,
     Approved,
     AuditEntry,
+    AwaitingAdmin,
     CompletedReservation,
     DuplicateResource,
     ExecutionRecord,
@@ -31,6 +35,7 @@ from foreman.core.store import (
     NewResource,
     OrphanReservation,
     PlanRecord,
+    Rejected,
     Reservation,
     ResourceRecord,
     StaleLease,
@@ -84,14 +89,19 @@ class InMemoryProjectStore:
 
 
 class InMemoryMemberStore:
-    def __init__(self) -> None:
-        self._roles: dict[UUID, Role] = {}
+    def __init__(self, members: Sequence[Member] = ()) -> None:
+        self._roles = {m.user_id: m.role for m in members}
+        self._names = {m.user_id: m.name for m in members}
 
     async def role_of(self, user_id: UUID) -> Role | None:
         return self._roles.get(user_id)
 
+    async def name_of(self, user_id: UUID) -> str | None:
+        return self._names.get(user_id)
+
     async def sync(self, members: Sequence[Member]) -> None:
         self._roles = {m.user_id: m.role for m in members}
+        self._names = {m.user_id: m.name for m in members}
 
 
 class InMemoryEventLog(SubscriberHub):
@@ -158,6 +168,8 @@ class _Plan:
     record: PlanRecord
     approval_id: UUID | None = None
     execution_id: UUID | None = None
+    admin_approval_id: UUID | None = None
+    admin_rejection_id: UUID | None = None
 
 
 @dataclass(slots=True)
@@ -220,6 +232,7 @@ class InMemoryPlanStore:
         plan_hash: str,
         approver_id: UUID,
         autonomy_level: int,
+        start_execution: bool = True,
     ) -> ApprovalResult:
         entry = self._s.plans.get(plan_id)
         if entry is None or entry.record.project_id != project_id:
@@ -227,30 +240,99 @@ class InMemoryPlanStore:
         record = entry.record
         if plan_hash != record.content_hash:
             return ApprovalRefused("plan_hash_mismatch")
-        if record.status == "dev_approved" and entry.approval_id and entry.execution_id:
-            return Approved(entry.approval_id, entry.execution_id, created=False)
+        if record.status == "dev_approved" and entry.approval_id:
+            if entry.execution_id:
+                return Approved(entry.approval_id, entry.execution_id, created=False)
+            return AwaitingAdmin(entry.approval_id, created=False)
         if record.status != "proposed" or record.expires_at <= self._s.clock():
             return ApprovalRefused("plan_not_approvable")
-        if any(
+        if start_execution and self._project_is_busy(project_id):
+            return ApprovalRefused("execution_in_progress")
+        entry.record = replace(record, status="dev_approved")
+        entry.approval_id = uuid4()
+        if not start_execution:
+            return AwaitingAdmin(entry.approval_id, created=True)
+        return Approved(entry.approval_id, self._start(entry, autonomy_level), created=True)
+
+    async def approve_admin(
+        self,
+        project_id: UUID,
+        plan_id: UUID,
+        plan_hash: str,
+        approver_id: UUID,
+        approver_role: str,
+        autonomy_level: int,
+    ) -> AdminApprovalResult:
+        if approver_role not in ADMIN_ROLES:
+            return ApprovalRefused("forbidden")
+        entry = self._s.plans.get(plan_id)
+        if entry is None or entry.record.project_id != project_id:
+            return ApprovalRefused("not_found")
+        record = entry.record
+        if plan_hash != record.content_hash:
+            return ApprovalRefused("plan_hash_mismatch")
+        if entry.admin_approval_id and entry.execution_id:
+            return Approved(entry.admin_approval_id, entry.execution_id, created=False)
+        if (
+            record.status != "dev_approved"
+            or entry.execution_id
+            or record.expires_at <= self._s.clock()
+        ):
+            return ApprovalRefused("plan_not_approvable")
+        if self._project_is_busy(project_id):
+            return ApprovalRefused("execution_in_progress")
+        entry.admin_approval_id = uuid4()
+        return Approved(entry.admin_approval_id, self._start(entry, autonomy_level), created=True)
+
+    async def reject_admin(
+        self,
+        project_id: UUID,
+        plan_id: UUID,
+        plan_hash: str,
+        approver_id: UUID,
+        approver_role: str,
+    ) -> AdminRejectionResult:
+        if approver_role not in ADMIN_ROLES:
+            return ApprovalRefused("forbidden")
+        entry = self._s.plans.get(plan_id)
+        if entry is None or entry.record.project_id != project_id:
+            return ApprovalRefused("not_found")
+        record = entry.record
+        if plan_hash != record.content_hash:
+            return ApprovalRefused("plan_hash_mismatch")
+        if entry.admin_rejection_id:
+            return Rejected(entry.admin_rejection_id, created=False)
+        if record.status != "dev_approved" or entry.execution_id:
+            return ApprovalRefused("plan_not_approvable")
+        entry.admin_rejection_id = uuid4()
+        entry.record = replace(record, status="invalidated")
+        return Rejected(entry.admin_rejection_id, created=True)
+
+    async def has_admin_approval(self, plan_id: UUID, plan_hash: str) -> bool:
+        entry = self._s.plans.get(plan_id)
+        return bool(entry and entry.admin_approval_id and entry.record.content_hash == plan_hash)
+
+    def _project_is_busy(self, project_id: UUID) -> bool:
+        return any(
             e.project_id == project_id and e.state in _ACTIVE_STATES
             for e in self._s.executions.values()
-        ):
-            return ApprovalRefused("execution_in_progress")
-        execution_id = uuid4()
-        execution = _Execution(
+        )
+
+    def _start(self, entry: _Plan, autonomy_level: int) -> UUID:
+        """Exécution et étapes `pending` du plan (même effet que la transaction PostgreSQL)."""
+        record, execution_id = entry.record, uuid4()
+        self._s.executions[execution_id] = _Execution(
             id=execution_id,
-            plan_id=plan_id,
-            project_id=project_id,
+            plan_id=record.id,
+            project_id=record.project_id,
             autonomy_level=autonomy_level,
             steps=[
                 _Step(uuid4(), b.seq, b.tool, b.params, b.idempotency_key)
                 for b in (s.bound_to(execution_id) for s in steps_of(record.content))
             ],
         )
-        self._s.executions[execution.id] = execution
-        entry.record = replace(record, status="dev_approved")
-        entry.approval_id, entry.execution_id = uuid4(), execution.id
-        return Approved(entry.approval_id, execution.id, created=True)
+        entry.execution_id = execution_id
+        return execution_id
 
 
 def _step_record(step: _Step) -> StepRecord:

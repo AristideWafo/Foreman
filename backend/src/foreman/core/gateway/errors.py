@@ -7,7 +7,8 @@ DenialCode = Literal[
     "unknown_context",  # exécution, plan ou étape introuvable pour ce projet, exécution terminée
     "unknown_tool",
     "invalid_params",  # le schéma de l'outil refuse les paramètres
-    "policy_denied",  # la matrice refuse (ou une exigence n'est pas remplie)
+    "policy_denied",  # la matrice refuse (ou une exigence autre que l'admin n'est pas remplie)
+    "approval_required",  # la règle exige `admin_approved` et aucun admin n'a approuvé ce plan
     "plan_not_approved",
     "plan_hash_mismatch",
     "call_differs_from_step",  # l'appel n'est pas celui de l'étape `seq` du plan approuvé

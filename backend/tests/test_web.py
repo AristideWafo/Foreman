@@ -11,10 +11,11 @@ from fastapi.testclient import TestClient
 from foreman.bootstrap.configure import App, Profile, configure, parse_dev_members
 from foreman.core.clarification import answer_text
 from foreman.core.events import ClarificationQuestion
+from foreman.core.planning import Draft, DraftStep, Planner
 from foreman.core.ports import ConversationMessage, ModelReply, Provider
-from foreman.core.store import DEV_USER_ID
+from foreman.core.store import ADMIN_ROLES, DEV_USER_ID
 from foreman.core.turn import TurnService
-from foreman.infra.file_catalog import catalog_dir_from_env
+from foreman.infra.file_catalog import catalog_dir_from_env, load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
 from foreman.infra.replay_provider import ReplayProvider
 from foreman.surfaces.web.app import create_app
@@ -90,7 +91,7 @@ def test_healthz_reports_the_version_from_the_environment(monkeypatch: pytest.Mo
     assert client.get("/healthz").json() == {**expected, "version": "dev"}
 
 
-def test_me_is_the_dev_identity_and_admin_approvals_are_not_implemented() -> None:
+def test_me_is_the_dev_identity_and_a_developer_cannot_give_the_admin_approval() -> None:
     client = TestClient(create_app())
     assert client.get("/api/me").json() == {
         "user_id": str(DEV_USER_ID),
@@ -101,7 +102,7 @@ def test_me_is_the_dev_identity_and_admin_approvals_are_not_implemented() -> Non
         f"/api/projects/{uuid4()}/plans/{uuid4()}/admin-approvals",
         json={"plan_hash": "sha256:" + "a" * 64, "decision": "approved"},
     )
-    assert (response.status_code, response.json()) == (501, {"error": "not_implemented"})
+    assert (response.status_code, response.json()) == (403, {"error": "forbidden"})
 
 
 async def test_projects_are_listed_newest_first() -> None:
@@ -347,3 +348,64 @@ def test_none_mode_ignores_the_forwarded_user_header(monkeypatch: pytest.MonkeyP
     with TestClient(create_app()) as client:
         me = client.get("/api/me", headers={"X-Forwarded-User": "bob"}).json()
     assert me == {"user_id": str(DEV_USER_ID), "name": "dev", "role": "developer"}
+
+
+def test_admin_approval_over_http_approves_then_replays_and_a_rejection_invalidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Contrat : 201 puis 200 idempotent (ApprovalAccepted) ; refus = 200 ApprovalRejected."""
+    monkeypatch.setenv("FOREMAN_AUTH_MODE", "proxy_header")
+    monkeypatch.setenv("FOREMAN_DEV_MEMBERS", "dev:developer,admin:team_admin")
+    state = configure(Profile.WEB)
+    dev = {"X-Forwarded-User": "dev"}
+    admin = {"X-Forwarded-User": "admin"}
+
+    def draft(title: str) -> Draft:
+        step = DraftStep(
+            "Préparer",
+            "server.apply_playbook",
+            {
+                "environment": "production",
+                "project": "safe-eat",
+                "playbook": "bootstrap_project",
+                "mode": "apply",
+            },
+        )
+        return Draft(title=title, summary="s", environment="production", steps=[step])
+
+    with TestClient(create_app(state)) as client:
+        dev_id = UUID(client.get("/api/me", headers=dev).json()["user_id"])
+        project = client.post("/api/projects", json={}, headers=dev).json()["id"]
+        planner = Planner(state.catalog, state.stores.plans)  # type: ignore[arg-type]
+        plans = [
+            asyncio.run(planner.propose(UUID(project), draft(t), dev_id))[0] for t in ("a", "b")
+        ]
+        base = f"/api/projects/{project}/plans"
+        for record in plans:
+            pending = client.post(
+                f"{base}/{record.id}/approvals",
+                json={"plan_hash": record.content_hash, "decision": "approved"},
+                headers=dev,
+            )
+            assert pending.status_code == 202
+
+        body = {"plan_hash": plans[0].content_hash, "decision": "approved"}
+        url = f"{base}/{plans[0].id}/admin-approvals"
+        first = client.post(url, json=body, headers=admin)
+        again = client.post(url, json=body, headers=admin)
+        assert (first.status_code, again.status_code) == (201, 200)
+        assert first.json() == again.json() and "execution_id" in first.json()
+
+        refusal = client.post(
+            f"{base}/{plans[1].id}/admin-approvals",
+            json={"plan_hash": plans[1].content_hash, "decision": "rejected"},
+            headers=admin,
+        )
+        assert (refusal.status_code, refusal.json()["status"]) == (200, "rejected")
+        assert "ApprovalRejected" in client.get("/openapi.json").json()["components"]["schemas"]
+        stored = asyncio.run(state.stores.plans.get(UUID(project), plans[1].id))
+        assert stored is not None and stored.status == "invalidated"
+
+
+def test_admin_roles_in_the_store_match_the_policy_matrix() -> None:
+    assert set(ADMIN_ROLES) == set(load_catalog(environment="staging").policy.approvers.admin)

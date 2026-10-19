@@ -30,6 +30,15 @@ class PostgresMemberStore:
             log_failure("members.role_of", exc)
             raise StoreError("stockage indisponible") from None
 
+    async def name_of(self, user_id: UUID) -> str | None:
+        statement = sa.select(t.users.c.name).where(t.users.c.id == user_id)
+        try:
+            async with self._engine.connect() as conn:
+                return (await conn.execute(statement)).scalar_one_or_none()
+        except SQLAlchemyError as exc:
+            log_failure("members.name_of", exc)
+            raise StoreError("stockage indisponible") from None
+
     async def sync(self, members: Sequence[Member]) -> None:
         """Remplace les rôles de l'équipe en une transaction. Les `users` ne sont jamais supprimés
         (les plans et approbations les référencent) ; seul le rôle disparaît."""

@@ -12,13 +12,13 @@ from fastapi import Request
 
 from foreman.bootstrap.configure import App, AuthMode
 from foreman.core.identity import Principal, member_id
-from foreman.core.store import DEV_USER_ID
+from foreman.core.store import DEV_USER_ID, DEV_USER_NAME
 from foreman.surfaces.web.errors import ApiError
 
 FORWARDED_USER = "X-Forwarded-User"
 MAX_NAME_LENGTH = 100
 
-DEV_PRINCIPAL = Principal(user_id=DEV_USER_ID, name="dev", role="developer")
+DEV_PRINCIPAL = Principal(user_id=DEV_USER_ID, name=DEV_USER_NAME, role="developer")
 
 
 def make_current_principal(app: App) -> Callable[[Request], Awaitable[Principal]]:

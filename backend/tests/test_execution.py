@@ -16,15 +16,17 @@ from foreman.core.approval import ApprovalService
 from foreman.core.execution.engine import ExecutionEngine
 from foreman.core.gateway.pipeline import ToolGateway
 from foreman.core.gateway.port import GatewayCall, GatewayResult
+from foreman.core.identity import Principal
 from foreman.core.planning import Draft, DraftStep, Planner, plan_card_id
 from foreman.core.ports import AdapterResult, ToolAdapter
-from foreman.core.store import DEV_USER_ID, ApprovalRefused, Approved, AuditEntry
+from foreman.core.store import DEV_USER_ID, ApprovalRefused, Approved, AuditEntry, AwaitingAdmin
 from foreman.infra.file_catalog import load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
 from foreman.integrations.dns.simulated import SimulatedDns
 from foreman.integrations.gitlab.simulated import SimulatedGitLab
 from foreman.integrations.server.simulated import SimulatedServer
 from foreman.surfaces.web.app import create_app
+from support import DEV_PRINCIPAL, dev_members
 
 ADAPTER_SECRET = "secret-adapter token=glpat-XXXXXXXXXXXXXXXXXXXX"  # noqa: S105 - valeur factice
 
@@ -127,6 +129,7 @@ async def test_an_adapter_defect_blocks_the_execution_without_leaking_details(
     gateway = ToolGateway(
         catalog=catalog,
         stores=stores,
+        members=dev_members(),
         adapters={
             "gitlab": gitlab,
             "server": SimulatedServer(),
@@ -158,8 +161,8 @@ async def test_an_adapter_defect_blocks_the_execution_without_leaking_details(
         ],
     )
     record, _ = await Planner(catalog, stores.plans).propose(project, draft, DEV_USER_ID)
-    approved = await ApprovalService(catalog, stores, events).approve(
-        project, record.id, record.content_hash
+    approved = await ApprovalService(catalog, stores, events, dev_members()).approve(
+        project, record.id, record.content_hash, DEV_PRINCIPAL
     )
     assert isinstance(approved, Approved)
 
@@ -251,8 +254,8 @@ async def test_the_lease_is_renewed_during_a_long_call() -> None:
     record, _ = await Planner(catalog, stores.plans, clock=far_future).propose(
         project, draft, DEV_USER_ID
     )
-    approved = await ApprovalService(catalog, stores, events).approve(
-        project, record.id, record.content_hash
+    approved = await ApprovalService(catalog, stores, events, dev_members()).approve(
+        project, record.id, record.content_hash, DEV_PRINCIPAL
     )
     assert isinstance(approved, Approved)
     gateway = SlowGateway()
@@ -296,11 +299,62 @@ async def test_a_refused_approval_reissues_the_plan_card_from_the_stored_state()
     record, _ = await Planner(catalog, stores.plans, clock=long_ago).propose(
         project, draft, DEV_USER_ID
     )  # expiré
-    refused = await ApprovalService(catalog, stores, events).approve(
-        project, record.id, record.content_hash
+    refused = await ApprovalService(catalog, stores, events, dev_members()).approve(
+        project, record.id, record.content_hash, DEV_PRINCIPAL
     )
     assert refused == ApprovalRefused("plan_not_approvable")
     cards = [e.data for e in await events.read_after(project, 0) if e.type == "card"]
     assert len(cards) == 1
     assert cards[0].kind == "plan" and cards[0].card_id == plan_card_id(record.id)
     assert (cards[0].status, cards[0].approvable) == ("expired", False)
+
+
+async def test_a_production_plan_waits_for_an_admin_who_then_starts_the_execution() -> None:
+    """D2/D3 : la validation du développeur n'écrit aucune exécution (202) et émet la carte
+    `pending` ; seul un admin approuve (le développeur reçoit `forbidden`, rien n'est écrit)."""
+    catalog = load_catalog(environment="staging")
+    projects = InMemoryProjectStore()
+    _, stores = in_memory_stores(projects=projects)
+    events = InMemoryEventLog()
+    members = dev_members()
+    project = (await projects.create("p")).id
+    draft = Draft(
+        title="Production",
+        summary="Préparer le projet",
+        environment="production",
+        steps=[
+            DraftStep(
+                "Préparer",
+                "server.apply_playbook",
+                {
+                    "environment": "production",
+                    "project": "safe-eat",
+                    "playbook": "bootstrap_project",
+                    "mode": "apply",
+                },
+            )
+        ],
+    )
+    record, _ = await Planner(catalog, stores.plans).propose(project, draft, DEV_USER_ID)
+    service = ApprovalService(catalog, stores, events, members)
+    pending = await service.approve(project, record.id, record.content_hash, DEV_PRINCIPAL)
+    assert isinstance(pending, AwaitingAdmin)
+    assert await stores.executions.list_resumable() == []  # aucune exécution n'a été créée
+
+    card = [e.data for e in await events.read_after(project, 0) if e.data.kind == "approval"][-1]
+    assert (card.status, card.rule_id, card.missing) == (  # type: ignore[union-attr]
+        "pending",
+        "R7-ecriture-production",
+        ["admin_approved"],
+    )
+    assert card.approver_roles == ["team_admin", "org_admin"]  # type: ignore[union-attr]
+
+    refused = await service.approve_admin(project, record.id, record.content_hash, DEV_PRINCIPAL)
+    assert refused == ApprovalRefused("forbidden")
+    assert not await stores.plans.has_admin_approval(record.id, record.content_hash)
+
+    boss = Principal(user_id=DEV_USER_ID, name="boss", role="team_admin")
+    approved = await service.approve_admin(project, record.id, record.content_hash, boss)
+    assert isinstance(approved, Approved) and approved.created
+    last = [e.data for e in await events.read_after(project, 0) if e.data.kind == "approval"][-1]
+    assert (last.status, last.decided_by.name) == ("approved", "boss")  # type: ignore[union-attr]

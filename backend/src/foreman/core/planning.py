@@ -385,7 +385,8 @@ def _skills(names: Sequence[str], catalog: Catalog, environment: str) -> list[Pl
 def plan_card(
     record: PlanRecord, content: PlanContent, catalog: Catalog, card_id: str
 ) -> PlanCardData:
-    """Carte plan enrichie. `approvable` : la matrice n'exige pas d'approbation d'administrateur."""
+    """Carte plan enrichie. `approvable` : le plan attend la validation du développeur ; si
+    l'environnement exige un admin, la carte le dit et la validation est suivie de la sienne."""
     environment = catalog.policy.autonomy.environments[content.environment]
     return PlanCardData(
         card_id=card_id,
@@ -411,7 +412,8 @@ def plan_card(
         stack=content.stack,
         skills=[SkillRef(name=s.name, version=s.version, sha256=s.sha256) for s in content.skills],
         expected_resources=content.expected_resources,
-        approvable=record.status == "proposed" and not environment.admin_approval_required,
+        approvable=record.status == "proposed",
+        admin_approval_required=True if environment.admin_approval_required else None,
     )
 
 

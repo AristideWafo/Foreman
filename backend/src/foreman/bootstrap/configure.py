@@ -24,7 +24,7 @@ from foreman.core.gateway.port import Gateway
 from foreman.core.identity import ROLES, Member
 from foreman.core.planning import Planner
 from foreman.core.ports import EventLog, MemberStore, ProjectStore
-from foreman.core.store import Stores
+from foreman.core.store import DEV_USER_ID, DEV_USER_NAME, Stores
 from foreman.core.turn import TurnService
 from foreman.infra.db.engine import make_engine
 from foreman.infra.db.events import PostgresEventLog
@@ -102,6 +102,16 @@ def configure(profile: Profile) -> App:
     catalog = load_catalog(environment=environment)
     # 3. Adaptateurs de connecteurs : bootstrap/adapters.py (seul endroit qui importe integrations)
     provider = ReplayProvider.from_dir(catalog_dir_from_env())
+    auth_mode = AuthMode(os.environ.get(ENV_AUTH_MODE, DEFAULT_AUTH_MODE))
+    dev_members = parse_dev_members(os.environ.get(ENV_DEV_MEMBERS, ""))
+    if auth_mode is AuthMode.PROXY_HEADER and not dev_members:
+        # Sans membre, personne ne peut s'authentifier : on échoue au démarrage.
+        raise ValueError(f"{ENV_DEV_MEMBERS} est obligatoire en mode {AuthMode.PROXY_HEADER}")
+    if auth_mode is AuthMode.NONE:
+        # Le mode `none` n'authentifie personne : l'utilisateur `dev` (DEV_USER_ID) est développeur.
+        # Sans ce membre, la gateway ne trouverait aucun rôle pour ses plans et refuserait tout.
+        dev = Member(DEV_USER_NAME, "developer", DEV_USER_ID)
+        dev_members = (dev, *(m for m in dev_members if m.name != DEV_USER_NAME))
     events: EventLog
     projects: ProjectStore
     members: MemberStore
@@ -121,15 +131,10 @@ def configure(profile: Profile) -> App:
         projects = memory_projects
         events = InMemoryEventLog()
         stores = in_memory_stores(projects=memory_projects)[1]
-        members = InMemoryMemberStore()
+        members = InMemoryMemberStore(dev_members)  # pas de démarrage asynchrone : déjà synchronisé
         lifecycle = NoLifecycle()
-    auth_mode = AuthMode(os.environ.get(ENV_AUTH_MODE, DEFAULT_AUTH_MODE))
-    dev_members = parse_dev_members(os.environ.get(ENV_DEV_MEMBERS, ""))
-    if auth_mode is AuthMode.PROXY_HEADER and not dev_members:
-        # Sans membre, personne ne peut s'authentifier : on échoue au démarrage.
-        raise ValueError(f"{ENV_DEV_MEMBERS} est obligatoire en mode {AuthMode.PROXY_HEADER}")
     # 4. Services du cœur
-    gateway = build_gateway(catalog, stores)
+    gateway = build_gateway(catalog, stores, members)
     return App(
         profile=profile,
         projects=projects,
@@ -143,6 +148,6 @@ def configure(profile: Profile) -> App:
         dev_members=dev_members,
         catalog=catalog,
         gateway=gateway,
-        approvals=ApprovalService(catalog, stores, events),
+        approvals=ApprovalService(catalog, stores, events, members),
         engine=ExecutionEngine(catalog=catalog, stores=stores, gateway=gateway, events=events),
     )

@@ -99,6 +99,13 @@ class ApprovalPending(BaseModel):
     missing: Annotated[list[Literal["admin_approved"]], Field(max_length=1)]
 
 
+class ApprovalRejected(BaseModel):
+    """200 : l'administrateur a refusé le plan (il est invalidé, aucune exécution n'existe)."""
+
+    approval_id: UUID
+    status: Literal["rejected"]
+
+
 class AdminApprovalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

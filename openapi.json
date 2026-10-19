@@ -183,6 +183,27 @@
         "title": "ApprovalPending",
         "type": "object"
       },
+      "ApprovalRejected": {
+        "description": "200 : l'administrateur a refus\u00e9 le plan (il est invalid\u00e9, aucune ex\u00e9cution n'existe).",
+        "properties": {
+          "approval_id": {
+            "format": "uuid",
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "rejected",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "status"
+        ],
+        "title": "ApprovalRejected",
+        "type": "object"
+      },
       "ApprovalRequest": {
         "additionalProperties": false,
         "description": "Approbation d'un plan : elle porte sur le HASH affich\u00e9, pas sur \u00ab le dernier plan \u00bb.",
@@ -2576,7 +2597,7 @@
     },
     "/api/projects/{project_id}/plans/{plan_id}/admin-approvals": {
       "post": {
-        "description": "Un administrateur approuve ou refuse un plan en attente (pas encore impl\u00e9ment\u00e9).",
+        "description": "Un administrateur approuve (cr\u00e9e l'ex\u00e9cution et la d\u00e9marre) ou refuse un plan.\n\nSeuls les r\u00f4les de `approvers.admin` le peuvent (sinon 403, rien n'est \u00e9crit).",
         "operationId": "admin_approve_plan_api_projects__project_id__plans__plan_id__admin_approvals_post",
         "parameters": [
           {
@@ -2611,6 +2632,24 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ApprovalAccepted"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApprovalRejected"
+                    }
+                  ],
+                  "title": "Response 200 Admin Approve Plan Api Projects  Project Id  Plans  Plan Id  Admin Approvals Post"
+                }
+              }
+            },
+            "description": "Rejeu idempotent d'une approbation (`ApprovalAccepted`, m\u00eames identifiants), ou refus (`decision: rejected`, `ApprovalRejected`) : le plan est invalid\u00e9"
+          },
           "201": {
             "content": {
               "application/json": {
@@ -2659,7 +2698,7 @@
                 }
               }
             },
-            "description": "`plan_hash_mismatch`, `plan_not_approvable` ou `policy_denied`"
+            "description": "`plan_hash_mismatch`, `plan_not_approvable` (expir\u00e9, invalid\u00e9, pas encore valid\u00e9 par le d\u00e9veloppeur) ou `execution_in_progress`"
           },
           "422": {
             "content": {
@@ -2697,7 +2736,7 @@
     },
     "/api/projects/{project_id}/plans/{plan_id}/approvals": {
       "post": {
-        "description": "Le d\u00e9veloppeur valide son plan (staging) : l'approbation porte sur le hash affich\u00e9.",
+        "description": "Le d\u00e9veloppeur valide son plan : l'approbation porte sur le hash affich\u00e9.\n\nSi l'environnement exige un administrateur, la validation est \u00e9crite sans ex\u00e9cution (202).",
         "operationId": "approve_plan_api_projects__project_id__plans__plan_id__approvals_post",
         "parameters": [
           {

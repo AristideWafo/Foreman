@@ -14,6 +14,7 @@ from foreman.core.store import (
     ApprovalRefused,
     Approved,
     AuditEntry,
+    AwaitingAdmin,
     CompletedReservation,
     DuplicateResource,
     InvalidTransition,
@@ -23,6 +24,7 @@ from foreman.core.store import (
     NewResource,
     OrphanReservation,
     PlanRecord,
+    Rejected,
     StaleLease,
     StoreError,
     UnknownProject,
@@ -144,6 +146,64 @@ async def test_approval_is_idempotent_and_other_outcomes_are_typed_refusals(
         other_project, expired.id, expired.content_hash, APPROVER, 2
     )
     assert result == ApprovalRefused("plan_not_approvable")
+
+
+async def test_admin_approval_starts_the_execution_once_and_a_developer_cannot_give_it(
+    harness: Harness,
+) -> None:
+    project = await new_project(harness)
+    plan = await new_plan(harness, project)
+    plans = harness.stores.plans
+    waiting = await plans.approve(
+        project, plan.id, plan.content_hash, APPROVER, 2, start_execution=False
+    )
+    assert isinstance(waiting, AwaitingAdmin) and waiting.created
+    assert await plans.approve(project, plan.id, plan.content_hash, APPROVER, 2, False) == (
+        AwaitingAdmin(waiting.approval_id, created=False)
+    )  # rejeu : même identifiant, toujours aucune exécution
+    assert not await plans.has_admin_approval(plan.id, plan.content_hash)
+
+    # Un développeur est refusé et rien n'est écrit.
+    refused = await plans.approve_admin(
+        project, plan.id, plan.content_hash, APPROVER, "developer", 2
+    )
+    assert refused == ApprovalRefused("forbidden")
+    assert not await plans.has_admin_approval(plan.id, plan.content_hash)
+
+    first = await plans.approve_admin(
+        project, plan.id, plan.content_hash, APPROVER, "team_admin", 2
+    )
+    assert isinstance(first, Approved) and first.created
+    replay = await plans.approve_admin(
+        project, plan.id, plan.content_hash, APPROVER, "org_admin", 2
+    )
+    assert replay == Approved(first.approval_id, first.execution_id, created=False)
+    assert await plans.has_admin_approval(plan.id, plan.content_hash)
+    assert not await plans.has_admin_approval(plan.id, "sha256:" + "f" * 64)  # lié au hash
+    # La validation développeur rejouée rend maintenant l'exécution créée par l'admin.
+    again = await plans.approve(project, plan.id, plan.content_hash, APPROVER, 2, False)
+    assert again == Approved(waiting.approval_id, first.execution_id, created=False)
+
+
+async def test_admin_rejection_invalidates_the_plan_and_is_idempotent(harness: Harness) -> None:
+    project = await new_project(harness)
+    plan = await new_plan(harness, project)
+    plans = harness.stores.plans
+    await plans.approve(project, plan.id, plan.content_hash, APPROVER, 2, start_execution=False)
+    assert await plans.reject_admin(
+        project, plan.id, plan.content_hash, APPROVER, "developer"
+    ) == ApprovalRefused("forbidden")
+    rejected = await plans.reject_admin(project, plan.id, plan.content_hash, APPROVER, "team_admin")
+    assert isinstance(rejected, Rejected) and rejected.created
+    assert await plans.reject_admin(
+        project, plan.id, plan.content_hash, APPROVER, "team_admin"
+    ) == Rejected(rejected.approval_id, created=False)
+    stored = await plans.get(project, plan.id)
+    assert stored is not None and stored.status == "invalidated"
+    after = await plans.approve_admin(
+        project, plan.id, plan.content_hash, APPROVER, "team_admin", 2
+    )
+    assert after == ApprovalRefused("plan_not_approvable")  # plus d'exécution possible
 
 
 async def test_an_executed_plan_cannot_be_approved_again(harness: Harness) -> None:
