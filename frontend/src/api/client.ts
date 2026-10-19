@@ -15,6 +15,14 @@ type ApprovalPending = components["schemas"]["ApprovalPending"];
 type AdminApprovalBody = components["schemas"]["AdminApprovalRequest"];
 type AdminApprovalResult = ApprovalAccepted | components["schemas"]["ApprovalRejected"];
 export type Me = components["schemas"]["Me"];
+export type Role = Me["role"];
+export type TeamView = components["schemas"]["TeamView"];
+export type UserView = components["schemas"]["UserView"];
+export type InvitationView = components["schemas"]["InvitationView"];
+export type InvitationCreated = components["schemas"]["InvitationCreated"];
+type CreateTeamBody = components["schemas"]["CreateTeamRequest"];
+type CreateInvitationBody = components["schemas"]["CreateInvitationRequest"];
+export type MemberRole = components["schemas"]["SetRoleRequest"]["role"];
 
 type QuestionBody = components["schemas"]["QuestionAnswerRequest"];
 type QuestionAccepted = components["schemas"]["QuestionAccepted"];
@@ -37,6 +45,10 @@ const ERROR_CODES: readonly ErrorCode[] = [
   "forbidden",
   "policy_denied",
   "too_many_requests",
+  "last_admin",
+  "last_team_admin",
+  "invalid_invitation",
+  "conflict",
 ];
 
 /** Erreur d'API : seuls le statut et le code opaque du contrat sont conservés. */
@@ -101,6 +113,55 @@ function jsonPost(body: unknown): RequestInit {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   };
+}
+
+const adminPath = (path: string) => `/api/admin/${path}`;
+const seg = encodeURIComponent;
+
+export const listAdminTeams = () => request<TeamView[]>(adminPath("teams"));
+export const listAdminUsers = () => request<UserView[]>(adminPath("users"));
+export const listInvitations = () => request<InvitationView[]>(adminPath("invitations"));
+
+export const createTeam = (body: CreateTeamBody) =>
+  request<TeamView>(adminPath("teams"), jsonPost(body));
+
+export const createInvitation = (body: CreateInvitationBody) =>
+  request<InvitationCreated>(adminPath("invitations"), jsonPost(body));
+
+export const revokeInvitation = (id: string) =>
+  request<void>(adminPath(`invitations/${seg(id)}`), { method: "DELETE" });
+
+export const setMemberRole = (teamId: string, userId: string, role: MemberRole) =>
+  request<void>(adminPath(`teams/${seg(teamId)}/members/${seg(userId)}`), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role }),
+  });
+
+export const removeMember = (teamId: string, userId: string) =>
+  request<void>(adminPath(`teams/${seg(teamId)}/members/${seg(userId)}`), { method: "DELETE" });
+
+export const disableUser = (userId: string) =>
+  request<void>(adminPath(`users/${seg(userId)}/disable`), { method: "POST" });
+
+/** Message utilisateur opaque pour une action d'administration. */
+export function describeAdminError(error: unknown): string {
+  const status = error instanceof ApiError ? error.status : 0;
+  const code = error instanceof ApiError ? error.code : null;
+  if (code === "last_admin") {
+    return "Impossible : il faut au moins un administrateur d'organisation actif.";
+  }
+  if (code === "last_team_admin") {
+    return "Impossible : l'équipe doit garder au moins un administrateur.";
+  }
+  if (code === "invalid_invitation") return "Cette invitation n'est plus valide.";
+  if (status === 403) return "Votre rôle ne permet pas cette action.";
+  if (status === 409) {
+    return "Cette action entre en conflit avec l'état actuel. Actualisez et réessayez.";
+  }
+  if (status === 404) return "Élément introuvable. Actualisez la page.";
+  if (status === 422) return "Valeurs refusées : vérifiez le formulaire.";
+  return "L'action a échoué. Réessayez dans un instant.";
 }
 
 /** Mode de persistance annoncé par le serveur (`postgres`, `memory`), ou `null` s'il est absent. */

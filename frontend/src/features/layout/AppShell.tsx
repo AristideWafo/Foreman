@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Outlet, useMatch } from "react-router-dom";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { canAdminister } from "../admin/AdminPage";
 import { useLogout } from "../auth/useLogout";
 import { useMe } from "../cards/useMe";
 import { useMemoryMode } from "../health/useHealth";
@@ -13,6 +15,9 @@ export function AppShell() {
   const memoryMode = useMemoryMode();
   const me = useMe();
   const logout = useLogout();
+  const [teamFilter, setTeamFilter] = useState("");
+  const visible = teamFilter ? projects.filter((p) => p.teamId === teamFilter) : projects;
+  const adminActive = useMatch("/admin") !== null;
   const match = useMatch("/projects/:projectId");
   const activeProjectId = match?.params.projectId ?? null;
   return (
@@ -22,9 +27,14 @@ export function AppShell() {
         style={{ "--sidebar-width": "20rem" } as React.CSSProperties}
       >
         <AppSidebar
-          projects={projects}
+          projects={visible}
           activeProjectId={activeProjectId}
-          homeActive={activeProjectId === null}
+          homeActive={activeProjectId === null && !adminActive}
+          adminActive={adminActive}
+          canAdmin={canAdminister(me)}
+          teams={me?.teams ?? []}
+          teamFilter={teamFilter}
+          onTeamFilter={setTeamFilter}
           memoryMode={memoryMode}
           me={me}
           // Sans jeton CSRF il n'y a pas de session (modes `none`/`proxy_header`) : rien à fermer.

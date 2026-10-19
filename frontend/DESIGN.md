@@ -198,6 +198,19 @@ Le rôle de l'utilisateur vient de `GET /api/me` (`useMe`), jamais d'une règle 
 **Carte plan** : si `admin_approval_required`, l'action devient **« Valider et transmettre à l'admin »** ; sur 202
 (`ApprovalPending`), la ligne de statut dit « Validé. En attente d'un administrateur. ».
 
+## Administration (`/admin`) et équipes
+
+Entrée « Administration » dans le rail, visible si `/api/me` donne `org_admin` ou `team_admin` d'une équipe
+partagée (aide visuelle : le serveur refuse le reste). Un autre rôle voit « Cette page est réservée aux
+administrateurs. ». Trois onglets (`Tabs`) : Équipes (création réservée à l'org_admin, premier admin
+obligatoire), Membres (rôle par équipe, ajout, retrait, désactivation), Invitations (lien copiable affiché une
+seule fois, avec avertissement). Rétrograder, retirer, désactiver et révoquer passent par un `AlertDialog` de
+confirmation. Les listes déroulantes sont des `<select>` natifs (`NativeSelect`). Les erreurs 403/409
+(`last_admin`, `last_team_admin`) sont traduites en messages clairs, jamais le détail serveur.
+
+Accueil : sélecteur « Équipe du projet » (équipes de `/api/me`, « Équipe par défaut » = choix du serveur).
+Barre latérale : filtre « Filtrer par équipe » dans la liste des projets, à partir de deux équipes.
+
 ## Badge nom et rôle (barre latérale)
 
 Pied du panneau de projets : le nom (tronqué si long) et un `Badge` `secondary` avec le rôle en français

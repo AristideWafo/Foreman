@@ -3,8 +3,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { createProject, describeError } from "../../api/client";
+import { NativeSelect } from "@/components/NativeSelect";
 import { PageHeader } from "@/components/PageHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
+import { useMe } from "../cards/useMe";
 import { PROJECTS_KEY } from "../projects/useProjects";
 import { MessageInput } from "./MessageInput";
 import { PromptSuggestions } from "./PromptSuggestions";
@@ -23,8 +26,11 @@ export function HomePage() {
       : null;
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
+  const teams = useMe()?.teams ?? [];
+  // Vide : le serveur choisit l'équipe par défaut (personnelle, ou de développement).
+  const [teamId, setTeamId] = useState("");
   const create = useMutation({
-    mutationFn: (title: string) => createProject({ title }),
+    mutationFn: (title: string) => createProject({ title, team_id: teamId || null }),
   });
 
   async function start(message: string) {
@@ -53,6 +59,24 @@ export function HomePage() {
             Décrivez votre demande : Foreman propose un plan que vous relisez avant toute action.
           </p>
         </div>
+        {teams.length > 0 ? (
+          <div className="flex items-center gap-2 self-center">
+            <Label htmlFor="project-team">Équipe du projet</Label>
+            <NativeSelect
+              id="project-team"
+              className="w-56"
+              value={teamId}
+              onChange={(e) => setTeamId(e.target.value)}
+            >
+              <option value="">Équipe par défaut</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+        ) : null}
         <MessageInput
           value={text}
           onChange={setText}
