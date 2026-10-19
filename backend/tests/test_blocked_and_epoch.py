@@ -7,11 +7,12 @@ from pydantic import JsonValue
 
 from foreman.core.approval import ApprovalService
 from foreman.core.catalog import Catalog
+from foreman.core.execution.cards import _blocked_summary
 from foreman.core.execution.engine import ExecutionEngine
 from foreman.core.gateway.pipeline import ToolGateway
 from foreman.core.planning import Draft, DraftStep, Planner
 from foreman.core.ports import AdapterError, AdapterResult, ToolAdapter
-from foreman.core.store import DEV_USER_ID, Approved, Stores
+from foreman.core.store import DEV_USER_ID, Approved, AuditEntry, Stores
 from foreman.infra.file_catalog import load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
 from foreman.integrations.dns.simulated import SimulatedDns
@@ -104,6 +105,30 @@ async def test_a_blocked_card_says_why_without_internal_detail() -> None:
         "L'exécution est bloquée à l'étape 2. "
         "Le fournisseur a refusé l'appel (état externe perdu ou indisponible). Relancez le plan."
     )
+
+
+async def test_the_blocked_cause_comes_from_the_latest_refusal_of_the_step() -> None:
+    projects = InMemoryProjectStore()
+    _, stores = in_memory_stores(projects=projects)
+    events = InMemoryEventLog()
+    project = (await projects.create("p")).id
+    engine = engine_for(stores, events, RefusingSecondCall(gitlab()))
+    blocked = await run_plan(stores, events, engine, project, "bb")
+    execution = await stores.executions.get(project, blocked)
+    assert execution is not None
+    # Plus de 500 lignes plus anciennes ne doivent pas masquer le dernier refus.
+    await stores.audit.append(
+        AuditEntry(
+            actor_kind="system",
+            project_id=project,
+            execution_id=blocked,
+            step_seq=2,
+            decision="error",
+            result_redacted={"code": "scope_violation"},
+        )
+    )
+
+    assert "autre projet" in await _blocked_summary(stores, execution)
 
 
 async def test_a_restarted_fake_does_not_replay_a_stale_step_result() -> None:

@@ -520,10 +520,22 @@ class InMemoryAuditLog:
         self._s.audit.append(entry)
 
     async def list_for_project(
-        self, project_id: UUID, limit: int = 200, *, execution_id: UUID | None = None
+        self,
+        project_id: UUID,
+        limit: int = 200,
+        *,
+        execution_id: UUID | None = None,
+        step_seq: int | None = None,
+        newest_first: bool = False,
     ) -> list[AuditEntry]:
-        found = (e for e in self._s.audit if e.project_id == project_id)
-        return [e for e in found if execution_id in (None, e.execution_id)][:limit]
+        found = [
+            e
+            for e in self._s.audit
+            if e.project_id == project_id
+            and execution_id in (None, e.execution_id)
+            and step_seq in (None, e.step_seq)
+        ]
+        return (found[::-1] if newest_first else found)[:limit]
 
 
 def in_memory_stores(

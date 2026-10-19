@@ -105,16 +105,18 @@ async def _blocked_summary(stores: Stores, execution: ExecutionRecord) -> str:
     prefix = f"L'exécution est bloquée à l'étape {seq}. "
     try:
         entries = await stores.audit.list_for_project(
-            execution.project_id, limit=500, execution_id=execution.id
+            execution.project_id,
+            limit=500,
+            execution_id=execution.id,
+            step_seq=seq,
+            newest_first=True,
         )
     except StoreError:
         return prefix + _GENERIC_CAUSE
     codes = [
-        (e.result_redacted or {}).get("code")
-        for e in entries
-        if e.step_seq == seq and e.decision in ("denied", "error")
+        (e.result_redacted or {}).get("code") for e in entries if e.decision in ("denied", "error")
     ]
-    return prefix + (_CAUSES.get(str(codes[-1]), _GENERIC_CAUSE) if codes else _GENERIC_CAUSE)
+    return prefix + (_CAUSES.get(str(codes[0]), _GENERIC_CAUSE) if codes else _GENERIC_CAUSE)
 
 
 def _result(

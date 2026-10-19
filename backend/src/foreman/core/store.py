@@ -425,7 +425,13 @@ class AuditLog(Protocol):
         ...
 
     async def list_for_project(
-        self, project_id: UUID, limit: int = 200, *, execution_id: UUID | None = None
+        self,
+        project_id: UUID,
+        limit: int = 200,
+        *,
+        execution_id: UUID | None = None,
+        step_seq: int | None = None,
+        newest_first: bool = False,
     ) -> list[AuditEntry]: ...
 
 
