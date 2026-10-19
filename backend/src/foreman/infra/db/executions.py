@@ -224,7 +224,7 @@ class PostgresExecutionStore:
                         pg_insert(t.step_idempotency)
                         .values(
                             project_id=execution.project_id,
-                            key=step.idempotency_key,
+                            key=lease.key(step.idempotency_key),
                             step_id=step.id,
                         )
                         .on_conflict_do_nothing()
@@ -237,7 +237,7 @@ class PostgresExecutionStore:
                     await conn.execute(
                         sa.select(t.step_idempotency.c.status, t.step_idempotency.c.result).where(
                             t.step_idempotency.c.project_id == execution.project_id,
-                            t.step_idempotency.c.key == step.idempotency_key,
+                            t.step_idempotency.c.key == lease.key(step.idempotency_key),
                         )
                     )
                 ).one()
@@ -276,7 +276,7 @@ class PostgresExecutionStore:
                     )
                     .where(
                         t.step_idempotency.c.project_id == execution.project_id,
-                        t.step_idempotency.c.key == step.idempotency_key,
+                        t.step_idempotency.c.key == lease.key(step.idempotency_key),
                         t.executions.c.id != lease.execution_id,
                         t.executions.c.state == "running",
                         t.executions.c.lease_owner.is_not(None),
@@ -289,7 +289,7 @@ class PostgresExecutionStore:
                     sa.update(t.step_idempotency)
                     .where(
                         t.step_idempotency.c.project_id == execution.project_id,
-                        t.step_idempotency.c.key == step.idempotency_key,
+                        t.step_idempotency.c.key == lease.key(step.idempotency_key),
                         t.step_idempotency.c.status == "reserved",
                     )
                     .values(step_id=step.id)
@@ -334,7 +334,7 @@ class PostgresExecutionStore:
                     sa.update(t.step_idempotency)
                     .where(
                         t.step_idempotency.c.project_id == execution.project_id,
-                        t.step_idempotency.c.key == step.idempotency_key,
+                        t.step_idempotency.c.key == lease.key(step.idempotency_key),
                     )
                     .values(status="done", result=dict(result))
                     .returning(t.step_idempotency.c.key)

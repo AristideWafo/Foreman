@@ -191,7 +191,9 @@ class ExplodingAudit:
     async def append(self, entry: AuditEntry) -> None:
         raise RuntimeError(SECRET_URL)
 
-    async def list_for_project(self, project_id: UUID, limit: int = 200) -> list[AuditEntry]:
+    async def list_for_project(
+        self, project_id: UUID, limit: int = 200, **filters: Any
+    ) -> list[AuditEntry]:
         return []
 
 
@@ -208,8 +210,10 @@ class FlakyAudit:
             raise RuntimeError(SECRET_URL)
         await self._inner.append(entry)
 
-    async def list_for_project(self, project_id: UUID, limit: int = 200) -> list[AuditEntry]:
-        return await self._inner.list_for_project(project_id, limit)
+    async def list_for_project(
+        self, project_id: UUID, limit: int = 200, **filters: Any
+    ) -> list[AuditEntry]:
+        return await self._inner.list_for_project(project_id, limit, **filters)
 
 
 class ManualClock:
@@ -765,6 +769,43 @@ async def test_an_allowed_call_returns_masked_and_truncated_output() -> None:
     # La décision est auditée avant l'exécution ; le résultat s'écrit avec l'étape.
     logged = await world.stores.audit.list_for_project(started.project_id)
     assert [e.decision for e in logged] == ["allow"]
+
+
+class KeyRecorder:
+    """Adaptateur durable (sans `epoch`) qui retient la clé reçue."""
+
+    def __init__(self, inner: ToolAdapter) -> None:
+        self.inner = inner
+        self.keys: list[str] = []
+
+    async def execute(
+        self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str
+    ) -> AdapterResult:
+        self.keys.append(idempotency_key)
+        return await self.inner.execute(tool, params, idempotency_key)
+
+
+async def test_a_durable_adapter_keeps_its_key_unchanged_in_a_mixed_configuration() -> None:
+    world = make_world()
+    started = await start(world, ONE_GROUP)
+    durable = KeyRecorder(world.gitlab)
+    amnesic = SimulatedServer()
+    amnesic.epoch = "7"
+    gateway = ToolGateway(
+        catalog=world.catalog,
+        stores=world.stores,
+        adapters={
+            "gitlab": durable,
+            "server": amnesic,
+            "dns": world.gateway._adapters["dns"],
+        },
+        members=dev_members(),
+    )
+    assert gateway.idempotency_scope == "@server.7"  # la portée globale reste celle des faux
+
+    await gateway.call(call_for(started))
+
+    assert durable.keys == [call_for(started).idempotency_key]
 
 
 async def test_an_oversized_output_is_truncated_but_the_created_resource_is_kept() -> None:

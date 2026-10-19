@@ -43,13 +43,22 @@ class PostgresAuditLog:
             log_failure("audit.append", exc)
             raise StoreError("audit invalide") from None
 
-    async def list_for_project(self, project_id: UUID, limit: int = 200) -> list[AuditEntry]:
-        statement = (
-            sa.select(*t.audit_events.c)
-            .where(t.audit_events.c.project_id == project_id)
-            .order_by(t.audit_events.c.id)
-            .limit(limit)
-        )
+    async def list_for_project(
+        self,
+        project_id: UUID,
+        limit: int = 200,
+        *,
+        execution_id: UUID | None = None,
+        step_seq: int | None = None,
+        newest_first: bool = False,
+    ) -> list[AuditEntry]:
+        statement = sa.select(*t.audit_events.c).where(t.audit_events.c.project_id == project_id)
+        if execution_id is not None:
+            statement = statement.where(t.audit_events.c.execution_id == execution_id)
+        if step_seq is not None:
+            statement = statement.where(t.audit_events.c.step_seq == step_seq)
+        order = t.audit_events.c.id.desc() if newest_first else t.audit_events.c.id
+        statement = statement.order_by(order).limit(limit)
         try:
             async with self._engine.connect() as conn:
                 rows = (await conn.execute(statement)).all()

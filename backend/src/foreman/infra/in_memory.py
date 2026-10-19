@@ -400,7 +400,7 @@ class InMemoryExecutionStore:
         step = next((s for s in e.steps if s.seq == step_seq), None)
         if e.state != "running" or step is None or step.status not in ("pending", "running"):
             raise InvalidTransition
-        key = (e.project_id, step.idempotency_key)
+        key = (e.project_id, lease.key(step.idempotency_key))
         step.status = "running"  # l'étape est prise en charge, quelle que soit la réponse
         if key in self._s.idempotency:
             previous = self._s.idempotency[key]
@@ -413,7 +413,7 @@ class InMemoryExecutionStore:
         step = next((s for s in e.steps if s.seq == step_seq), None)
         if step is None or step.status != "running":
             raise InvalidTransition
-        key = (e.project_id, step.idempotency_key)
+        key = (e.project_id, lease.key(step.idempotency_key))
         if not (key in self._s.idempotency and self._s.idempotency[key] is None):
             raise InvalidTransition
         now = self._s.clock()
@@ -463,7 +463,7 @@ class InMemoryExecutionStore:
                 origin="created",
             )
         self._s.audit.extend(audit)
-        self._s.idempotency[(e.project_id, step.idempotency_key)] = dict(result)
+        self._s.idempotency[(e.project_id, lease.key(step.idempotency_key))] = dict(result)
         step.status, step.result = "succeeded", dict(result)
 
     async def release(
@@ -472,7 +472,7 @@ class InMemoryExecutionStore:
         e = self._held(lease)
         step = next((s for s in e.steps if s.seq == step_seq), None)
         if step is not None and step.status == "running" and step.result is None:
-            key = (e.project_id, step.idempotency_key)
+            key = (e.project_id, lease.key(step.idempotency_key))
             if key in self._s.idempotency and self._s.idempotency[key] is None:
                 del self._s.idempotency[key]
             step.status = "pending"
@@ -519,8 +519,23 @@ class InMemoryAuditLog:
         _check_audit(entry)
         self._s.audit.append(entry)
 
-    async def list_for_project(self, project_id: UUID, limit: int = 200) -> list[AuditEntry]:
-        return [e for e in self._s.audit if e.project_id == project_id][:limit]
+    async def list_for_project(
+        self,
+        project_id: UUID,
+        limit: int = 200,
+        *,
+        execution_id: UUID | None = None,
+        step_seq: int | None = None,
+        newest_first: bool = False,
+    ) -> list[AuditEntry]:
+        found = [
+            e
+            for e in self._s.audit
+            if e.project_id == project_id
+            and execution_id in (None, e.execution_id)
+            and step_seq in (None, e.step_seq)
+        ]
+        return (found[::-1] if newest_first else found)[:limit]
 
 
 def in_memory_stores(

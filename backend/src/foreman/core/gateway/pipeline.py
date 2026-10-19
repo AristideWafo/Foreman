@@ -171,6 +171,15 @@ class ToolGateway:
         self._catalog = catalog
         self._stores = stores
         self._adapters = adapters
+        epochs = sorted(
+            f"{name}.{epoch}"
+            for name, adapter in adapters.items()
+            if (epoch := getattr(adapter, "epoch", None)) is not None
+        )
+        # shortcut: portée globale (tous les faux) pour `step_idempotency` ; l'adaptateur, lui, ne
+        # reçoit que sa propre époque (`_invoke`). À affiner par connecteur si les clés réservées
+        # doivent différer par outil.
+        self.idempotency_scope = "@" + ",".join(epochs) if epochs else ""
         self._members = members
         self._clock = clock
         budget = catalog.policy.budgets.per_execution
@@ -379,7 +388,11 @@ class ToolGateway:
         adapter = self._adapters[tool.connector]
         try:
             async with asyncio.timeout(tool.timeout_s):
-                raw = await adapter.execute(tool.tool, call.params, call.idempotency_key)
+                epoch = getattr(adapter, "epoch", None)
+                key = call.idempotency_key + (
+                    f"@{tool.connector}.{epoch}" if epoch is not None else ""
+                )
+                raw = await adapter.execute(tool.tool, call.params, key)
         except TimeoutError:
             return "timeout"
         except PermissionMissing:

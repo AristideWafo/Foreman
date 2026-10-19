@@ -88,6 +88,10 @@ class ToolAdapter(Protocol):
       du plan : un adaptateur peut donc rejouer sans comparer les paramètres.
     - Une même clé peut être rejouée tant que le moteur n'a pas enregistré la réussite de l'étape
       (panne entre l'appel et `complete_step`) : l'idempotence est REQUISE de l'adaptateur.
+    - Attribut OPTIONNEL `epoch: str` : un adaptateur dont l'état ne survit pas au processus (faux
+      en mémoire) déclare un identifiant propre à l'instance. La gateway l'ajoute à la clé
+      d'idempotence : après un redémarrage, un résultat réservé avant n'est pas rejoué. Absent pour
+      un adaptateur durable ou réel.
     - Aucun appel bloquant : un adaptateur réel déporte son travail hors de la boucle asynchrone.
     - Lève `AdapterError` (ou `PermissionMissing`) ; toute autre exception est un défaut.
     """

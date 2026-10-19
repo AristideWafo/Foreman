@@ -21,7 +21,7 @@ from foreman.core.events import (
     Url,
 )
 from foreman.core.planning import PlanContent, plan_card_id
-from foreman.core.store import ExecutionRecord, ResourceRecord, Stores
+from foreman.core.store import ExecutionRecord, ResourceRecord, StoreError, Stores
 
 MAX_LINKS = 10
 MAX_RESOURCES = 50
@@ -79,8 +79,51 @@ def _step_resources(
     return found
 
 
+_CAUSES = {
+    "scope_violation": (
+        "Cette ressource appartient à un autre projet ou sort du périmètre autorisé. "
+        "Changez le nom du projet ou contactez un administrateur."
+    ),
+    "foreign_resource": (
+        "Cette ressource appartient à un autre projet ou sort du périmètre autorisé. "
+        "Changez le nom du projet ou contactez un administrateur."
+    ),
+    "adapter_error": (
+        "Le fournisseur a refusé l'appel (état externe perdu ou indisponible). Relancez le plan."
+    ),
+}
+_GENERIC_CAUSE = "Rien d'autre n'a été lancé."
+
+
+async def _blocked_summary(stores: Stores, execution: ExecutionRecord) -> str:
+    """Pourquoi l'exécution est bloquée, depuis le dernier refus ou échec audité par la gateway.
+    Jamais d'identifiant ni de détail interne : seul le CODE (fermé) choisit le texte."""
+    unfinished = [s.seq for s in execution.steps if s.status != "succeeded"]
+    if not unfinished:
+        return f"L'exécution est bloquée. {_GENERIC_CAUSE}"
+    seq = min(unfinished)
+    prefix = f"L'exécution est bloquée à l'étape {seq}. "
+    try:
+        entries = await stores.audit.list_for_project(
+            execution.project_id,
+            limit=500,
+            execution_id=execution.id,
+            step_seq=seq,
+            newest_first=True,
+        )
+    except StoreError:
+        return prefix + _GENERIC_CAUSE
+    codes = [
+        (e.result_redacted or {}).get("code") for e in entries if e.decision in ("denied", "error")
+    ]
+    return prefix + (_CAUSES.get(str(codes[0]), _GENERIC_CAUSE) if codes else _GENERIC_CAUSE)
+
+
 def _result(
-    execution: ExecutionRecord, content: PlanContent, refs: list[ResourceRef]
+    execution: ExecutionRecord,
+    content: PlanContent,
+    refs: list[ResourceRef],
+    blocked_summary: str | None,
 ) -> ExecutionResult | None:
     if execution.state == "succeeded":
         links = [
@@ -93,12 +136,8 @@ def _result(
         if refs and all(r.reused for r in refs):
             summary += f" {len(refs)} ressources déjà présentes, aucune créée."
         return ExecutionResult(summary=summary, links=links)
-    if execution.state == "blocked":
-        unfinished = [s.seq for s in execution.steps if s.status != "succeeded"]
-        where = f" à l'étape {min(unfinished)}" if unfinished else ""
-        return ExecutionResult(
-            summary=f"L'exécution est bloquée{where}. Rien d'autre n'a été lancé."
-        )
+    if blocked_summary is not None:
+        return ExecutionResult(summary=blocked_summary)
     return None
 
 
@@ -146,5 +185,10 @@ async def execution_card(
             max_minutes=budget.max_minutes,
         ),
         resources=refs,
-        result=_result(execution, content, refs),
+        result=_result(
+            execution,
+            content,
+            refs,
+            await _blocked_summary(stores, execution) if execution.state == "blocked" else None,
+        ),
     )

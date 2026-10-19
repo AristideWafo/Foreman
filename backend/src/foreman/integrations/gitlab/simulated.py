@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
+from uuid import uuid4
 
 from pydantic import JsonValue
 
@@ -78,6 +79,7 @@ class SimulatedGitLab:
         first_group_id: int = FIRST_GROUP_ID,
         first_project_id: int = FIRST_PROJECT_ID,
     ) -> None:
+        self.epoch = uuid4().hex[:8]  # état en mémoire : voir `ToolAdapter` (époque d'adaptateur)
         self._root_id = root_group_id
         self._root_path = root_group_path
         self.groups: dict[int, SimulatedGroup] = {}

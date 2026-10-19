@@ -211,6 +211,8 @@ def long_ago() -> datetime:
 class SlowGateway:
     """Un appel long : ne rend la main que lorsque le test le libère."""
 
+    idempotency_scope = ""
+
     def __init__(self) -> None:
         self.entered = asyncio.Event()
         self.release = asyncio.Event()
