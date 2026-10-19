@@ -55,8 +55,10 @@ def _str(params: Mapping[str, JsonValue], key: str) -> str:
 
 
 class SimulatedGitLab:
-    """Les identifiants sont séquentiels (groupes dès 2000, dépôts dès 5000) : un enregistrement
-    de modèle peut donc viser le groupe créé par une étape précédente.
+    """Les identifiants sont séquentiels (groupes dès 2000, dépôts dès 5000 par défaut) : un
+    enregistrement de modèle peut donc viser le groupe créé par une étape précédente. Le registre
+    de ressources survit aux redémarrages, pas ce faux : un serveur démarre donc à des bases
+    aléatoires (`bootstrap/adapters.py`) pour ne jamais redonner un identifiant déjà inscrit.
 
     Deux ressources préexistantes, NON marquées `managed-by=foreman` (groupe `legacy`, dépôt
     `legacy-api`), sont semées au départ : « lire puis créer » ne doit jamais adopter ce que
@@ -73,6 +75,8 @@ class SimulatedGitLab:
         root_group_path: str = ROOT_GROUP_PATH,
         *,
         seed_foreign: bool = True,
+        first_group_id: int = FIRST_GROUP_ID,
+        first_project_id: int = FIRST_PROJECT_ID,
     ) -> None:
         self._root_id = root_group_id
         self._root_path = root_group_path
@@ -81,11 +85,17 @@ class SimulatedGitLab:
         if seed_foreign:
             self._seed_foreign()
         self._lock = asyncio.Lock()
-        self._next_group_id = FIRST_GROUP_ID
-        self._next_project_id = FIRST_PROJECT_ID
+        self._next_group_id = first_group_id
+        self._next_project_id = first_project_id
 
     @classmethod
-    def from_referentiel(cls, gitlab_groups: Mapping[str, JsonValue]) -> "SimulatedGitLab":
+    def from_referentiel(
+        cls,
+        gitlab_groups: Mapping[str, JsonValue],
+        *,
+        first_group_id: int = FIRST_GROUP_ID,
+        first_project_id: int = FIRST_PROJECT_ID,
+    ) -> "SimulatedGitLab":
         """Construit le faux depuis le référentiel `gitlab-groups` (groupe racine)."""
         root = gitlab_groups.get("root_group")
         if not isinstance(root, dict):
@@ -97,7 +107,12 @@ class SimulatedGitLab:
             or not isinstance(root_path, str)
         ):
             raise AdapterError("référentiel GitLab invalide")
-        return cls(root_id, root_path)
+        return cls(
+            root_id,
+            root_path,
+            first_group_id=first_group_id,
+            first_project_id=first_project_id,
+        )
 
     def _seed_foreign(self) -> None:
         """Ressources préexistantes que Foreman n'a PAS créées (sans marquage `managed-by`)."""
