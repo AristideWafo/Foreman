@@ -448,9 +448,7 @@
     "data": {
       "card_id": "00000000000040008000000000000004",
       "step": 1,
-      "lines": [
-        "groupe foreman-demo/safe-eat créé"
-      ]
+      "lines": ["groupe foreman-demo/safe-eat créé"]
     }
   },
   {
@@ -587,9 +585,7 @@
     "data": {
       "card_id": "00000000000040008000000000000004",
       "step": 2,
-      "lines": [
-        "groupe foreman-demo/safe-eat/backend créé"
-      ]
+      "lines": ["groupe foreman-demo/safe-eat/backend créé"]
     }
   },
   {
@@ -733,9 +729,7 @@
     "data": {
       "card_id": "00000000000040008000000000000004",
       "step": 3,
-      "lines": [
-        "groupe foreman-demo/safe-eat/frontend créé"
-      ]
+      "lines": ["groupe foreman-demo/safe-eat/frontend créé"]
     }
   },
   {
@@ -886,9 +880,7 @@
     "data": {
       "card_id": "00000000000040008000000000000004",
       "step": 4,
-      "lines": [
-        "dépôt safe-eat-api créé (boilerplate go-api)"
-      ]
+      "lines": ["dépôt safe-eat-api créé (boilerplate go-api)"]
     }
   },
   {
@@ -1046,9 +1038,7 @@
     "data": {
       "card_id": "00000000000040008000000000000004",
       "step": 5,
-      "lines": [
-        "dépôt safe-eat-web créé (boilerplate vue-web)"
-      ]
+      "lines": ["dépôt safe-eat-web créé (boilerplate vue-web)"]
     }
   },
   {
@@ -1567,9 +1557,7 @@
     "data": {
       "card_id": "00000000000040008000000000000004",
       "step": 8,
-      "lines": [
-        "healthcheck : ok"
-      ]
+      "lines": ["healthcheck : ok"]
     }
   },
   {
@@ -2435,9 +2423,7 @@
     "data": {
       "card_id": "00000000000040008000000000000007",
       "step": 2,
-      "lines": [
-        "groupe foreman-demo/safe-eat/backend déjà présent"
-      ]
+      "lines": ["groupe foreman-demo/safe-eat/backend déjà présent"]
     }
   },
   {
@@ -2581,9 +2567,7 @@
     "data": {
       "card_id": "00000000000040008000000000000007",
       "step": 3,
-      "lines": [
-        "groupe foreman-demo/safe-eat/frontend déjà présent"
-      ]
+      "lines": ["groupe foreman-demo/safe-eat/frontend déjà présent"]
     }
   },
   {
@@ -2734,9 +2718,7 @@
     "data": {
       "card_id": "00000000000040008000000000000007",
       "step": 4,
-      "lines": [
-        "dépôt safe-eat-api déjà présent (boilerplate go-api)"
-      ]
+      "lines": ["dépôt safe-eat-api déjà présent (boilerplate go-api)"]
     }
   },
   {
@@ -2894,9 +2876,7 @@
     "data": {
       "card_id": "00000000000040008000000000000007",
       "step": 5,
-      "lines": [
-        "dépôt safe-eat-web déjà présent (boilerplate vue-web)"
-      ]
+      "lines": ["dépôt safe-eat-web déjà présent (boilerplate vue-web)"]
     }
   },
   {
@@ -3415,9 +3395,7 @@
     "data": {
       "card_id": "00000000000040008000000000000007",
       "step": 8,
-      "lines": [
-        "healthcheck : ok"
-      ]
+      "lines": ["healthcheck : ok"]
     }
   },
   {
