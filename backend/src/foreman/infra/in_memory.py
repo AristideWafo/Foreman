@@ -12,6 +12,7 @@ from foreman.core.identity import Member, Role
 from foreman.core.ports import CapacityExceeded, ProjectStore
 from foreman.core.projects import Project
 from foreman.core.store import (
+    ADMIN_REJECTED,
     ADMIN_ROLES,
     LEASE_TTL_S,
     MAX_AUDIT_DURATION_MS,
@@ -28,6 +29,8 @@ from foreman.core.store import (
     ExecutionRecord,
     ExecutionRef,
     ExecutionState,
+    Invalidated,
+    InvalidationResult,
     InvalidTransition,
     Lease,
     NewPlan,
@@ -45,8 +48,10 @@ from foreman.core.store import (
     Stores,
     TakenOverReservation,
     UnknownProject,
+    checked_invalidation,
     ensure_audit_scope,
     steps_of,
+    system_audit,
 )
 from foreman.infra.subscribers import (
     MAX_SUBSCRIBERS_PER_PROJECT,
@@ -193,6 +198,9 @@ def _check_audit(entry: AuditEntry) -> None:
         raise StoreError("audit invalide")
 
 
+_OPEN = ("proposed", "dev_approved")  # statuts d'un plan encore décidable
+
+
 class InMemoryPlanStore:
     def __init__(self, state: MemoryState, projects: ProjectStore | None = None) -> None:
         self._s = state
@@ -234,6 +242,8 @@ class InMemoryPlanStore:
         approver_id: UUID,
         autonomy_level: int,
         start_execution: bool = True,
+        *,
+        now: datetime,
     ) -> ApprovalResult:
         entry = self._s.plans.get(plan_id)
         if entry is None or entry.record.project_id != project_id:
@@ -241,11 +251,14 @@ class InMemoryPlanStore:
         record = entry.record
         if plan_hash != record.content_hash:
             return ApprovalRefused("plan_hash_mismatch")
+        if self._expire_if_due(entry, now):
+            return ApprovalRefused("plan_not_approvable")
+        record = entry.record
         if record.status == "dev_approved" and entry.approval_id:
             if entry.execution_id:
                 return Approved(entry.approval_id, entry.execution_id, created=False)
             return AwaitingAdmin(entry.approval_id, created=False)
-        if record.status != "proposed" or record.expires_at <= self._s.clock():
+        if record.status != "proposed":
             return ApprovalRefused("plan_not_approvable")
         if start_execution and self._project_is_busy(project_id):
             return ApprovalRefused("execution_in_progress")
@@ -263,6 +276,8 @@ class InMemoryPlanStore:
         approver_id: UUID,
         approver_role: str,
         autonomy_level: int,
+        *,
+        now: datetime,
     ) -> AdminApprovalResult:
         if approver_role not in ADMIN_ROLES:
             return ApprovalRefused("forbidden")
@@ -274,11 +289,9 @@ class InMemoryPlanStore:
             return ApprovalRefused("plan_hash_mismatch")
         if entry.admin_approval_id and entry.execution_id:
             return Approved(entry.admin_approval_id, entry.execution_id, created=False)
-        if (
-            record.status != "dev_approved"
-            or entry.execution_id
-            or record.expires_at <= self._s.clock()
-        ):
+        if self._expire_if_due(entry, now):
+            return ApprovalRefused("plan_not_approvable")
+        if record.status != "dev_approved" or entry.execution_id:
             return ApprovalRefused("plan_not_approvable")
         if self._project_is_busy(project_id):
             return ApprovalRefused("execution_in_progress")
@@ -292,6 +305,8 @@ class InMemoryPlanStore:
         plan_hash: str,
         approver_id: UUID,
         approver_role: str,
+        *,
+        now: datetime,
     ) -> AdminRejectionResult:
         if approver_role not in ADMIN_ROLES:
             return ApprovalRefused("forbidden")
@@ -303,11 +318,54 @@ class InMemoryPlanStore:
             return ApprovalRefused("plan_hash_mismatch")
         if entry.admin_rejection_id:
             return Rejected(entry.admin_rejection_id, created=False)
+        if self._expire_if_due(entry, now):
+            return ApprovalRefused("plan_not_approvable")
         if record.status != "dev_approved" or entry.execution_id:
             return ApprovalRefused("plan_not_approvable")
         entry.admin_rejection_id = uuid4()
-        entry.record = replace(record, status="invalidated")
+        self._invalidate(entry, checked_invalidation(ADMIN_REJECTED))
         return Rejected(entry.admin_rejection_id, created=True)
+
+    async def invalidate(
+        self,
+        project_id: UUID,
+        plan_id: UUID,
+        plan_hash: str,
+        invalidation: Mapping[str, object],
+        now: datetime,
+    ) -> InvalidationResult:
+        invalidation = checked_invalidation(invalidation)
+        entry = self._s.plans.get(plan_id)
+        if entry is None or entry.record.project_id != project_id:
+            return ApprovalRefused("not_found")
+        if plan_hash != entry.record.content_hash:
+            return ApprovalRefused("plan_hash_mismatch")
+        if entry.record.status == "invalidated":
+            return Invalidated(created=False)
+        if (
+            self._expire_if_due(entry, now)
+            or entry.record.status not in _OPEN
+            or entry.execution_id
+        ):
+            return ApprovalRefused("plan_not_approvable")
+        self._invalidate(entry, invalidation)
+        return Invalidated(created=True)
+
+    async def expire_due(self, now: datetime) -> list[PlanRecord]:
+        return [e.record for e in list(self._s.plans.values()) if self._expire_if_due(e, now)]
+
+    def _invalidate(self, entry: _Plan, invalidation: Mapping[str, object]) -> None:
+        entry.record = replace(entry.record, status="invalidated", invalidation=invalidation)
+        self._s.audit.append(system_audit(entry.record, "invalidated", str(invalidation["reason"])))
+
+    def _expire_if_due(self, entry: _Plan, now: datetime) -> bool:
+        """Écrit `expired` (+ audit) si le plan est échu et sans exécution ; vrai si c'est fait."""
+        record = entry.record
+        if record.status not in _OPEN or entry.execution_id or record.expires_at > now:
+            return False
+        entry.record = replace(record, status="expired")
+        self._s.audit.append(system_audit(record, "expired", "expired"))
+        return True
 
     async def has_admin_approval(self, plan_id: UUID, plan_hash: str) -> bool:
         entry = self._s.plans.get(plan_id)

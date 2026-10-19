@@ -107,11 +107,16 @@ plans = sa.Table(
     sa.Column("requested_by", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
     sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+    # `{reason, changes}` : présent si et seulement si le plan est `invalidated` (migration 0005).
+    sa.Column("invalidation", JSONB, nullable=True),
     sa.UniqueConstraint("project_id", "version"),
     sa.UniqueConstraint("id", "content_hash"),
     sa.UniqueConstraint("id", "project_id"),
     sa.CheckConstraint("version >= 1", name="plans_version"),
     sa.CheckConstraint(_in("status", PLAN_STATUSES), name="plans_status"),
+    sa.CheckConstraint(
+        "(status = 'invalidated') = (invalidation IS NOT NULL)", name="plans_invalidation"
+    ),
 )
 
 approvals = sa.Table(

@@ -97,7 +97,7 @@ def seed_execution(conn: sa.Connection, plan_id: UUID, project_id: UUID, state: 
 def test_empty_database_gets_the_full_schema(blank_database_url: str) -> None:
     upgrade_head(blank_database_url)
     assert table_names(blank_database_url) == EXPECTED_TABLES
-    assert version(blank_database_url) == "0004"
+    assert version(blank_database_url) == "0005"
 
 
 def test_running_twice_changes_nothing(blank_database_url: str) -> None:
@@ -105,7 +105,7 @@ def test_running_twice_changes_nothing(blank_database_url: str) -> None:
     with connect(blank_database_url) as conn:
         conn.execute(sa.insert(t.teams).values(name="dev"))
     upgrade_head(blank_database_url)
-    assert version(blank_database_url) == "0004"
+    assert version(blank_database_url) == "0005"
     with connect(blank_database_url) as conn:
         assert conn.execute(sa.select(sa.func.count()).select_from(t.teams)).scalar() == 1
 
@@ -126,7 +126,7 @@ def test_two_concurrent_upgrades_both_succeed(blank_database_url: str) -> None:
         # Sans attendre : une migration bloquée est libérée par la suppression de la base.
         pool.shutdown(wait=False, cancel_futures=True)
     assert table_names(blank_database_url) == EXPECTED_TABLES
-    assert version(blank_database_url) == "0004"
+    assert version(blank_database_url) == "0005"
 
 
 def test_downgrade_to_base_removes_everything_then_upgrade_works_again(
@@ -322,3 +322,36 @@ def test_0004_prefixes_server_projects_with_their_environment_and_downgrades(
     downgrade(blank_database_url, "0003")
     with connect(blank_database_url) as conn:
         assert conn.execute(sa.select(t.managed_resources.c.external_id)).scalar() == "safe-eat"
+
+
+def test_0005_fills_existing_refusals_and_the_check_ties_invalidation_to_the_status(
+    blank_database_url: str,
+) -> None:
+    upgrade_head(blank_database_url)
+    downgrade(blank_database_url, "0004")
+    with connect(blank_database_url) as conn:
+        project = seed_project(conn)
+        rejected = seed_plan(conn, project, 1, HASH_A)
+        seed_plan(conn, project, 2, HASH_B)  # `proposed` : reste sans raison
+        conn.execute(
+            sa.text("UPDATE plans SET status = 'invalidated' WHERE id = :i"), {"i": rejected}
+        )
+    upgrade_head(blank_database_url)
+    with connect(blank_database_url) as conn:
+        rows = dict(conn.execute(sa.select(t.plans.c.version, t.plans.c.invalidation)).all())
+        assert rows == {1: {"reason": "admin_rejected", "changes": []}, 2: None}
+    for values in ({"status": "invalidated"}, {"invalidation": {"reason": "x", "changes": []}}):
+        with pytest.raises(IntegrityError), connect(blank_database_url) as conn:
+            conn.execute(sa.update(t.plans).where(t.plans.c.version == 2).values(**values))
+    with connect(blank_database_url) as conn:  # `expired` n'a pas de raison en colonne
+        conn.execute(sa.update(t.plans).where(t.plans.c.version == 2).values(status="expired"))
+    downgrade(blank_database_url, "0004")
+    with connect(blank_database_url) as conn:
+        columns = {c["name"] for c in sa.inspect(conn).get_columns("plans")}
+        assert "invalidation" not in columns
+        assert conn.execute(
+            sa.text("SELECT status FROM plans ORDER BY version")
+        ).scalars().all() == [
+            "invalidated",
+            "expired",
+        ]

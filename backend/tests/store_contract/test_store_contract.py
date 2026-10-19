@@ -17,6 +17,7 @@ from foreman.core.store import (
     AwaitingAdmin,
     CompletedReservation,
     DuplicateResource,
+    Invalidated,
     InvalidTransition,
     Lease,
     NewPlan,
@@ -32,6 +33,7 @@ from foreman.core.store import (
 
 FUTURE = datetime(2100, 1, 1, tzinfo=UTC)
 PAST = datetime(2000, 1, 1, tzinfo=UTC)
+NOW = datetime(2030, 1, 1, tzinfo=UTC)  # horloge injectée dans les décisions
 TOO_LONG = MAX_AUDIT_DURATION_MS + 1  # refusé par la table comme par le banc mémoire
 
 
@@ -65,7 +67,9 @@ async def new_plan(
 
 
 async def approve(h: Harness, plan: PlanRecord) -> Approved:
-    result = await h.stores.plans.approve(plan.project_id, plan.id, plan.content_hash, APPROVER, 2)
+    result = await h.stores.plans.approve(
+        plan.project_id, plan.id, plan.content_hash, APPROVER, 2, now=NOW
+    )
     assert isinstance(result, Approved)
     return result
 
@@ -124,26 +128,30 @@ async def test_approval_is_idempotent_and_other_outcomes_are_typed_refusals(
     project, other_project = await new_project(harness), await new_project(harness)
     plan = await new_plan(harness, project)
     first = await approve(harness, plan)
-    replay = await harness.stores.plans.approve(project, plan.id, plan.content_hash, APPROVER, 2)
+    replay = await harness.stores.plans.approve(
+        project, plan.id, plan.content_hash, APPROVER, 2, now=NOW
+    )
     assert replay == Approved(first.approval_id, first.execution_id, created=False)
 
     wrong_hash = "sha256:" + "f" * 64
     refusals = {
         "plan_hash_mismatch": await harness.stores.plans.approve(
-            project, plan.id, wrong_hash, APPROVER, 2
+            project, plan.id, wrong_hash, APPROVER, 2, now=NOW
         ),
         "not_found": await harness.stores.plans.approve(
-            other_project, plan.id, plan.content_hash, APPROVER, 2
+            other_project, plan.id, plan.content_hash, APPROVER, 2, now=NOW
         ),
     }
     for reason, result in refusals.items():
         assert result == ApprovalRefused(reason), reason  # type: ignore[arg-type]
-    unknown = await harness.stores.plans.approve(project, uuid4(), plan.content_hash, APPROVER, 2)
+    unknown = await harness.stores.plans.approve(
+        project, uuid4(), plan.content_hash, APPROVER, 2, now=NOW
+    )
     assert unknown == ApprovalRefused("not_found")
 
     expired = await new_plan(harness, other_project, expires_at=PAST)
     result = await harness.stores.plans.approve(
-        other_project, expired.id, expired.content_hash, APPROVER, 2
+        other_project, expired.id, expired.content_hash, APPROVER, 2, now=NOW
     )
     assert result == ApprovalRefused("plan_not_approvable")
 
@@ -155,33 +163,35 @@ async def test_admin_approval_starts_the_execution_once_and_a_developer_cannot_g
     plan = await new_plan(harness, project)
     plans = harness.stores.plans
     waiting = await plans.approve(
-        project, plan.id, plan.content_hash, APPROVER, 2, start_execution=False
+        project, plan.id, plan.content_hash, APPROVER, 2, start_execution=False, now=NOW
     )
     assert isinstance(waiting, AwaitingAdmin) and waiting.created
-    assert await plans.approve(project, plan.id, plan.content_hash, APPROVER, 2, False) == (
+    assert await plans.approve(
+        project, plan.id, plan.content_hash, APPROVER, 2, False, now=NOW
+    ) == (
         AwaitingAdmin(waiting.approval_id, created=False)
     )  # rejeu : même identifiant, toujours aucune exécution
     assert not await plans.has_admin_approval(plan.id, plan.content_hash)
 
     # Un développeur est refusé et rien n'est écrit.
     refused = await plans.approve_admin(
-        project, plan.id, plan.content_hash, APPROVER, "developer", 2
+        project, plan.id, plan.content_hash, APPROVER, "developer", 2, now=NOW
     )
     assert refused == ApprovalRefused("forbidden")
     assert not await plans.has_admin_approval(plan.id, plan.content_hash)
 
     first = await plans.approve_admin(
-        project, plan.id, plan.content_hash, APPROVER, "team_admin", 2
+        project, plan.id, plan.content_hash, APPROVER, "team_admin", 2, now=NOW
     )
     assert isinstance(first, Approved) and first.created
     replay = await plans.approve_admin(
-        project, plan.id, plan.content_hash, APPROVER, "org_admin", 2
+        project, plan.id, plan.content_hash, APPROVER, "org_admin", 2, now=NOW
     )
     assert replay == Approved(first.approval_id, first.execution_id, created=False)
     assert await plans.has_admin_approval(plan.id, plan.content_hash)
     assert not await plans.has_admin_approval(plan.id, "sha256:" + "f" * 64)  # lié au hash
     # La validation développeur rejouée rend maintenant l'exécution créée par l'admin.
-    again = await plans.approve(project, plan.id, plan.content_hash, APPROVER, 2, False)
+    again = await plans.approve(project, plan.id, plan.content_hash, APPROVER, 2, False, now=NOW)
     assert again == Approved(waiting.approval_id, first.execution_id, created=False)
 
 
@@ -189,21 +199,99 @@ async def test_admin_rejection_invalidates_the_plan_and_is_idempotent(harness: H
     project = await new_project(harness)
     plan = await new_plan(harness, project)
     plans = harness.stores.plans
-    await plans.approve(project, plan.id, plan.content_hash, APPROVER, 2, start_execution=False)
+    await plans.approve(
+        project, plan.id, plan.content_hash, APPROVER, 2, start_execution=False, now=NOW
+    )
     assert await plans.reject_admin(
-        project, plan.id, plan.content_hash, APPROVER, "developer"
+        project, plan.id, plan.content_hash, APPROVER, "developer", now=NOW
     ) == ApprovalRefused("forbidden")
-    rejected = await plans.reject_admin(project, plan.id, plan.content_hash, APPROVER, "team_admin")
+    rejected = await plans.reject_admin(
+        project, plan.id, plan.content_hash, APPROVER, "team_admin", now=NOW
+    )
     assert isinstance(rejected, Rejected) and rejected.created
     assert await plans.reject_admin(
-        project, plan.id, plan.content_hash, APPROVER, "team_admin"
+        project, plan.id, plan.content_hash, APPROVER, "team_admin", now=NOW
     ) == Rejected(rejected.approval_id, created=False)
     stored = await plans.get(project, plan.id)
     assert stored is not None and stored.status == "invalidated"
     after = await plans.approve_admin(
-        project, plan.id, plan.content_hash, APPROVER, "team_admin", 2
+        project, plan.id, plan.content_hash, APPROVER, "team_admin", 2, now=NOW
     )
     assert after == ApprovalRefused("plan_not_approvable")  # plus d'exécution possible
+
+
+async def test_invalidate_is_idempotent_checks_the_hash_and_leaves_an_audit(
+    harness: Harness,
+) -> None:
+    project = await new_project(harness)
+    plan = await new_plan(harness, project)
+    plans = harness.stores.plans
+    reason = {"reason": "catalog_changed", "changes": [{"kind": "policy", "name": "matrix"}]}
+    with pytest.raises(StoreError):  # raison absente ou inconnue : refus net, rien d'écrit
+        await plans.invalidate(project, plan.id, plan.content_hash, {"reason": "nope"}, NOW)
+    wrong = await plans.invalidate(project, plan.id, "sha256:" + "f" * 64, reason, NOW)
+    assert wrong == ApprovalRefused("plan_hash_mismatch")
+    assert await plans.invalidate(project, plan.id, plan.content_hash, reason, NOW) == Invalidated(
+        created=True
+    )
+    assert await plans.invalidate(project, plan.id, plan.content_hash, reason, NOW) == Invalidated(
+        created=False
+    )
+    stored = await plans.get(project, plan.id)
+    assert stored is not None and (stored.status, stored.invalidation) == ("invalidated", reason)
+    audit = await harness.stores.audit.list_for_project(project)
+    assert [(a.actor_kind, a.decision, a.rule_id) for a in audit] == [
+        ("system", "invalidated", "catalog_changed")
+    ]  # une seule ligne malgré le rejeu
+    assert await plans.approve(
+        project, plan.id, plan.content_hash, APPROVER, 2, now=NOW
+    ) == ApprovalRefused("plan_not_approvable")
+    started = await new_plan(harness, project)
+    await approve(harness, started)  # une exécution existe : plus d'invalidation possible
+    assert await plans.invalidate(
+        project, started.id, started.content_hash, reason, NOW
+    ) == ApprovalRefused("plan_not_approvable")
+
+
+async def test_expiry_is_written_by_decisions_and_by_expire_due_on_the_injected_clock(
+    harness: Harness,
+) -> None:
+    project = await new_project(harness)
+    plans = harness.stores.plans
+    due = NOW + timedelta(hours=1)
+    proposed = await new_plan(harness, project, expires_at=due)
+    waiting = await new_plan(harness, project, expires_at=due)
+    await plans.approve(
+        project, waiting.id, waiting.content_hash, APPROVER, 2, start_execution=False, now=NOW
+    )
+    decided = await new_plan(harness, project, expires_at=due)
+    replayed = await new_plan(harness, project, expires_at=due)
+    await plans.approve(
+        project, replayed.id, replayed.content_hash, APPROVER, 2, start_execution=False, now=NOW
+    )
+    running = await new_plan(harness, project, expires_at=due)
+    await plans.approve(project, running.id, running.content_hash, APPROVER, 2, now=NOW)
+
+    assert await plans.expire_due(NOW) == []  # l'horloge injectée n'a pas atteint l'échéance
+    later = due + timedelta(seconds=1)
+    refused = await plans.approve(project, decided.id, decided.content_hash, APPROVER, 2, now=later)
+    assert refused == ApprovalRefused("plan_not_approvable")
+    assert await plans.approve(  # rejeu sur dev_approved échu : refusé, pas l'ancienne approbation
+        project, replayed.id, replayed.content_hash, APPROVER, 2, start_execution=False, now=later
+    ) == ApprovalRefused("plan_not_approvable")
+    swept = await plans.expire_due(later)
+    assert {p.id for p in swept} == {proposed.id, waiting.id}  # ni `decided` (fait), ni `running`
+    assert all(p.status == "expired" and p.invalidation is None for p in swept)
+    assert await plans.expire_due(later) == []
+    for plan, status in ((proposed, "expired"), (decided, "expired"), (running, "dev_approved")):
+        stored = await plans.get(project, plan.id)
+        assert stored is not None and stored.status == status
+    audit = await harness.stores.audit.list_for_project(project)
+    expired = [(a.plan_id, a.decision, a.rule_id, a.actor_kind) for a in audit]
+    assert sorted(expired, key=str) == sorted(
+        [(p.id, "expired", "expired", "system") for p in (proposed, waiting, decided, replayed)],
+        key=str,
+    )  # une audit par plan, jamais deux
 
 
 async def test_an_executed_plan_cannot_be_approved_again(harness: Harness) -> None:
@@ -217,7 +305,9 @@ async def test_an_executed_plan_cannot_be_approved_again(harness: Harness) -> No
     await harness.stores.executions.finish(lease, "succeeded")
     stored = await harness.stores.plans.get(project, plan.id)
     assert stored is not None and stored.status == "executed"
-    again = await harness.stores.plans.approve(project, plan.id, plan.content_hash, APPROVER, 2)
+    again = await harness.stores.plans.approve(
+        project, plan.id, plan.content_hash, APPROVER, 2, now=NOW
+    )
     assert again == ApprovalRefused("plan_not_approvable")
 
 
@@ -226,7 +316,7 @@ async def test_concurrent_approvals_create_a_single_execution(harness: Harness) 
     plan = await new_plan(harness, project)
     results = await asyncio.gather(
         *(
-            harness.stores.plans.approve(project, plan.id, plan.content_hash, APPROVER, 2)
+            harness.stores.plans.approve(project, plan.id, plan.content_hash, APPROVER, 2, now=NOW)
             for _ in range(8)
         )
     )
@@ -241,7 +331,7 @@ async def test_a_second_plan_waits_while_an_execution_is_active(harness: Harness
     first, second = await new_plan(harness, project), await new_plan(harness, project)
     running = await approve(harness, first)
     refused = await harness.stores.plans.approve(
-        project, second.id, second.content_hash, APPROVER, 2
+        project, second.id, second.content_hash, APPROVER, 2, now=NOW
     )
     assert refused == ApprovalRefused("execution_in_progress")
     still = await harness.stores.plans.get(project, second.id)

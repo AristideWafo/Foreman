@@ -309,6 +309,8 @@ async def test_a_refused_approval_reissues_the_plan_card_from_the_stored_state()
     assert len(cards) == 1
     assert cards[0].kind == "plan" and cards[0].card_id == plan_card_id(record.id)
     assert (cards[0].status, cards[0].approvable) == ("expired", False)
+    stored = await stores.plans.get(project, record.id)
+    assert stored is not None and stored.status == "expired"  # écrit, plus seulement affiché
 
 
 async def test_a_production_plan_waits_for_an_admin_who_then_starts_the_execution() -> None:

@@ -6,6 +6,7 @@ absente (`None`), jamais « interdite ».
 """
 
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Final, Literal, Protocol
@@ -82,6 +83,9 @@ class PlanRecord:
     created_at: datetime
     expires_at: datetime
     requested_by: UUID | None = None  # vide pour les plans antérieurs à la migration 0003
+    # `{reason, changes}` si et seulement si le plan est `invalidated` (CHECK de la migration 0005).
+    # `expired` n'en porte pas : sa raison n'existe que dans la carte.
+    invalidation: Mapping[str, object] | None = None
 
 
 EXECUTION_ID_PLACEHOLDER: Final = "{execution_id}"  # gabarit haché dans le plan
@@ -154,13 +158,46 @@ class ApprovalRefused:
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class Invalidated:
+    """Plan passé à `invalidated` (ou déjà : `created` faux, rien n'est réécrit)."""
+
+    created: bool
+
+
+ADMIN_REJECTED: Final[Mapping[str, object]] = {"reason": "admin_rejected", "changes": []}
+
 ApprovalResult = Approved | AwaitingAdmin | ApprovalRefused
 AdminApprovalResult = Approved | ApprovalRefused
 AdminRejectionResult = Rejected | ApprovalRefused
+InvalidationResult = Invalidated | ApprovalRefused
 
 # Rôles qui peuvent donner l'approbation admin (défense en profondeur : la matrice `approvers`
 # est la source, le dépôt refuse en plus un développeur).
 ADMIN_ROLES: Final = ("team_admin", "org_admin")
+
+
+INVALIDATION_REASONS: Final = ("admin_rejected", "catalog_changed", "project_changed")
+
+
+def checked_invalidation(invalidation: Mapping[str, object]) -> dict[str, object]:
+    """Copie profonde de `{reason, changes}` ; `StoreError` si la raison est absente ou inconnue."""
+    if invalidation.get("reason") not in INVALIDATION_REASONS:
+        raise StoreError("invalidation invalide")
+    return deepcopy(dict(invalidation))
+
+
+def system_audit(plan: PlanRecord, decision: str, rule_id: str) -> "AuditEntry":
+    """Audit d'une transition écrite par le système (invalidation, expiration) : un seul gabarit
+    pour les deux dépôts. `AuditEntry` est défini plus bas, d'où l'annotation différée."""
+    return AuditEntry(
+        actor_kind="system",
+        project_id=plan.project_id,
+        plan_id=plan.id,
+        plan_hash=plan.content_hash,
+        decision=decision,
+        rule_id=rule_id,
+    )
 
 
 class PlanStore(Protocol):
@@ -178,11 +215,16 @@ class PlanStore(Protocol):
         approver_id: UUID,
         autonomy_level: int,
         start_execution: bool = True,
+        *,
+        now: datetime,
     ) -> ApprovalResult:
         """Atomique : plan `dev_approved` + approbation + exécution + étapes `pending`.
 
         Sans `start_execution`, seuls le plan et l'approbation sont écrits (`AwaitingAdmin`) :
         l'exécution naît de `approve_admin`.
+
+        `now` est l'horloge du service, seule source de temps (échéance comprise). Un plan échu
+        sans exécution est écrit `expired`, avec son audit, dans la même transaction, puis refusé.
         """
         ...
 
@@ -194,6 +236,8 @@ class PlanStore(Protocol):
         approver_id: UUID,
         approver_role: str,
         autonomy_level: int,
+        *,
+        now: datetime,
     ) -> AdminApprovalResult:
         """Atomique : approbation `admin` + exécution + étapes. Idempotent. Un développeur est
         refusé (`forbidden`, rien d'écrit) ; le plan doit être `dev_approved` et non expiré."""
@@ -206,8 +250,29 @@ class PlanStore(Protocol):
         plan_hash: str,
         approver_id: UUID,
         approver_role: str,
+        *,
+        now: datetime,
     ) -> AdminRejectionResult:
-        """Atomique : approbation `admin` refusée + plan `invalidated`. Idempotent."""
+        """Atomique : approbation `admin` refusée + plan `invalidated` (`ADMIN_REJECTED`) + audit.
+        Idempotent."""
+        ...
+
+    async def invalidate(
+        self,
+        project_id: UUID,
+        plan_id: UUID,
+        plan_hash: str,
+        invalidation: Mapping[str, object],
+        now: datetime,
+    ) -> InvalidationResult:
+        """`proposed` ou `dev_approved` sans exécution -> `invalidated`, avec audit système
+        (`decision: invalidated`, `rule_id` = raison) dans la même transaction. Idempotent
+        (`created`). Le hash est vérifié ; un plan échu est écrit `expired` et refusé."""
+        ...
+
+    async def expire_due(self, now: datetime) -> list[PlanRecord]:
+        """Écrit `expired` (+ audit système) pour chaque plan `proposed` ou `dev_approved` échu
+        et sans exécution. Rend ceux qui viennent de changer d'état (un 2e appel rend [])."""
         ...
 
     async def has_admin_approval(self, plan_id: UUID, plan_hash: str) -> bool:

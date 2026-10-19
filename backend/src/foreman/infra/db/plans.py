@@ -1,6 +1,9 @@
 """Plans et approbations en PostgreSQL. Toutes les lectures sont cloisonnées par projet."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import replace
+from datetime import datetime
+from functools import partial
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -9,6 +12,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from foreman.core.store import (
+    ADMIN_REJECTED,
     ADMIN_ROLES,
     AdminApprovalResult,
     AdminRejectionResult,
@@ -16,14 +20,19 @@ from foreman.core.store import (
     ApprovalResult,
     Approved,
     AwaitingAdmin,
+    Invalidated,
+    InvalidationResult,
     NewPlan,
     PlanRecord,
     Rejected,
     StoreError,
     UnknownProject,
+    checked_invalidation,
     steps_of,
+    system_audit,
 )
 from foreman.infra.db import tables as t
+from foreman.infra.db.audit import audit_values
 from foreman.infra.db.engine import constraint_of, log_failure
 
 ONE_ACTIVE_PER_PROJECT = "uq_executions_one_active_per_project"
@@ -41,6 +50,7 @@ def plan_record(row: Any) -> PlanRecord:
         created_at=row.created_at,
         expires_at=row.expires_at,
         requested_by=row.requested_by,
+        invalidation=row.invalidation,
     )
 
 
@@ -105,6 +115,8 @@ class PostgresPlanStore:
         approver_id: UUID,
         autonomy_level: int,
         start_execution: bool = True,
+        *,
+        now: datetime,
     ) -> ApprovalResult:
         async def work(conn: AsyncConnection) -> ApprovalResult:
             plan = await _locked_plan(conn, project_id, plan_id)
@@ -112,9 +124,11 @@ class PostgresPlanStore:
                 return ApprovalRefused("not_found")
             if plan.content_hash != plan_hash:
                 return ApprovalRefused("plan_hash_mismatch")
+            if await _expire_if_due(conn, plan, now):
+                return ApprovalRefused("plan_not_approvable")
             if plan.status == "dev_approved":
                 return await _existing_approval(conn, plan_id)
-            if plan.status != "proposed" or plan.expired:
+            if plan.status != "proposed":
                 return ApprovalRefused("plan_not_approvable")
             await conn.execute(
                 sa.update(t.plans).where(t.plans.c.id == plan_id).values(status="dev_approved")
@@ -137,6 +151,8 @@ class PostgresPlanStore:
         approver_id: UUID,
         approver_role: str,
         autonomy_level: int,
+        *,
+        now: datetime,
     ) -> AdminApprovalResult:
         if approver_role not in ADMIN_ROLES:
             return ApprovalRefused("forbidden")
@@ -151,7 +167,9 @@ class PostgresPlanStore:
             execution_id = await _execution_id(conn, plan_id)
             if admin_id and execution_id:
                 return Approved(admin_id, execution_id, created=False)
-            if plan.status != "dev_approved" or execution_id or plan.expired:
+            if await _expire_if_due(conn, plan, now, execution_id):
+                return ApprovalRefused("plan_not_approvable")
+            if plan.status != "dev_approved" or execution_id:
                 return ApprovalRefused("plan_not_approvable")
             approval_id = await _insert_approval(
                 conn, plan_id, plan_hash, "admin", approver_id, "approved"
@@ -169,6 +187,8 @@ class PostgresPlanStore:
         plan_hash: str,
         approver_id: UUID,
         approver_role: str,
+        *,
+        now: datetime,
     ) -> AdminRejectionResult:
         if approver_role not in ADMIN_ROLES:
             return ApprovalRefused("forbidden")
@@ -182,17 +202,68 @@ class PostgresPlanStore:
             rejected_id = await _decision_id(conn, plan_id, "admin", "rejected")
             if rejected_id:
                 return Rejected(rejected_id, created=False)
+            if await _expire_if_due(conn, plan, now):
+                return ApprovalRefused("plan_not_approvable")
             if plan.status != "dev_approved" or await _execution_id(conn, plan_id):
                 return ApprovalRefused("plan_not_approvable")
-            await conn.execute(
-                sa.update(t.plans).where(t.plans.c.id == plan_id).values(status="invalidated")
-            )
+            await _invalidate(conn, plan, ADMIN_REJECTED, now)
             approval_id = await _insert_approval(
                 conn, plan_id, plan_hash, "admin", approver_id, "rejected"
             )
             return Rejected(approval_id, created=True)
 
         return await self._transaction("plan.reject_admin", work)
+
+    async def invalidate(
+        self,
+        project_id: UUID,
+        plan_id: UUID,
+        plan_hash: str,
+        invalidation: Mapping[str, object],
+        now: datetime,
+    ) -> InvalidationResult:
+        invalidation = checked_invalidation(invalidation)
+
+        async def work(conn: AsyncConnection) -> InvalidationResult:
+            plan = await _locked_plan(conn, project_id, plan_id)
+            if plan is None:
+                return ApprovalRefused("not_found")
+            if plan.content_hash != plan_hash:
+                return ApprovalRefused("plan_hash_mismatch")
+            if plan.status == "invalidated":
+                return Invalidated(created=False)
+            if await _expire_if_due(conn, plan, now):
+                return ApprovalRefused("plan_not_approvable")
+            if plan.status not in _OPEN or await _execution_id(conn, plan_id):
+                return ApprovalRefused("plan_not_approvable")
+            await _invalidate(conn, plan, invalidation, now)
+            return Invalidated(created=True)
+
+        return await self._transaction("plan.invalidate", work)
+
+    async def expire_due(self, now: datetime) -> list[PlanRecord]:
+        """Un plan par transaction (verrou de ligne), sérialisée avec les décisions."""
+        try:
+            async with self._engine.connect() as conn:
+                due = (
+                    await conn.execute(
+                        sa.select(t.plans.c.id, t.plans.c.project_id).where(
+                            t.plans.c.status.in_(_OPEN), t.plans.c.expires_at <= now
+                        )
+                    )
+                ).all()
+        except SQLAlchemyError as exc:
+            log_failure("plan.expire_due", exc)
+            raise StoreError("stockage indisponible") from None
+
+        expired: list[PlanRecord] = []
+        for row in due:
+            record = await self._transaction(
+                "plan.expire_due", partial(_expire_one, row=row, now=now)
+            )
+            if isinstance(record, PlanRecord):
+                expired.append(record)
+        return expired
 
     async def has_admin_approval(self, plan_id: UUID, plan_hash: str) -> bool:
         statement = sa.select(t.approvals.c.id).where(
@@ -225,15 +296,54 @@ class PostgresPlanStore:
             raise StoreError("stockage indisponible") from None
 
 
+_OPEN = ("proposed", "dev_approved")  # statuts d'un plan encore décidable
+
+
 async def _locked_plan(conn: AsyncConnection, project_id: UUID, plan_id: UUID) -> Any:
-    """Le plan verrouillé (sérialise les décisions), avec `expired` calculé par la base."""
+    """Le plan verrouillé (sérialise les décisions). Le temps vient de l'appelant (`now`)."""
     return (
         await conn.execute(
-            sa.select(*t.plans.c, (t.plans.c.expires_at <= sa.func.now()).label("expired"))
+            sa.select(*t.plans.c)
             .where(t.plans.c.id == plan_id, t.plans.c.project_id == project_id)
             .with_for_update()
         )
     ).one_or_none()
+
+
+async def _expire_if_due(
+    conn: AsyncConnection, plan: Any, now: datetime, execution_id: UUID | None = None
+) -> bool:
+    """Écrit `expired` + audit si le plan est échu et sans exécution : vrai s'il vient de l'être."""
+    if plan.status not in _OPEN or plan.expires_at > now:
+        return False
+    if (execution_id or await _execution_id(conn, plan.id)) is not None:
+        return False  # une fois l'exécution créée, l'expiration ne s'applique plus
+    await conn.execute(sa.update(t.plans).where(t.plans.c.id == plan.id).values(status="expired"))
+    await conn.execute(
+        sa.insert(t.audit_events).values(
+            **audit_values(system_audit(plan_record(plan), "expired", "expired"))
+        )
+    )
+    return True
+
+
+async def _expire_one(conn: AsyncConnection, row: Any, now: datetime) -> PlanRecord | None:
+    plan = await _locked_plan(conn, row.project_id, row.id)  # relu sous verrou
+    if plan is None or not await _expire_if_due(conn, plan, now):
+        return None
+    return replace(plan_record(plan), status="expired")
+
+
+async def _invalidate(
+    conn: AsyncConnection, plan: Any, invalidation: Mapping[str, object], now: datetime
+) -> None:
+    await conn.execute(
+        sa.update(t.plans)
+        .where(t.plans.c.id == plan.id)
+        .values(status="invalidated", invalidation=dict(invalidation))
+    )
+    entry = system_audit(plan_record(plan), "invalidated", str(invalidation["reason"]))
+    await conn.execute(sa.insert(t.audit_events).values(at=now, **audit_values(entry)))
 
 
 async def _insert_approval(

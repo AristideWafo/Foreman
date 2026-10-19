@@ -92,6 +92,7 @@ class ApprovalService:
             approver.user_id,
             content.autonomy_level,
             start_execution=precheck is None,
+            now=self._clock(),
         )
         if isinstance(result, Approved) and result.created:
             await self._announce(project_id, plan_id, result.execution_id, content)
@@ -120,6 +121,7 @@ class ApprovalService:
             approver.user_id,
             approver.role,
             content.autonomy_level,
+            now=self._clock(),
         )
         if isinstance(result, Approved) and result.created:
             await self._announce_decision(project_id, plan, content, "approved", approver)
@@ -140,7 +142,7 @@ class ApprovalService:
             return loaded
         plan, content = loaded
         result = await self._stores.plans.reject_admin(
-            project_id, plan_id, plan_hash, approver.user_id, approver.role
+            project_id, plan_id, plan_hash, approver.user_id, approver.role, now=self._clock()
         )
         if isinstance(result, Rejected) and result.created:
             await self._announce_decision(project_id, plan, content, "rejected", approver)
@@ -195,8 +197,8 @@ class ApprovalService:
     async def _reissue_plan_card(
         self, project_id: UUID, record: PlanRecord, content: PlanContent
     ) -> None:
-        """Carte plan telle que l'état persisté la décrit. `expired` n'est jamais écrit en base :
-        un plan proposé dont l'échéance est passée s'affiche `expired`, non approuvable."""
+        """Carte plan telle que l'état persisté la décrit. `expired` est écrit par les décisions et
+        `expire_due` ; un plan échu pas encore balayé s'affiche déjà `expired`, non approuvable."""
         try:
             if record.status == "proposed" and record.expires_at <= self._clock():
                 record = replace(record, status="expired")
