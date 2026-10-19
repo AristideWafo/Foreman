@@ -238,3 +238,8 @@ le contenu du compose, ce qui est un choix de sécurité à prendre explicitemen
 
 `Deploy` en manuel avec le SHA d'un commit précédent. Le script revient aussi seul à l'image
 précédente si le health check échoue (`deploy-custom.sh`) ou si les trois contrôles de santé échouent (`deploy.sh`).
+
+## Base du plan (foreman.plan/2, S12)
+
+- Le contrôle de base a lieu à la validation du développeur et à l'approbation admin, pas à chaque appel de la gateway ; entre le contrôle et l'écriture, seule une autre exécution peut changer le registre (`execution_in_progress`, l'admin refait le contrôle).
+- Un plan `foreman.plan/1` déjà en attente n'est plus approuvable (409 `plan_not_approvable`) et reste affiché `proposed` jusqu'à son échéance (24 h) ; son historique d'exécution est illisible (404).
