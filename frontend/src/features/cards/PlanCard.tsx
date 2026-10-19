@@ -18,21 +18,22 @@ function ApprovePlan({
   projectId,
   planId,
   planHash,
+  adminRequired,
 }: {
   projectId: string;
   planId: string;
   planHash: string;
+  adminRequired: boolean;
 }) {
-  const { approve, pending, approved, waitingForCard, errorMessage } = usePlanApproval(
-    projectId,
-    planId,
-    planHash,
-  );
+  const { approve, pending, approved, awaitingAdmin, waitingForCard, errorMessage } =
+    usePlanApproval(projectId, planId, planHash);
   if (approved) {
     return (
       <p role="status" className="flex items-center gap-2 text-sm">
         <CheckIcon aria-hidden="true" />
-        Plan validé. L'exécution démarre.
+        {awaitingAdmin
+          ? "Validé. En attente d'un administrateur."
+          : "Plan validé. L'exécution démarre."}
       </p>
     );
   }
@@ -44,7 +45,11 @@ function ApprovePlan({
         disabled={pending || waitingForCard}
         aria-busy={pending}
       >
-        {pending ? "Validation en cours…" : "Valider le plan"}
+        {pending
+          ? "Validation en cours…"
+          : adminRequired
+            ? "Valider et transmettre à l'admin"
+            : "Valider le plan"}
       </Button>
       {errorMessage ? (
         <Alert variant="destructive">
@@ -142,6 +147,7 @@ export function PlanCard({
             projectId={projectId}
             planId={planId}
             planHash={planHash}
+            adminRequired={card.admin_approval_required === true}
           />
         </CardFooter>
       ) : null}
