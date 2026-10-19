@@ -68,6 +68,16 @@ async def wait_for_status(log: InMemoryEventLog, project_id: UUID, status: str) 
     raise AssertionError("flux fermé avant le statut attendu")
 
 
+def test_healthz_is_a_closed_typed_object_in_openapi() -> None:
+    schema = TestClient(create_app()).get("/openapi.json").json()["components"]["schemas"]
+    assert set(schema["HealthResponse"]["properties"]) == {
+        "status",
+        "profile",
+        "version",
+        "persistence",
+    }
+
+
 def test_healthz_reports_the_version_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     client = TestClient(create_app())
     monkeypatch.setenv("FOREMAN_VERSION", "0.2.0")
@@ -75,6 +85,16 @@ def test_healthz_reports_the_version_from_the_environment(monkeypatch: pytest.Mo
     assert client.get("/healthz").json() == {**expected, "version": "0.2.0"}
     monkeypatch.delenv("FOREMAN_VERSION")
     assert client.get("/healthz").json() == {**expected, "version": "dev"}
+
+
+def test_me_is_the_dev_identity_and_admin_approvals_are_not_implemented() -> None:
+    client = TestClient(create_app())
+    assert client.get("/api/me").json() == {"user_id": "dev", "name": "dev", "role": "developer"}
+    response = client.post(
+        f"/api/projects/{uuid4()}/plans/{uuid4()}/admin-approvals",
+        json={"plan_hash": "sha256:" + "a" * 64, "decision": "approved"},
+    )
+    assert (response.status_code, response.json()) == (501, {"error": "not_implemented"})
 
 
 async def test_projects_are_listed_newest_first() -> None:

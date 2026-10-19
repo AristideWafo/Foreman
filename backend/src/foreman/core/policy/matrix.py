@@ -8,7 +8,8 @@ le refus : sans règle qui s'applique, l'appel est refusé. Les exigences (`requ
 from dataclasses import dataclass
 from typing import Literal
 
-from foreman.core.catalog import PolicyMatrix, Purpose, Requirement, Reversibility, ToolClass
+from foreman.core.catalog import PolicyMatrix, Purpose, Reversibility, ToolClass
+from foreman.core.events import Requirement
 
 DenyReason = Literal[
     "unknown_environment", "role_not_allowed", "level_too_low", "never_autonomous", "no_rule"

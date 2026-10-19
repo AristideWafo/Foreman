@@ -14,6 +14,7 @@ from foreman.core.events import (
     Sha256,
     StepStatus,
 )
+from foreman.core.identity import Role
 
 
 class CreateProjectRequest(BaseModel):
@@ -44,6 +45,9 @@ ErrorCode = Literal[
     "plan_not_approvable",
     "execution_in_progress",
     "question_closed",
+    "unauthenticated",
+    "forbidden",
+    "policy_denied",
 ]
 
 
@@ -85,6 +89,34 @@ class ApprovalRequest(BaseModel):
 class ApprovalAccepted(BaseModel):
     approval_id: UUID
     execution_id: UUID
+
+
+class ApprovalPending(BaseModel):
+    """202 : validé par le développeur, il manque encore l'approbation d'un administrateur."""
+
+    approval_id: UUID
+    status: Literal["approval_required"]
+    missing: Annotated[list[Literal["admin_approved"]], Field(max_length=1)]
+
+
+class AdminApprovalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_hash: Sha256
+    decision: Literal["approved", "rejected"]
+
+
+class Me(BaseModel):
+    user_id: Annotated[str, Field(max_length=100)]
+    name: Annotated[str, Field(max_length=100)]
+    role: Role
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok"]
+    profile: Literal["web", "cli", "worker", "eval"]
+    version: Annotated[str, Field(max_length=32, pattern=r"^[A-Za-z0-9._+-]+$")]
+    persistence: Literal["memory", "postgres"]
 
 
 class PlanView(BaseModel):

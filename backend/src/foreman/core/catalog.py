@@ -25,7 +25,7 @@ from pydantic import (
     model_validator,
 )
 
-from foreman.core.events import Sha256
+from foreman.core.events import Requirement, Sha256
 
 TOOL_NAME_PATTERN: Final = r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$"
 REGISTRY_MARKING: Final = "managed-by=foreman"
@@ -40,13 +40,6 @@ Reversibility = Literal[
 ]
 ScopeKind = Literal["create", "update", "read"]
 Decision = Literal["allow", "allow_if"]
-Requirement = Literal[
-    "plan_approved",
-    "admin_approved",
-    "remediation_approved_by_admin",
-    "adoption_approved_by_admin",
-    "command_approved",
-]
 Purpose = Literal["resume", "rollback_own", "remediation"]
 SkillStatus = Literal["draft", "published"]
 

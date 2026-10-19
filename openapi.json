@@ -1,6 +1,30 @@
 {
   "components": {
     "schemas": {
+      "AdminApprovalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "plan_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Plan Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_hash",
+          "decision"
+        ],
+        "title": "AdminApprovalRequest",
+        "type": "object"
+      },
       "ApprovalAccepted": {
         "properties": {
           "approval_id": {
@@ -19,6 +43,144 @@
           "execution_id"
         ],
         "title": "ApprovalAccepted",
+        "type": "object"
+      },
+      "ApprovalCardData": {
+        "additionalProperties": false,
+        "description": "Demande d'approbation administrateur : r\u00e9\u00e9mise enti\u00e8re \u00e0 chaque changement de `status`.",
+        "properties": {
+          "approver_roles": {
+            "items": {
+              "enum": [
+                "developer",
+                "team_admin",
+                "org_admin"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Approver Roles",
+            "type": "array"
+          },
+          "card_id": {
+            "maxLength": 64,
+            "title": "Card Id",
+            "type": "string"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "environment": {
+            "maxLength": 50,
+            "title": "Environment",
+            "type": "string"
+          },
+          "kind": {
+            "const": "approval",
+            "title": "Kind",
+            "type": "string"
+          },
+          "missing": {
+            "items": {
+              "enum": [
+                "plan_approved",
+                "admin_approved",
+                "remediation_approved_by_admin",
+                "adoption_approved_by_admin",
+                "command_approved"
+              ],
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Missing",
+            "type": "array"
+          },
+          "plan_card_id": {
+            "maxLength": 64,
+            "title": "Plan Card Id",
+            "type": "string"
+          },
+          "plan_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Plan Hash",
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "requested_by": {
+            "$ref": "#/components/schemas/UserRef"
+          },
+          "rule_id": {
+            "maxLength": 50,
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id",
+          "kind",
+          "plan_id",
+          "plan_hash",
+          "plan_card_id",
+          "environment",
+          "rule_id",
+          "missing",
+          "approver_roles",
+          "requested_by",
+          "status"
+        ],
+        "title": "ApprovalCardData",
+        "type": "object"
+      },
+      "ApprovalPending": {
+        "description": "202 : valid\u00e9 par le d\u00e9veloppeur, il manque encore l'approbation d'un administrateur.",
+        "properties": {
+          "approval_id": {
+            "format": "uuid",
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "missing": {
+            "items": {
+              "const": "admin_approved",
+              "type": "string"
+            },
+            "maxItems": 1,
+            "title": "Missing",
+            "type": "array"
+          },
+          "status": {
+            "const": "approval_required",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "status",
+          "missing"
+        ],
+        "title": "ApprovalPending",
         "type": "object"
       },
       "ApprovalRequest": {
@@ -88,6 +250,7 @@
           "data": {
             "discriminator": {
               "mapping": {
+                "approval": "#/components/schemas/ApprovalCardData",
                 "clarification": "#/components/schemas/ClarificationCardData",
                 "execution": "#/components/schemas/ExecutionCardData",
                 "plan": "#/components/schemas/PlanCardData"
@@ -103,6 +266,9 @@
               },
               {
                 "$ref": "#/components/schemas/ClarificationCardData"
+              },
+              {
+                "$ref": "#/components/schemas/ApprovalCardData"
               }
             ],
             "title": "Data"
@@ -432,7 +598,10 @@
               "plan_hash_mismatch",
               "plan_not_approvable",
               "execution_in_progress",
-              "question_closed"
+              "question_closed",
+              "unauthenticated",
+              "forbidden",
+              "policy_denied"
             ],
             "title": "Error",
             "type": "string"
@@ -935,6 +1104,47 @@
         "title": "ExpectedResource",
         "type": "object"
       },
+      "HealthResponse": {
+        "properties": {
+          "persistence": {
+            "enum": [
+              "memory",
+              "postgres"
+            ],
+            "title": "Persistence",
+            "type": "string"
+          },
+          "profile": {
+            "enum": [
+              "web",
+              "cli",
+              "worker",
+              "eval"
+            ],
+            "title": "Profile",
+            "type": "string"
+          },
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "maxLength": 32,
+            "pattern": "^[A-Za-z0-9._+-]+$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "profile",
+          "version",
+          "persistence"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
       "JsonValue": {},
       "Link": {
         "additionalProperties": false,
@@ -956,6 +1166,36 @@
           "url"
         ],
         "title": "Link",
+        "type": "object"
+      },
+      "Me": {
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "developer",
+              "team_admin",
+              "org_admin"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "maxLength": 100,
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "role"
+        ],
+        "title": "Me",
         "type": "object"
       },
       "MessageAccepted": {
@@ -1066,6 +1306,19 @@
       "PlanCardData": {
         "additionalProperties": false,
         "properties": {
+          "admin_approval_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Vrai si l'environnement exige l'approbation d'un admin",
+            "title": "Admin Approval Required"
+          },
           "approvable": {
             "anyOf": [
               {
@@ -1520,6 +1773,22 @@
         ],
         "title": "TurnStatusEvent",
         "type": "object"
+      },
+      "UserRef": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "UserRef",
+        "type": "object"
       }
     }
   },
@@ -1529,6 +1798,85 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/me": {
+      "get": {
+        "description": "Identit\u00e9 de l'appelant (S4 : utilisateur de d\u00e9veloppement unique).",
+        "operationId": "get_me_api_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Get Me"
+      }
+    },
     "/api/projects": {
       "get": {
         "description": "Projets connus du serveur, du plus r\u00e9cent au plus ancien.",
@@ -1547,6 +1895,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
           },
           "404": {
             "content": {
@@ -1622,6 +1990,26 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1691,6 +2079,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
           },
           "404": {
             "content": {
@@ -1790,6 +2198,26 @@
             },
             "description": "Flux SSE. `id:` = `seq`, pas de champ `event:`, `data:` = un `Event` JSON, commentaire `:` de maintien toutes les 15 s, `retry: 3000`. Rejoue les \u00e9v\u00e9nements de `seq > max(Last-Event-ID, after)`, dans l'ordre, puis le direct. Un `Last-Event-ID` non num\u00e9rique est ignor\u00e9. Si la reprise est plus ancienne que le plus vieil \u00e9v\u00e9nement conserv\u00e9, le serveur rejoue depuis celui-ci (le client d\u00e9tecte le trou par la rupture de contigu\u00eft\u00e9 de `seq` et repart de l'\u00e9tat re\u00e7u). Un abonn\u00e9 trop lent voit le flux ferm\u00e9 par le serveur et se reconnecte. Toute r\u00e9ponse non 200 est invisible pour `EventSource` : sur erreur avec `readyState` \u00e0 `CLOSED`, appeler `GET /projects/{id}` pour distinguer 404 et 503."
           },
+          "401": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
+          },
           "404": {
             "content": {
               "text/event-stream": {
@@ -1871,6 +2299,26 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1951,6 +2399,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
           },
           "404": {
             "content": {
@@ -2042,6 +2510,26 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -2084,6 +2572,127 @@
           }
         },
         "summary": "Get Plan"
+      }
+    },
+    "/api/projects/{project_id}/plans/{plan_id}/admin-approvals": {
+      "post": {
+        "description": "Un administrateur approuve ou refuse un plan en attente (pas encore impl\u00e9ment\u00e9).",
+        "operationId": "admin_approve_plan_api_projects__project_id__plans__plan_id__admin_approvals_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`plan_hash_mismatch`, `plan_not_approvable` ou `policy_denied`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Admin Approve Plan"
       }
     },
     "/api/projects/{project_id}/plans/{plan_id}/approvals": {
@@ -2143,6 +2752,36 @@
             },
             "description": "Successful Response"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalPending"
+                }
+              }
+            },
+            "description": "Valid\u00e9 par le d\u00e9veloppeur, en attente d'un administrateur (`approval_required`) : aucune ex\u00e9cution n'est cr\u00e9\u00e9e"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -2161,7 +2800,7 @@
                 }
               }
             },
-            "description": "`plan_hash_mismatch` (hash diff\u00e9rent de celui du plan), `plan_not_approvable` (expir\u00e9, invalid\u00e9 ou ex\u00e9cut\u00e9), `execution_in_progress`"
+            "description": "`plan_hash_mismatch` (hash diff\u00e9rent de celui du plan), `plan_not_approvable` (expir\u00e9, invalid\u00e9 ou ex\u00e9cut\u00e9), `execution_in_progress`, `policy_denied` (\u00e9tape interdite au r\u00f4le)"
           },
           "422": {
             "content": {
@@ -2253,6 +2892,26 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -2315,11 +2974,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Healthz Healthz Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/HealthResponse"
                 }
               }
             },

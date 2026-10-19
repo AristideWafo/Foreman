@@ -12,18 +12,22 @@ from pydantic import JsonValue
 from foreman.bootstrap.configure import App
 from foreman.core.events import AnyEvent
 from foreman.core.execution.cards import execution_card
+from foreman.core.identity import Principal
 from foreman.core.ports import CapacityExceeded
 from foreman.core.projects import Project
 from foreman.core.store import ApprovalRefused
 from foreman.core.turn import QuestionRefused, TurnInProgress, TurnRequest
 from foreman.surfaces.web.errors import ApiError
 from foreman.surfaces.web.schemas import (
+    AdminApprovalRequest,
     ApprovalAccepted,
+    ApprovalPending,
     ApprovalRequest,
     CreateProjectRequest,
     ErrorResponse,
     ExecutionStepView,
     ExecutionView,
+    Me,
     MessageAccepted,
     MessageRequest,
     PlanView,
@@ -32,11 +36,16 @@ from foreman.surfaces.web.schemas import (
 )
 from foreman.surfaces.web.tasks import TaskRegistry
 
+DEV_PRINCIPAL = Principal(
+    user_id="dev", name="dev", role="developer"
+)  # S4 : identité réelle en PR-C
 WEB_USER_ID = "web-anonymous"  # semaine 1 : aucune identité (authentification en S10)
 
 _ERRORS: dict[int | str, dict[str, Any]] = {
     # Descriptions explicites : la bibliothèque standard les libelle différemment selon la version
     # de Python, ce qui ferait varier openapi.json entre le poste et la CI.
+    401: {"model": ErrorResponse, "description": "Non authentifié (`unauthenticated`)"},
+    403: {"model": ErrorResponse, "description": "Rôle insuffisant (`forbidden`)"},
     404: {"model": ErrorResponse, "description": "Introuvable"},
     422: {"model": ErrorResponse, "description": "Requête invalide"},
     501: {"model": ErrorResponse, "description": "Pas encore implémenté"},
@@ -193,6 +202,13 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         response_model=ApprovalAccepted,
         responses={
             **_ERRORS,
+            202: {
+                "model": ApprovalPending,
+                "description": (
+                    "Validé par le développeur, en attente d'un administrateur "
+                    "(`approval_required`) : aucune exécution n'est créée"
+                ),
+            },
             200: {
                 "model": ApprovalAccepted,
                 "description": (
@@ -209,7 +225,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
                 "description": (
                     "`plan_hash_mismatch` (hash différent de celui du plan), "
                     "`plan_not_approvable` (expiré, invalidé ou exécuté), "
-                    "`execution_in_progress`"
+                    "`execution_in_progress`, `policy_denied` (étape interdite au rôle)"
                 ),
             },
         },
@@ -231,6 +247,29 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         else:
             response.status_code = 200  # rejeu idempotent : mêmes identifiants
         return ApprovalAccepted(approval_id=result.approval_id, execution_id=result.execution_id)
+
+    @router.post(
+        "/projects/{project_id}/plans/{plan_id}/admin-approvals",
+        status_code=201,
+        response_model=ApprovalAccepted,
+        responses={
+            **_ERRORS,
+            409: {
+                "model": ErrorResponse,
+                "description": "`plan_hash_mismatch`, `plan_not_approvable` ou `policy_denied`",
+            },
+        },
+    )
+    async def admin_approve_plan(
+        project_id: UUID, plan_id: UUID, body: AdminApprovalRequest
+    ) -> ApprovalAccepted:
+        """Un administrateur approuve ou refuse un plan en attente (pas encore implémenté)."""
+        raise ApiError(501, "not_implemented")
+
+    @router.get("/me", response_model=Me, responses=_ERRORS)
+    async def get_me() -> Me:
+        """Identité de l'appelant (S4 : utilisateur de développement unique)."""
+        return Me(user_id=DEV_PRINCIPAL.user_id, name=DEV_PRINCIPAL.name, role=DEV_PRINCIPAL.role)
 
     @router.post(
         "/projects/{project_id}/questions/{question_id}",

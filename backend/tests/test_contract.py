@@ -230,12 +230,19 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
         "/api/projects/{project_id}/events",
         "/api/projects/{project_id}/plans/{plan_id}",
         "/api/projects/{project_id}/plans/{plan_id}/approvals",
+        "/api/projects/{project_id}/plans/{plan_id}/admin-approvals",
+        "/api/me",
         "/api/projects/{project_id}/executions/{execution_id}",
         "/api/projects/{project_id}/questions/{question_id}",
     }
     card = schemas["CardEvent"]["properties"]["data"]
     assert card["discriminator"]["propertyName"] == "kind"
-    assert set(card["discriminator"]["mapping"]) == {"plan", "execution", "clarification"}
+    assert set(card["discriminator"]["mapping"]) == {
+        "plan",
+        "execution",
+        "clarification",
+        "approval",
+    }
     assert (
         "kind" in schemas["PlanCardData"]["required"]
     )  # discriminant requis dans le schéma publié
