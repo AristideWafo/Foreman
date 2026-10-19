@@ -130,7 +130,9 @@
             "enum": [
               "pending",
               "approved",
-              "rejected"
+              "rejected",
+              "expired",
+              "invalidated"
             ],
             "title": "Status",
             "type": "string"
@@ -1166,6 +1168,35 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "Invalidation": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlanChange"
+            },
+            "maxItems": 20,
+            "title": "Changes",
+            "type": "array"
+          },
+          "reason": {
+            "enum": [
+              "admin_rejected",
+              "catalog_changed",
+              "project_changed",
+              "expired"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "Invalidation",
+        "type": "object"
+      },
       "JsonValue": {},
       "Link": {
         "additionalProperties": false,
@@ -1401,6 +1432,17 @@
             "default": null,
             "title": "Expected Resources"
           },
+          "invalidation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Invalidation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "kind": {
             "const": "plan",
             "title": "Kind",
@@ -1516,6 +1558,34 @@
         "title": "PlanCardData",
         "type": "object"
       },
+      "PlanChange": {
+        "additionalProperties": false,
+        "description": "\u00c9l\u00e9ment du catalogue ou du projet qui a chang\u00e9 : un nom, jamais une valeur.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "policy",
+              "referential",
+              "skill",
+              "tool",
+              "registry"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ],
+        "title": "PlanChange",
+        "type": "object"
+      },
       "PlanView": {
         "properties": {
           "content": {
@@ -1545,6 +1615,16 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "invalidation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Invalidation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "status": {
             "enum": [

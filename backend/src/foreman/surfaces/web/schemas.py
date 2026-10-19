@@ -9,6 +9,7 @@ from foreman.core.events import (
     Budget,
     ExecutionResult,
     ExecutionState,
+    Invalidation,
     PlanStatus,
     ResourceRef,
     Sha256,
@@ -134,6 +135,7 @@ class PlanView(BaseModel):
     content: Annotated[dict[str, JsonValue], Field(description="Contenu canonique haché du plan")]
     created_at: AwareDatetime
     expires_at: AwareDatetime
+    invalidation: Invalidation | None = None
 
 
 class ExecutionStepView(BaseModel):

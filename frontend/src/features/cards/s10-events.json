@@ -94,7 +94,8 @@
         }
       ],
       "approvable": true,
-      "admin_approval_required": true
+      "admin_approval_required": true,
+      "invalidation": null
     }
   },
   {
@@ -168,7 +169,8 @@
         }
       ],
       "approvable": false,
-      "admin_approval_required": true
+      "admin_approval_required": true,
+      "invalidation": null
     }
   },
   {
@@ -281,7 +283,8 @@
         }
       ],
       "approvable": false,
-      "admin_approval_required": true
+      "admin_approval_required": true,
+      "invalidation": null
     }
   },
   {
