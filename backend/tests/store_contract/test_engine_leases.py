@@ -6,7 +6,7 @@ appels : on vérifie le moteur et les garanties du dépôt, pas les adaptateurs.
 
 import asyncio
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -15,9 +15,10 @@ from harness import APPROVER, Harness
 
 from foreman.core.approval import ApprovalService
 from foreman.core.execution.engine import ExecutionEngine
+from foreman.core.gateway.errors import CallDenied
 from foreman.core.gateway.port import GatewayCall, GatewayResult
 from foreman.core.planning import Draft, DraftStep, Planner
-from foreman.core.store import Approved, AuditEntry, Lease, Reservation, Stores
+from foreman.core.store import Approved, AuditEntry, Lease, NewReservation, Reservation, Stores
 from foreman.infra.file_catalog import load_catalog
 from foreman.infra.in_memory import InMemoryEventLog
 from support import DEV_PRINCIPAL, dev_members
@@ -242,3 +243,64 @@ async def test_a_crash_after_the_reservation_blocks_and_never_calls_twice(
     execution = await harness.stores.executions.get(bench.project, bench.execution)
     assert execution is not None and execution.state == "blocked"
     assert bench.gateway.calls == Counter({1: 1})  # l'adaptateur n'est jamais rappelé à l'aveugle
+
+
+class FailingGateway(CountingGateway):
+    """Échoue à l'étape 1 tant que `failure` est posée (erreur ou refus)."""
+
+    def __init__(self, failure: Exception | None) -> None:
+        super().__init__()
+        self.failure = failure
+
+    async def call(self, call: GatewayCall) -> GatewayResult:
+        if call.step_seq == 1 and self.failure is not None:
+            self.calls[1] += 1
+            raise self.failure
+        return await super().call(call)
+
+
+async def test_an_identical_plan_succeeds_after_a_failure_without_duplicates(
+    harness: Harness,
+) -> None:
+    # L'étape 1 échoue après la réservation (orpheline) ; le même plan la reprend une seule fois.
+    gateway = FailingGateway(RuntimeError("panne"))
+    first = await approved_execution(harness, gateway=gateway)
+    await first.engine.run(first.project, first.execution)
+    failed = await harness.stores.executions.get(first.project, first.execution)
+    assert failed is not None and failed.state == "blocked"
+    gateway.failure = None
+    second = await approved_execution(harness, project=first.project, gateway=gateway)
+    await second.engine.run(second.project, second.execution)
+    done = await harness.stores.executions.get(second.project, second.execution)
+    assert done is not None and done.state == "succeeded"
+    assert gateway.calls == Counter({1: 2, 2: 1, 3: 1})  # étape 1 : l'échec, puis un seul succès
+
+
+async def test_an_orphan_of_a_tool_without_strategy_stays_blocked(harness: Harness) -> None:
+    gateway = FailingGateway(RuntimeError("panne"))
+    first = await approved_execution(harness, gateway=gateway)
+    await first.engine.run(first.project, first.execution)
+    gateway.failure = None
+    second = await approved_execution(harness, project=first.project, gateway=gateway)
+    catalog = load_catalog(environment="staging")
+    tool = catalog.tools["gitlab.create_group"]
+    bare = {**catalog.tools, tool.tool: tool.model_copy(update={"idempotency": None})}
+    second.engine._catalog = replace(catalog, tools=bare)
+    await second.engine.run(second.project, second.execution)
+    execution = await harness.stores.executions.get(second.project, second.execution)
+    assert execution is not None and execution.state == "blocked"
+    assert gateway.calls == Counter({1: 1})  # rien n'est rappelé à l'aveugle
+
+
+async def test_a_denial_before_effect_releases_the_reservation(harness: Harness) -> None:
+    gateway = FailingGateway(CallDenied("policy_denied"))
+    first = await approved_execution(harness, gateway=gateway)
+    await first.engine.run(first.project, first.execution)
+    store = harness.stores.executions
+    failed = await store.get(first.project, first.execution)
+    assert failed is not None and failed.state == "blocked"
+    gateway.failure = None
+    second = await approved_execution(harness, project=first.project, gateway=gateway)
+    lease = await store.claim_lease(second.execution, "probe")
+    assert lease is not None
+    assert isinstance(await store.reserve_idempotency(lease, 1), NewReservation)  # clé libre

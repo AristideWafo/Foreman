@@ -36,6 +36,7 @@ from foreman.core.store import (
     StaleLease,
     StepRecord,
     Stores,
+    TakenOverReservation,
 )
 
 log = logging.getLogger(__name__)
@@ -199,7 +200,10 @@ class ExecutionEngine:
         stores = self._stores
         reservation = await stores.executions.reserve_idempotency(lease, step.seq)
         if isinstance(reservation, OrphanReservation):
-            raise _Blocked(step.seq)  # réservée sans résultat : jamais rejouée à l'aveugle
+            # Réservée sans résultat : rejouée seulement si l'outil se rappelle sans risque.
+            if not self._replayable(step.tool):
+                raise _Blocked(step.seq)
+            reservation = await stores.executions.take_over(lease, step.seq)
         if isinstance(reservation, CompletedReservation):
             # La clé a déjà abouti : on reprend son résultat, rien n'est rappelé.
             result = cast(Mapping[str, JsonValue], reservation.result)
@@ -220,7 +224,7 @@ class ExecutionEngine:
             await self._step_event(project_id, lease.execution_id, step.seq, "succeeded")
             await self._emit_card(project_id, lease.execution_id, started)
             return
-        assert isinstance(reservation, NewReservation)  # noqa: S101 - union fermée
+        assert isinstance(reservation, NewReservation | TakenOverReservation)  # noqa: S101 - union fermée
         try:
             await self._execute(lease, project_id, plan, step, outputs, started)
         except asyncio.CancelledError:
@@ -251,6 +255,9 @@ class ExecutionEngine:
             log.warning(
                 "execution %s : étape %d refusée (%s)", lease.execution_id, step.seq, error.code
             )
+            if isinstance(error, CallDenied) and error.code != "call_in_progress":
+                # Refus avant effet : la clé ne doit pas rester orpheline pour un plan identique.
+                await self._release(lease, step.seq, keep_lease=True)
             raise _Blocked(step.seq) from None
         except Exception as exc:
             log.warning(
@@ -333,9 +340,18 @@ class ExecutionEngine:
             except Exception:
                 return
 
-    async def _release(self, lease: Lease, step_seq: int | None) -> None:
+    def _replayable(self, tool: str) -> bool:
+        """Outil de lecture ou déclaré idempotent au catalogue : rappelé sans risque (D3)."""
+        definition = self._catalog.tools.get(tool)
+        return definition is not None and (
+            definition.tool_class == "read" or definition.idempotency is not None
+        )
+
+    async def _release(
+        self, lease: Lease, step_seq: int | None, *, keep_lease: bool = False
+    ) -> None:
         try:
-            await self._stores.executions.release(lease, step_seq)
+            await self._stores.executions.release(lease, step_seq, keep_lease=keep_lease)
         except Exception as exc:
             log.warning(
                 "execution %s : libération non écrite (%s)", lease.execution_id, type(exc).__name__

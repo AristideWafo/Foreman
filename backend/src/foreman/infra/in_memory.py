@@ -43,6 +43,7 @@ from foreman.core.store import (
     StepStatus,
     StoreError,
     Stores,
+    TakenOverReservation,
     UnknownProject,
     ensure_audit_scope,
     steps_of,
@@ -407,6 +408,16 @@ class InMemoryExecutionStore:
         self._s.idempotency[key] = None
         return NewReservation()
 
+    async def take_over(self, lease: Lease, step_seq: int) -> TakenOverReservation:
+        e = self._held(lease)
+        step = next((s for s in e.steps if s.seq == step_seq), None)
+        if step is None or step.status != "running":
+            raise InvalidTransition
+        key = (e.project_id, step.idempotency_key)
+        if not (key in self._s.idempotency and self._s.idempotency[key] is None):
+            raise InvalidTransition
+        return TakenOverReservation()  # la mémoire ne lie pas la clé à une étape : rien à déplacer
+
     async def complete_step(
         self,
         lease: Lease,
@@ -441,7 +452,9 @@ class InMemoryExecutionStore:
         self._s.idempotency[(e.project_id, step.idempotency_key)] = dict(result)
         step.status, step.result = "succeeded", dict(result)
 
-    async def release(self, lease: Lease, step_seq: int | None) -> None:
+    async def release(
+        self, lease: Lease, step_seq: int | None, *, keep_lease: bool = False
+    ) -> None:
         e = self._held(lease)
         step = next((s for s in e.steps if s.seq == step_seq), None)
         if step is not None and step.status == "running" and step.result is None:
@@ -449,7 +462,8 @@ class InMemoryExecutionStore:
             if key in self._s.idempotency and self._s.idempotency[key] is None:
                 del self._s.idempotency[key]
             step.status = "pending"
-        e.lease_owner, e.lease_expires_at = None, None
+        if not keep_lease:
+            e.lease_owner, e.lease_expires_at = None, None
 
     async def finish(self, lease: Lease, state: Literal["succeeded", "blocked"]) -> None:
         e = self._held(lease)
