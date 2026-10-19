@@ -28,6 +28,7 @@ from foreman.core.gateway.redact import (
     mask_text,
     redact_value,
 )
+from foreman.core.gateway.scope import in_scope
 from foreman.core.policy.matrix import (
     Allow,
     AllowIf,
@@ -542,7 +543,7 @@ async def slug_belongs_to_another_project() -> tuple[World, Refusal]:
     await register(
         world,
         [playbook_step(1, "bootstrap_project")],
-        NewResource("server", "server_project", "safe-eat"),
+        NewResource("server", "server_project", "staging/safe-eat"),
     )
     started = await start(world, [playbook_step(1, "bootstrap_project")])
     return world, Refusal(call_for(started), "scope_violation")
@@ -730,7 +731,7 @@ async def test_a_full_plan_runs_through_the_gateway_with_resolved_references() -
     assert sorted((r.resource_type, r.external_id) for r in registered) == [
         ("gitlab_group", "2000"),
         ("gitlab_group", "2001"),
-        ("server_project", "safe-eat"),
+        ("server_project", "staging/safe-eat"),
     ]
     audit = await world.stores.audit.list_for_project(started.project_id)
     assert [e.decision for e in audit].count("allow") == 5
@@ -951,6 +952,35 @@ async def test_a_dry_run_registers_nothing_and_unlocks_no_deployment() -> None:
     with pytest.raises(CallDenied) as denied:
         await world.gateway.call(call_for(started, 2))
     assert denied.value.code == "scope_violation"  # le projet n'a jamais été créé
+
+
+async def test_a_staging_project_does_not_satisfy_production_scope_nor_clash_with_its_slug() -> (
+    None
+):
+    """#177 : l'identité est `environnement/slug`."""
+    world = make_world()
+    owner = await register(
+        world,
+        [playbook_step(1, "bootstrap_project")],
+        NewResource("server", "server_project", "staging/safe-eat"),
+    )
+    tool = world.catalog.tools["server.apply_playbook"]
+
+    async def allowed(project: UUID, playbook: str, environment: str) -> bool:
+        params = playbook_step(1, playbook, environment)["params"]
+        return await in_scope(
+            catalog=world.catalog,
+            registry=world.stores.registry,
+            project_id=project,
+            tool=tool,
+            params=params,
+        )
+
+    assert await allowed(owner, "deploy_compose", "staging")
+    assert not await allowed(owner, "deploy_compose", "production")
+    stranger = (await world.projects.create("q")).id
+    assert await allowed(stranger, "bootstrap_project", "production")  # même slug, autre env
+    assert not await allowed(stranger, "bootstrap_project", "staging")
 
 
 # --- 5. Concurrence et annulation -------------------------------------------------------------

@@ -31,7 +31,7 @@ idempotency:
   on_conflict: return_previous_result
 registry:
   resource_type: server_project
-  external_id: project               # le slug du projet ; run_id reste une sortie
+  external_id: "{input.environment}/{input.project}"   # un même slug peut exister en staging et en production
   marking: "répertoire et services Compose du projet étiquetés managed-by=foreman"
 redact: []
 timeout_s: 900

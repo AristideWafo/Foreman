@@ -65,9 +65,11 @@ async def _owned_by_another_project(
     Un identifiant lu en SORTIE (GitLab) ne peut être contrôlé qu'après l'exécution : la gateway le
     fait alors (`foreign_resource`).
     """
-    if tool.registry is None or tool.registry.external_id not in params:
+    if tool.registry is None or (
+        "{" not in tool.registry.external_id and (tool.registry.external_id not in params)
+    ):
         return False
-    external_id = _identifier(params[tool.registry.external_id])
+    external_id = _identifier(tool.registry.identify(params))
     if external_id is None:
         return True  # identifiant inutilisable : refusé
     return await registry.exists_elsewhere(
@@ -99,7 +101,10 @@ async def in_scope(
         ):
             return False
         return not await _owned_by_another_project(registry, project_id, tool, params)
-    target = _identifier(params.get(scope.target or ""))
-    if tool.registry is None or target is None:
+    if tool.registry is None:
+        return False
+    # Le projet visé est identifié comme à son enregistrement (gabarit environnement/slug).
+    target = _identifier(tool.registry.identify(params)) if scope.target else None
+    if target is None:
         return False
     return await registry.contains(project_id, tool.connector, tool.registry.resource_type, target)
