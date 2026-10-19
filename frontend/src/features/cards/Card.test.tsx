@@ -99,8 +99,8 @@ test("S1, carte exécution réussie : étapes, journal, budget, ressources et r�
     .map((a) => a.getAttribute("href"));
   expect(hrefs).toHaveLength(10);
   expect(hrefs[0]).toBe("https://gitlab.example.org/foreman-demo/safe-eat");
-  expect(within(execution).getByText("safe-eat")).toBeVisible();
-  expect(within(execution).queryByRole("link", { name: "safe-eat" })).toBeNull();
+  expect(within(execution).getByText("staging/safe-eat")).toBeVisible();
+  expect(within(execution).queryByRole("link", { name: "staging/safe-eat" })).toBeNull();
   expect(within(execution).getByText("8 étapes réussies sur 8 en staging.")).toBeVisible();
   // Journal de l'étape 1, reçu à part (execution_log) et conservé quand la carte est réémise.
   expect(within(execution).getByRole("log", { name: "Journal de l'étape 1" })).toHaveTextContent(
