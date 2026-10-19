@@ -8,6 +8,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from foreman.surfaces.web.schemas import ErrorCode
 
 CODES: dict[int, ErrorCode] = {
+    401: "unauthenticated",
+    403: "forbidden",
     404: "not_found",
     405: "method_not_allowed",
     409: "turn_in_progress",

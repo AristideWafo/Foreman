@@ -8,8 +8,8 @@ le déclare faux pour les modèles émis par le serveur : c'est de la rigueur c�
 consigne de validation côté client) ; sans cela, aucun ajout ne serait réellement additif.
 
 Sémantique de `seq` : strictement croissant, contigu à partir de 1, par projet, livré dans l'ordre.
-Une carte (`card`) remplace la précédente de même `card_id`. Trois sortes de cartes (`kind`) :
-`plan`, `execution` et `clarification` (ajout additif de la Semaine 3).
+Une carte (`card`) remplace la précédente de même `card_id`. Quatre sortes de cartes (`kind`) :
+`plan`, `execution`, `clarification` (S3) et `approval` (S4), ajouts additifs.
 
 Ordre et portée (Semaine 2) :
 - après l'approbation, la carte plan est RÉÉMISE (`status: dev_approved`, `approvable: false`)
@@ -26,6 +26,8 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+
+from foreman.core.identity import Role
 
 StepStatus = Literal["pending", "running", "succeeded", "failed", "compensated", "skipped"]
 ToolClass = Literal["read", "write_registry", "write_foreign", "destructive", "control"]
@@ -47,6 +49,13 @@ PlanStatus = Literal[
     "proposed", "dev_approved", "admin_approved", "invalidated", "expired", "executed"
 ]
 # Clé d'un dictionnaire libre : sans `_` ni majuscule (`__proto__` piégerait un `Object.assign`).
+Requirement = Literal[
+    "plan_approved",
+    "admin_approved",
+    "remediation_approved_by_admin",
+    "adoption_approved_by_admin",
+    "command_approved",
+]
 SlugKey = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{0,49}$")]
 # Seuls http et https, avec un hôte, sans espace ni contrôle : jamais de lien `javascript:`.
 Url = Annotated[str, Field(max_length=500, pattern=r"^https?://[^\s\x00-\x1f\x7f]+$")]
@@ -115,6 +124,9 @@ class PlanCardData(_Model):
     approvable: Annotated[
         bool | None, Field(description="Décidé par le serveur d'après la matrice de droits")
     ] = None
+    admin_approval_required: Annotated[
+        bool | None, Field(description="Vrai si l'environnement exige l'approbation d'un admin")
+    ] = None
 
 
 class Budget(_Model):
@@ -179,8 +191,30 @@ class ClarificationCardData(_Model):
     questions: Annotated[list[ClarificationQuestion], Field(max_length=5)]
 
 
+class UserRef(_Model):
+    name: Annotated[str, Field(min_length=1, max_length=100)]
+
+
+class ApprovalCardData(_Model):
+    """Demande d'approbation administrateur : réémise entière à chaque changement de `status`."""
+
+    card_id: Annotated[str, Field(max_length=64)]
+    kind: Literal["approval"]
+    plan_id: UUID
+    plan_hash: Sha256
+    plan_card_id: Annotated[str, Field(max_length=64)]
+    environment: Annotated[str, Field(max_length=50)]
+    rule_id: Annotated[str, Field(max_length=50)]
+    missing: Annotated[list[Requirement], Field(max_length=10)]
+    approver_roles: Annotated[list[Role], Field(max_length=3)]
+    requested_by: UserRef
+    status: Literal["pending", "approved", "rejected"]
+    decided_by: UserRef | None = None
+
+
 CardData = Annotated[
-    PlanCardData | ExecutionCardData | ClarificationCardData, Field(discriminator="kind")
+    PlanCardData | ExecutionCardData | ClarificationCardData | ApprovalCardData,
+    Field(discriminator="kind"),
 ]
 
 
@@ -266,6 +300,7 @@ EventData = (
     | PlanCardData
     | ExecutionCardData
     | ClarificationCardData
+    | ApprovalCardData
     | ExecutionStepData
     | ExecutionLogData
     | TurnStatusData
@@ -282,7 +317,7 @@ def make_event(seq: int, project_id: UUID, turn_id: UUID, data: EventData) -> An
     match data:
         case MessageData():
             return MessageEvent(seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data)
-        case PlanCardData() | ExecutionCardData() | ClarificationCardData():
+        case PlanCardData() | ExecutionCardData() | ClarificationCardData() | ApprovalCardData():
             return CardEvent(seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data)
         case ExecutionLogData():
             return ExecutionLogEvent(

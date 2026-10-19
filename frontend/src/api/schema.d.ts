@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Me
+         * @description Identité de l'appelant (S4 : utilisateur de développement unique).
+         */
+        get: operations["get_me_api_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects": {
         parameters: {
             query?: never;
@@ -119,6 +139,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/plans/{plan_id}/admin-approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Approve Plan
+         * @description Un administrateur approuve ou refuse un plan en attente (pas encore implémenté).
+         */
+        post: operations["admin_approve_plan_api_projects__project_id__plans__plan_id__admin_approvals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/plans/{plan_id}/approvals": {
         parameters: {
             query?: never;
@@ -183,6 +223,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AdminApprovalRequest */
+        AdminApprovalRequest: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approved" | "rejected";
+            /** Plan Hash */
+            plan_hash: string;
+        };
         /** ApprovalAccepted */
         ApprovalAccepted: {
             /**
@@ -195,6 +245,62 @@ export interface components {
              * Format: uuid
              */
             execution_id: string;
+        };
+        /**
+         * ApprovalCardData
+         * @description Demande d'approbation administrateur : réémise entière à chaque changement de `status`.
+         */
+        ApprovalCardData: {
+            /** Approver Roles */
+            approver_roles: ("developer" | "team_admin" | "org_admin")[];
+            /** Card Id */
+            card_id: string;
+            /** @default null */
+            decided_by: components["schemas"]["UserRef"] | null;
+            /** Environment */
+            environment: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "approval";
+            /** Missing */
+            missing: ("plan_approved" | "admin_approved" | "remediation_approved_by_admin" | "adoption_approved_by_admin" | "command_approved")[];
+            /** Plan Card Id */
+            plan_card_id: string;
+            /** Plan Hash */
+            plan_hash: string;
+            /**
+             * Plan Id
+             * Format: uuid
+             */
+            plan_id: string;
+            requested_by: components["schemas"]["UserRef"];
+            /** Rule Id */
+            rule_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "rejected";
+        };
+        /**
+         * ApprovalPending
+         * @description 202 : validé par le développeur, il manque encore l'approbation d'un administrateur.
+         */
+        ApprovalPending: {
+            /**
+             * Approval Id
+             * Format: uuid
+             */
+            approval_id: string;
+            /** Missing */
+            missing: "admin_approved"[];
+            /**
+             * Status
+             * @constant
+             */
+            status: "approval_required";
         };
         /**
          * ApprovalRequest
@@ -229,7 +335,7 @@ export interface components {
              */
             at: string;
             /** Data */
-            data: components["schemas"]["PlanCardData"] | components["schemas"]["ExecutionCardData"] | components["schemas"]["ClarificationCardData"];
+            data: components["schemas"]["PlanCardData"] | components["schemas"]["ExecutionCardData"] | components["schemas"]["ClarificationCardData"] | components["schemas"]["ApprovalCardData"];
             /**
              * Project Id
              * Format: uuid
@@ -396,7 +502,7 @@ export interface components {
              * Error
              * @enum {string}
              */
-            error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented" | "plan_hash_mismatch" | "plan_not_approvable" | "execution_in_progress" | "question_closed";
+            error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented" | "plan_hash_mismatch" | "plan_not_approvable" | "execution_in_progress" | "question_closed" | "unauthenticated" | "forbidden" | "policy_denied";
         };
         Event: components["schemas"]["MessageEvent"] | components["schemas"]["CardEvent"] | components["schemas"]["ExecutionStepEvent"] | components["schemas"]["ExecutionLogEvent"] | components["schemas"]["TurnStatusEvent"] | components["schemas"]["ErrorEvent"];
         /**
@@ -600,6 +706,26 @@ export interface components {
             /** Resource Type */
             resource_type: string;
         };
+        /** HealthResponse */
+        HealthResponse: {
+            /**
+             * Persistence
+             * @enum {string}
+             */
+            persistence: "memory" | "postgres";
+            /**
+             * Profile
+             * @enum {string}
+             */
+            profile: "web" | "cli" | "worker" | "eval";
+            /**
+             * Status
+             * @constant
+             */
+            status: "ok";
+            /** Version */
+            version: string;
+        };
         JsonValue: unknown;
         /** Link */
         Link: {
@@ -607,6 +733,18 @@ export interface components {
             label: string;
             /** Url */
             url: string;
+        };
+        /** Me */
+        Me: {
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "developer" | "team_admin" | "org_admin";
+            /** User Id */
+            user_id: string;
         };
         /** MessageAccepted */
         MessageAccepted: {
@@ -669,6 +807,12 @@ export interface components {
         };
         /** PlanCardData */
         PlanCardData: {
+            /**
+             * Admin Approval Required
+             * @description Vrai si l'environnement exige l'approbation d'un admin
+             * @default null
+             */
+            admin_approval_required: boolean | null;
             /**
              * Approvable
              * @description Décidé par le serveur d'après la matrice de droits
@@ -870,6 +1014,11 @@ export interface components {
              */
             v: 1;
         };
+        /** UserRef */
+        UserRef: {
+            /** Name */
+            name: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -879,6 +1028,80 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_me_api_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Introuvable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Pas encore implémenté */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_projects_api_projects_get: {
         parameters: {
             query?: never;
@@ -895,6 +1118,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Project"][];
+                };
+            };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Introuvable */
@@ -957,6 +1198,24 @@ export interface operations {
                     "application/json": components["schemas"]["Project"];
                 };
             };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Introuvable */
             404: {
                 headers: {
@@ -1013,6 +1272,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Project"];
+                };
+            };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Introuvable */
@@ -1077,6 +1354,24 @@ export interface operations {
                     "text/event-stream": components["schemas"]["Event"];
                 };
             };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Introuvable */
             404: {
                 headers: {
@@ -1134,6 +1429,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExecutionView"];
+                };
+            };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Introuvable */
@@ -1196,6 +1509,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageAccepted"];
+                };
+            };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Introuvable */
@@ -1266,8 +1597,116 @@ export interface operations {
                     "application/json": components["schemas"]["PlanView"];
                 };
             };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Introuvable */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Pas encore implémenté */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    admin_approve_plan_api_projects__project_id__plans__plan_id__admin_approvals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalAccepted"];
+                };
+            };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Introuvable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `plan_hash_mismatch`, `plan_not_approvable` ou `policy_denied` */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1338,6 +1777,33 @@ export interface operations {
                     "application/json": components["schemas"]["ApprovalAccepted"];
                 };
             };
+            /** @description Validé par le développeur, en attente d'un administrateur (`approval_required`) : aucune exécution n'est créée */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalPending"];
+                };
+            };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Introuvable, y compris un plan d'un autre projet */
             404: {
                 headers: {
@@ -1347,7 +1813,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `plan_hash_mismatch` (hash différent de celui du plan), `plan_not_approvable` (expiré, invalidé ou exécuté), `execution_in_progress` */
+            /** @description `plan_hash_mismatch` (hash différent de celui du plan), `plan_not_approvable` (expiré, invalidé ou exécuté), `execution_in_progress`, `policy_denied` (étape interdite au rôle) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1419,6 +1885,24 @@ export interface operations {
                     "application/json": components["schemas"]["QuestionAccepted"];
                 };
             };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Introuvable, y compris une question d'un autre projet */
             404: {
                 headers: {
@@ -1481,9 +1965,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
+                    "application/json": components["schemas"]["HealthResponse"];
                 };
             };
         };

@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from collections.abc import AsyncIterator, MutableMapping
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,6 +16,7 @@ from foreman.config.env import DEFAULT_VERSION, ENV_STATIC_DIR, ENV_VERSION
 from foreman.surfaces.web.api import create_router
 from foreman.surfaces.web.errors import install_error_handlers
 from foreman.surfaces.web.openapi import install_event_schema
+from foreman.surfaces.web.schemas import HealthResponse
 from foreman.surfaces.web.tasks import TaskRegistry
 
 
@@ -72,15 +74,18 @@ def create_app(app_state: App | None = None) -> FastAPI:
     api.include_router(create_router(state, tasks))
     install_event_schema(api)
 
-    @api.get("/healthz")
-    async def healthz() -> dict[str, str]:
-        version = os.environ.get(ENV_VERSION, "")[:32] or DEFAULT_VERSION
-        return {
-            "status": "ok",
-            "profile": state.profile.value,
-            "version": version,
-            "persistence": state.persistence,
-        }
+    @api.get("/healthz", response_model=HealthResponse)
+    async def healthz() -> HealthResponse:
+        raw = os.environ.get(ENV_VERSION, "")
+        version = re.sub(r"[^A-Za-z0-9._+-]", "_", raw)[:32] or DEFAULT_VERSION
+        return HealthResponse.model_validate(
+            {
+                "status": "ok",
+                "profile": state.profile.value,
+                "version": version,
+                "persistence": state.persistence,
+            }
+        )
 
     # Monté en dernier : les routes de l'API restent prioritaires sur la SPA.
     static_dir = os.environ.get(ENV_STATIC_DIR)

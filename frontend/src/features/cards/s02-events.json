@@ -212,7 +212,8 @@
           "name": "safe-eat"
         }
       ],
-      "approvable": true
+      "approvable": true,
+      "admin_approval_required": null
     }
   },
   {
