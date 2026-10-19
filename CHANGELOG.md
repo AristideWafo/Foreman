@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.11.0](https://github.com/AristideWafo/Foreman/compare/v0.10.0...v0.11.0) (2026-10-19)
+
+
+### Features
+
+* contrat S4 (carte d'approbation, rôles, /api/me, HealthResponse) ([59d8609](https://github.com/AristideWafo/Foreman/commit/59d86091da0d87b1e60365033772f3f5ae1baf22))
+* contrat S4 (carte d'approbation, rôles, /api/me, HealthResponse) ([fbcb07b](https://github.com/AristideWafo/Foreman/commit/fbcb07bd0500b6bb90bf8a2a18de1c465dbbc533))
+
+
+### Bug Fixes
+
+* /healthz n'échoue plus sur une version hors motif ([9f409f8](https://github.com/AristideWafo/Foreman/commit/9f409f86a3d773a486cccb629a9c0d21d8b41aad))
+
 ## [0.10.0](https://github.com/AristideWafo/Foreman/compare/v0.9.0...v0.10.0) (2026-10-19)
 
 
