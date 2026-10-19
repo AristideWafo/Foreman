@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install check check-full check-imports test fmt api-types check-api-types s01-fixture
+.PHONY: help install check check-full check-imports test fmt api-types check-api-types s01-fixture s02-fixture
 
 BACKEND := cd backend && uv run
 
@@ -43,3 +43,7 @@ check-api-types: api-types ## Échoue si les types générés sont périmés
 s01-fixture: ## Régénère le fixture des cartes S1 (événements normalisés) pour le front
 	cd backend && uv run python scripts/export_s01_fixture.py > ../frontend/src/features/cards/s01-events.json
 	cd frontend && pnpm exec prettier --write src/features/cards/s01-events.json
+
+s02-fixture: ## Régénère le fixture des cartes S2 (clarification puis plan) pour le front
+	cd backend && uv run python scripts/export_s02_fixture.py > ../frontend/src/features/cards/s02-events.json
+	cd frontend && pnpm exec prettier --write src/features/cards/s02-events.json

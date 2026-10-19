@@ -1,0 +1,229 @@
+[
+  {
+    "v": 1,
+    "seq": 1,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:01Z",
+    "type": "message",
+    "data": {
+      "role": "user",
+      "text": "Prépare le projet Safe Eat : GitLab puis déploiement."
+    }
+  },
+  {
+    "v": 1,
+    "seq": 2,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:02Z",
+    "type": "turn_status",
+    "data": {
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 3,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:03Z",
+    "type": "message",
+    "data": {
+      "role": "assistant",
+      "text": "Avant de planifier, j'ai besoin de connaître l'environnement cible."
+    }
+  },
+  {
+    "v": 1,
+    "seq": 4,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:04Z",
+    "type": "card",
+    "data": {
+      "card_id": "clarification-1",
+      "kind": "clarification",
+      "questions": [
+        {
+          "id": "q1-1",
+          "field": "environment",
+          "prompt": "Sur quel environnement faut-il déployer Safe Eat ?",
+          "options": ["staging"],
+          "status": "open",
+          "answer": null
+        }
+      ]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 5,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:05Z",
+    "type": "turn_status",
+    "data": {
+      "status": "completed"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 6,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:00:06Z",
+    "type": "message",
+    "data": {
+      "role": "user",
+      "text": "Réponse à la clarification : environment = staging"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 7,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:00:07Z",
+    "type": "turn_status",
+    "data": {
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 8,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:00:08Z",
+    "type": "card",
+    "data": {
+      "card_id": "clarification-1",
+      "kind": "clarification",
+      "questions": [
+        {
+          "id": "q1-1",
+          "field": "environment",
+          "prompt": "Sur quel environnement faut-il déployer Safe Eat ?",
+          "options": ["staging"],
+          "status": "answered",
+          "answer": "staging"
+        }
+      ]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 9,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:00:09Z",
+    "type": "message",
+    "data": {
+      "role": "assistant",
+      "text": "Merci. Voici le plan pour Safe Eat en staging. Rien ne s'exécute avant votre validation."
+    }
+  },
+  {
+    "v": 1,
+    "seq": 10,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:00:10Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "plan",
+      "title": "Safe Eat : GitLab et déploiement en staging",
+      "summary": "Groupe safe-eat, dépôt safe-eat-api depuis le boilerplate Go, puis préparation du serveur de staging et vérification de santé.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Créer le groupe safe-eat",
+          "status": "pending",
+          "tool": "gitlab.create_group",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Créer le dépôt safe-eat-api",
+          "status": "pending",
+          "tool": "gitlab.create_project",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Préparer le serveur de staging",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 4,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "plan_id": "00000000-0000-4000-8000-000000000004",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "status": "proposed",
+      "environment": "staging",
+      "autonomy_level": 2,
+      "stack": {
+        "backend": "go-api"
+      },
+      "skills": [
+        {
+          "name": "gitlab-project-creation",
+          "version": 1,
+          "sha256": "sha256:0bf151f71687a768eaba0c021e66839b929471072b5052090b5ddf377746a403"
+        },
+        {
+          "name": "go-backend-standard",
+          "version": 1,
+          "sha256": "sha256:384d3e7f9af2720ce82160d44962cb3523d8a42df6fb248a5e811407e75213d9"
+        },
+        {
+          "name": "docker-staging-deploy",
+          "version": 1,
+          "sha256": "sha256:33544267d63ab814cdaffa49fdcc96fdd9c05ccb07d211a2ec4e990d4c92a620"
+        }
+      ],
+      "expected_resources": [
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_group",
+          "name": "safe-eat"
+        },
+        {
+          "provider": "gitlab",
+          "resource_type": "gitlab_project",
+          "name": "safe-eat-api"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        }
+      ],
+      "approvable": true
+    }
+  },
+  {
+    "v": 1,
+    "seq": 11,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:00:11Z",
+    "type": "turn_status",
+    "data": {
+      "status": "completed"
+    }
+  }
+]
