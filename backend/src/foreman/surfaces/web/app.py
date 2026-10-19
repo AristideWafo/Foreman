@@ -14,6 +14,7 @@ from starlette.responses import Response
 
 from foreman.bootstrap.configure import App, AuthMode, Profile, configure
 from foreman.config.env import DEFAULT_VERSION, ENV_STATIC_DIR, ENV_VERSION
+from foreman.surfaces.web.admin_api import create_admin_router
 from foreman.surfaces.web.api import create_router
 from foreman.surfaces.web.auth_routes import create_auth_router
 from foreman.surfaces.web.errors import install_error_handlers
@@ -109,6 +110,7 @@ def create_app(app_state: App | None = None) -> FastAPI:
     install_error_handlers(api)
     api.include_router(create_router(state, tasks))
     api.include_router(create_auth_router(state))
+    api.include_router(create_admin_router(state))
     install_event_schema(api)
 
     @api.get("/healthz", response_model=HealthResponse)

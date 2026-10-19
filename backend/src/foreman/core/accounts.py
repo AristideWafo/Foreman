@@ -4,7 +4,7 @@ Les invariants qui exigent la base (dernier org_admin, dernier admin d'équipe) 
 le store, dans la transaction ; ici vivent les règles sans état.
 """
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Final, Protocol
@@ -85,6 +85,42 @@ class Invitation:
     used_at: datetime | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class Membership:
+    """Appartenance à une équipe PARTAGÉE (les équipes personnelles n'apparaissent jamais)."""
+
+    team_id: UUID
+    team_name: str
+    role: Role
+
+
+@dataclass(frozen=True, slots=True)
+class AdminUser:
+    id: UUID
+    email: str
+    name: str
+    disabled: bool
+    memberships: tuple[Membership, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AdminScope:
+    """Périmètre d'administration : org_admin (tout) ou team_admin d'équipes partagées.
+
+    Le rôle d'une équipe personnelle ne compte pas : chacun y est admin de lui-même.
+    """
+
+    org: bool
+    teams: frozenset[UUID]
+
+    @property
+    def is_admin(self) -> bool:
+        return self.org or bool(self.teams)
+
+    def covers(self, team_id: UUID) -> bool:
+        return self.org or team_id in self.teams
+
+
 def rank(role: Role) -> int:
     return ROLES.index(role)
 
@@ -138,7 +174,10 @@ class AccountStore(Protocol):
         """
         ...
 
-    async def create_team(self, name: str, first_admin: UUID) -> Team: ...
+    async def create_team(self, name: str, first_admin: UUID, actor: UUID | None = None) -> Team:
+        """Équipe + son premier team_admin (même transaction). `actor` (org_admin) est audité ;
+        `None` = amorçage de confiance."""
+        ...
 
     async def add_member(self, team_id: UUID, user_id: UUID, role: Role, actor: UUID) -> None: ...
 
@@ -162,4 +201,35 @@ class AccountStore(Protocol):
         self, token_hash: str, email: str, name: str, password_hash: str, now: datetime
     ) -> Account:
         """Consomme l'invitation et crée le compte dans une transaction (tout ou rien)."""
+        ...
+
+    async def admin_scope(self, user_id: UUID) -> AdminScope: ...
+
+    async def memberships(
+        self, user_ids: Sequence[UUID], team_ids: Collection[UUID] | None = None
+    ) -> dict[UUID, list[Membership]]:
+        """Appartenances aux équipes partagées (limitées à `team_ids` si fourni)."""
+        ...
+
+    async def list_teams(self, team_ids: Collection[UUID] | None, limit: int) -> list[Team]:
+        """Équipes partagées ; `None` = toutes (org_admin)."""
+        ...
+
+    async def list_users(self, team_ids: Collection[UUID] | None, limit: int) -> list[AdminUser]:
+        """Comptes ; avec `team_ids`, seulement les membres de ces équipes."""
+        ...
+
+    async def list_invitations(
+        self, team_ids: Collection[UUID] | None, limit: int
+    ) -> list[Invitation]:
+        """Invitations non utilisées (expirées comprises : on peut les révoquer)."""
+        ...
+
+    async def revoke_invitation(self, invitation_id: UUID, actor: UUID) -> None:
+        """`NotFound` si inconnue, `InvalidInvitation` si déjà utilisée, `ElevationDenied` si
+        l'auteur n'administre pas l'équipe visée."""
+        ...
+
+    async def move_project(self, project_id: UUID, team_id: UUID, actor: UUID) -> None:
+        """org_admin seulement ; l'équipe cible est partagée."""
         ...

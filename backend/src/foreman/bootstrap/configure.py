@@ -12,12 +12,14 @@ from foreman.config.env import (
     DEFAULT_AUTH_MODE,
     DEFAULT_ENVIRONMENT,
     DEFAULT_LOG_LEVEL,
+    DEFAULT_PUBLIC_URL,
     ENV_AUTH_MODE,
     ENV_COOKIE_SECURE,
     ENV_DATABASE_URL,
     ENV_DEV_MEMBERS,
     ENV_ENVIRONMENT,
     ENV_LOG_LEVEL,
+    ENV_PUBLIC_URL,
 )
 from foreman.core.accounts import AccountStore
 from foreman.core.approval import ApprovalService
@@ -112,6 +114,13 @@ class App:
     auth: AuthStore | None = None
     hasher: PasswordHasher = field(default_factory=Argon2Hasher)
     cookie_secure: bool = True
+
+
+def invitation_link(token: str) -> str:
+    """Lien d'invitation, format unique (CLI et API). Le jeton est en fragment : absent des
+    journaux d'accès."""
+    base = os.environ.get(ENV_PUBLIC_URL, DEFAULT_PUBLIC_URL).rstrip("/")
+    return f"{base}/accept-invite#token={token}"
 
 
 def configure(profile: Profile) -> App:

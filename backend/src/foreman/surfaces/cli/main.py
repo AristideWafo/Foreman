@@ -1,11 +1,9 @@
 import argparse
 import asyncio
-import os
 import sys
 from datetime import UTC, datetime
 
-from foreman.bootstrap.configure import App, Profile, configure
-from foreman.config.env import DEFAULT_PUBLIC_URL, ENV_PUBLIC_URL
+from foreman.bootstrap.configure import App, Profile, configure, invitation_link
 from foreman.core.accounts import AccountError
 from foreman.core.auth import create_admin_invitation
 from foreman.core.store import DEV_TEAM_ID, DEV_USER_ID
@@ -29,8 +27,7 @@ async def _admin_create(email: str) -> str:
         token = await create_admin_invitation(app.accounts, app.auth, email, datetime.now(UTC))
     finally:
         await app.lifecycle.stop()
-    base = os.environ.get(ENV_PUBLIC_URL, DEFAULT_PUBLIC_URL).rstrip("/")
-    return f"{base}/accept-invite#token={token}"  # fragment : absent des journaux d'accès
+    return invitation_link(token)
 
 
 def _admin(argv: list[str]) -> None:
