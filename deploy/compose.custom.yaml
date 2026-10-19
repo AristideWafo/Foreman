@@ -63,6 +63,9 @@ services:
       # retiré avant d'atteindre l'application.
       - traefik.http.middlewares.${PROJECT}-auth.basicauth.users=${FOREMAN_BASIC_AUTH_USERS:?FOREMAN_BASIC_AUTH_USERS requis (utilisateur:hash, voir docs/DEPLOYMENT.md)}
       - traefik.http.middlewares.${PROJECT}-auth.basicauth.removeheader=true
+      # Traefik écrit le nom authentifié dans X-Forwarded-User et écrase celui du client : c'est
+      # l'identité lue par l'application quand FOREMAN_AUTH_MODE=proxy_header.
+      - traefik.http.middlewares.${PROJECT}-auth.basicauth.headerfield=X-Forwarded-User
 
       # /healthz reste public (supervision, vérification du déploiement) : il ne renvoie que l'état.
       - "traefik.http.routers.${PROJECT}-health.rule=Host(`${FOREMAN_DOMAIN}`) && Path(`/healthz`)"

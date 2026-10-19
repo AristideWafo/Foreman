@@ -20,6 +20,7 @@ EXECUTION_STATES = (
     "degraded",
 )
 ACTIVE_EXECUTION_STATES = ("running", "awaiting_permission", "awaiting_remediation")
+ROLES = ("developer", "team_admin", "org_admin")
 PROJECT_STATUSES = ("draft", "active", "archived")
 STEP_STATUSES = ("pending", "running", "succeeded", "failed", "compensated", "skipped")
 
@@ -35,6 +36,16 @@ users = sa.Table(
     sa.Column("email", sa.Text, nullable=False, unique=True),
     sa.Column("name", sa.Text, nullable=False),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
+)
+
+# Rôle par équipe, synchronisé au démarrage depuis FOREMAN_DEV_MEMBERS (voir infra/db/members.py).
+memberships = sa.Table(
+    "memberships",
+    metadata,
+    sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id"), primary_key=True),
+    sa.Column("team_id", UUID(as_uuid=True), sa.ForeignKey("teams.id"), primary_key=True),
+    sa.Column("role", sa.Text, nullable=False),
+    sa.CheckConstraint(_in("role", ROLES), name="memberships_role"),
 )
 
 teams = sa.Table(
@@ -136,6 +147,7 @@ executions = sa.Table(
     sa.Column("project_id", UUID(as_uuid=True), nullable=False),
     sa.Column("state", sa.Text, nullable=False, server_default=sa.text("'running'")),
     sa.Column("autonomy_level", sa.Integer, nullable=False),
+    sa.Column("environment", sa.Text, nullable=False),
     sa.Column("checkpoint", JSONB(none_as_null=True), nullable=True),
     sa.Column("budget_used", JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")),
     sa.Column("lease_owner", sa.Text, nullable=True),
@@ -147,6 +159,11 @@ executions = sa.Table(
     sa.ForeignKeyConstraint(["plan_id", "project_id"], ["plans.id", "plans.project_id"]),
     sa.CheckConstraint("lease_epoch >= 0", name="executions_lease_epoch"),
     sa.CheckConstraint(_in("state", EXECUTION_STATES), name="executions_state"),
+    sa.CheckConstraint("autonomy_level BETWEEN 1 AND 4", name="executions_autonomy_level"),
+    # D8 : jamais d'autonomie totale en production, même si le code se trompe.
+    sa.CheckConstraint(
+        "environment <> 'production' OR autonomy_level <= 3", name="executions_production_autonomy"
+    ),
     sa.Index(
         "uq_executions_one_active_per_project",
         "project_id",

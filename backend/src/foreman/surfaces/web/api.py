@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Annotated, Any, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Header, Query, Response
+from fastapi import APIRouter, Depends, Header, Query, Response
 from fastapi.responses import StreamingResponse
 from pydantic import JsonValue
 
@@ -17,6 +17,7 @@ from foreman.core.ports import CapacityExceeded
 from foreman.core.projects import Project
 from foreman.core.store import ApprovalRefused
 from foreman.core.turn import QuestionRefused, TurnInProgress, TurnRequest
+from foreman.surfaces.web.auth import make_current_principal
 from foreman.surfaces.web.errors import ApiError
 from foreman.surfaces.web.schemas import (
     AdminApprovalRequest,
@@ -35,11 +36,6 @@ from foreman.surfaces.web.schemas import (
     QuestionAnswerRequest,
 )
 from foreman.surfaces.web.tasks import TaskRegistry
-
-DEV_PRINCIPAL = Principal(
-    user_id="dev", name="dev", role="developer"
-)  # S4 : identité réelle en PR-C
-WEB_USER_ID = "web-anonymous"  # semaine 1 : aucune identité (authentification en S10)
 
 _ERRORS: dict[int | str, dict[str, Any]] = {
     # Descriptions explicites : la bibliothèque standard les libelle différemment selon la version
@@ -91,7 +87,10 @@ def _frame(event: AnyEvent) -> bytes:
 
 
 def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
-    router = APIRouter(prefix="/api")
+    current_principal = make_current_principal(app)
+    # Toute route de l'API exige une identité (401 en `proxy_header`) ; en `none`, c'est `dev`.
+    router = APIRouter(prefix="/api", dependencies=[Depends(current_principal)])
+    Caller = Annotated[Principal, Depends(current_principal)]
 
     @router.post("/projects", status_code=201, response_model=Project, responses=_ERRORS)
     async def create_project(body: CreateProjectRequest | None = None) -> Project:
@@ -125,7 +124,9 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             },
         },
     )
-    async def post_message(project_id: UUID, body: MessageRequest) -> MessageAccepted:
+    async def post_message(
+        project_id: UUID, body: MessageRequest, caller: Caller
+    ) -> MessageAccepted:
         """Un seul tour à la fois par projet : un second message pendant un tour renvoie 409."""
         if await app.projects.get(project_id) is None:
             raise ApiError(404, "not_found")
@@ -133,7 +134,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             turn_id = app.turns.begin(project_id)
         except TurnInProgress:
             raise ApiError(409, "turn_in_progress") from None
-        request = TurnRequest(user_id=WEB_USER_ID, project_id=project_id, message=body.text)
+        request = TurnRequest(user_id=caller.user_id, project_id=project_id, message=body.text)
         try:
             tasks.spawn(app.turns.run(request, turn_id))
         except BaseException:
@@ -267,9 +268,9 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         raise ApiError(501, "not_implemented")
 
     @router.get("/me", response_model=Me, responses=_ERRORS)
-    async def get_me() -> Me:
-        """Identité de l'appelant (S4 : utilisateur de développement unique)."""
-        return Me(user_id=DEV_PRINCIPAL.user_id, name=DEV_PRINCIPAL.name, role=DEV_PRINCIPAL.role)
+    async def get_me(caller: Caller) -> Me:
+        """Identité de l'appelant, lue côté serveur (rôle : `FOREMAN_DEV_MEMBERS`)."""
+        return Me(user_id=str(caller.user_id), name=caller.name, role=caller.role)
 
     @router.post(
         "/projects/{project_id}/questions/{question_id}",
@@ -292,7 +293,11 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         },
     )
     async def answer_question(
-        project_id: UUID, question_id: str, body: QuestionAnswerRequest, response: Response
+        project_id: UUID,
+        question_id: str,
+        body: QuestionAnswerRequest,
+        response: Response,
+        caller: Caller,
     ) -> QuestionAccepted:
         """Répond à une question de clarification (202, relance un tour) ou la reporte (200).
 
@@ -303,7 +308,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             raise ApiError(404, "not_found")
         try:
             outcome = await app.turns.resolve_question(
-                WEB_USER_ID, project_id, question_id, body.decision, body.value
+                caller.user_id, project_id, question_id, body.decision, body.value
             )
         except QuestionRefused as refused:
             if refused.reason == "not_found":

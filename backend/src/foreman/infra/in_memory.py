@@ -8,6 +8,7 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from foreman.core.events import AnyEvent, ClarificationQuestion, EventData, make_event
+from foreman.core.identity import Member, Role
 from foreman.core.ports import CapacityExceeded, ProjectStore
 from foreman.core.projects import Project
 from foreman.core.store import (
@@ -80,6 +81,17 @@ class InMemoryProjectStore:
         if project_id not in self._projects:
             raise UnknownProject
         self._questions[project_id] = list(questions)
+
+
+class InMemoryMemberStore:
+    def __init__(self) -> None:
+        self._roles: dict[UUID, Role] = {}
+
+    async def role_of(self, user_id: UUID) -> Role | None:
+        return self._roles.get(user_id)
+
+    async def sync(self, members: Sequence[Member]) -> None:
+        self._roles = {m.user_id: m.role for m in members}
 
 
 class InMemoryEventLog(SubscriberHub):
@@ -192,6 +204,7 @@ class InMemoryPlanStore:
             status="proposed",
             created_at=self._s.clock(),
             expires_at=plan.expires_at,
+            requested_by=plan.requested_by,
         )
         self._s.plans[record.id] = _Plan(record)
         return record

@@ -11,9 +11,12 @@ from fastapi import FastAPI
 from foreman.bootstrap.configure import Profile, configure
 from foreman.bootstrap.database import DatabaseLifecycle
 from foreman.config.env import ENV_DATABASE_URL
+from foreman.core.identity import Member
 from foreman.infra.db import tables as t
 from foreman.infra.db.engine import make_engine
-from foreman.infra.db.projects import PostgresProjectStore
+from foreman.infra.db.members import PostgresMemberStore
+from foreman.infra.db.migrate import upgrade_head
+from foreman.infra.db.projects import PostgresProjectStore, seed_dev_identity
 from foreman.infra.in_memory import InMemoryProjectStore
 from foreman.surfaces.web.app import create_app
 
@@ -84,3 +87,20 @@ async def test_an_unreachable_database_fails_the_startup_without_leaking_its_url
     assert "TOP-SECRET-PW" not in everything
     assert "foreman:" not in everything
     assert caplog.text.count("tentative") == 2  # reconnexions bornées
+
+
+async def test_member_sync_replaces_roles_and_keeps_the_users(blank_database_url: str) -> None:
+    engine = make_engine(blank_database_url)
+    await asyncio.to_thread(upgrade_head, blank_database_url)
+    await seed_dev_identity(engine)
+    members = PostgresMemberStore(engine)
+    alice, bob = Member("alice", "developer"), Member("bob", "team_admin")
+    await members.sync([alice, bob])
+    assert await members.role_of(bob.user_id) == "team_admin"
+    await members.sync([alice])  # bob retiré du .env : il perd son rôle
+    assert await members.role_of(bob.user_id) is None
+    assert await members.role_of(alice.user_id) == "developer"
+    async with engine.connect() as conn:
+        count = await conn.execute(sa.select(sa.func.count()).select_from(t.users))
+        assert count.scalar() == 3  # dev, alice, bob : les utilisateurs ne sont jamais supprimés
+    await engine.dispose()

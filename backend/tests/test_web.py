@@ -8,10 +8,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from foreman.bootstrap.configure import App, Profile
+from foreman.bootstrap.configure import App, Profile, configure, parse_dev_members
 from foreman.core.clarification import answer_text
 from foreman.core.events import ClarificationQuestion
 from foreman.core.ports import ConversationMessage, ModelReply, Provider
+from foreman.core.store import DEV_USER_ID
 from foreman.core.turn import TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
@@ -91,7 +92,11 @@ def test_healthz_reports_the_version_from_the_environment(monkeypatch: pytest.Mo
 
 def test_me_is_the_dev_identity_and_admin_approvals_are_not_implemented() -> None:
     client = TestClient(create_app())
-    assert client.get("/api/me").json() == {"user_id": "dev", "name": "dev", "role": "developer"}
+    assert client.get("/api/me").json() == {
+        "user_id": str(DEV_USER_ID),
+        "name": "dev",
+        "role": "developer",
+    }
     response = client.post(
         f"/api/projects/{uuid4()}/plans/{uuid4()}/admin-approvals",
         json={"plan_hash": "sha256:" + "a" * 64, "decision": "approved"},
@@ -310,3 +315,35 @@ async def test_answering_a_question_is_refused_without_echo_and_starts_no_turn()
     assert provider.calls == 1
     assert provider.last == answer_text("environment", "staging")  # texte produit par la route
     assert [q.status for q in await store.get_open_questions(mine)] == ["answered"]
+
+
+def test_proxy_header_mode_requires_a_known_identity_and_reads_the_role_from_the_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FOREMAN_AUTH_MODE", "proxy_header")
+    monkeypatch.setenv("FOREMAN_DEV_MEMBERS", "alice:developer,bob:team_admin")
+    with TestClient(create_app()) as client:  # le démarrage synchronise les membres
+        for headers in ({}, {"X-Forwarded-User": "mallory"}, {"X-Forwarded-User": " "}):
+            response = client.get("/api/me", headers=headers)
+            assert (response.status_code, response.json()) == (401, {"error": "unauthenticated"})
+        assert client.get("/api/projects").status_code == 401  # toutes les routes, pas /me seul
+        bob = client.get("/api/me", headers={"X-Forwarded-User": "bob"}).json()
+        assert (bob["name"], bob["role"]) == ("bob", "team_admin")
+
+
+def test_proxy_header_refuses_empty_members_and_duplicate_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FOREMAN_AUTH_MODE", "proxy_header")
+    monkeypatch.delenv("FOREMAN_DEV_MEMBERS", raising=False)
+    with pytest.raises(ValueError):
+        configure(Profile.WEB)
+    with pytest.raises(ValueError):
+        parse_dev_members("alice:developer,alice:team_admin")
+
+
+def test_none_mode_ignores_the_forwarded_user_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FOREMAN_DEV_MEMBERS", "bob:org_admin")
+    with TestClient(create_app()) as client:
+        me = client.get("/api/me", headers={"X-Forwarded-User": "bob"}).json()
+    assert me == {"user_id": str(DEV_USER_ID), "name": "dev", "role": "developer"}

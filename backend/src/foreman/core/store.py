@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Final, Literal, Protocol
 from uuid import UUID
 
-# Identités de développement (profil web, avant les rôles de la semaine 10) : fixes, upsert sûr.
+# Identités de développement (utilisateur `dev` du mode `none`) : fixes, upsert sûr.
 DEV_USER_ID: Final = UUID("00000000-0000-4000-8000-00000000d001")
 DEV_TEAM_ID: Final = UUID("00000000-0000-4000-8000-00000000d002")
 DEV_USER_EMAIL: Final = "dev@foreman.local"
@@ -66,6 +66,7 @@ class NewPlan:
     content_hash: str
     skills_used: Sequence[Mapping[str, object]]
     expires_at: datetime
+    requested_by: UUID  # demandeur authentifié par le serveur, jamais lu du corps de requête
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +80,7 @@ class PlanRecord:
     status: PlanStatus
     created_at: datetime
     expires_at: datetime
+    requested_by: UUID | None = None  # vide pour les plans antérieurs à la migration 0003
 
 
 EXECUTION_ID_PLACEHOLDER: Final = "{execution_id}"  # gabarit haché dans le plan

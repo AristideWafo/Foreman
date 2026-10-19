@@ -56,7 +56,7 @@ class QuestionAnswer:
 
 @dataclass(frozen=True, slots=True)
 class TurnRequest:
-    user_id: str
+    user_id: UUID
     project_id: UUID
     message: str
     answer: QuestionAnswer | None = None
@@ -179,7 +179,7 @@ class TurnService:
 
     async def resolve_question(
         self,
-        user_id: str,
+        user_id: UUID,
         project_id: UUID,
         question_id: str,
         decision: Literal["answer", "defer"],
@@ -265,13 +265,15 @@ class TurnService:
             return
         await self._emit(project_id, turn_id, MessageData(role="assistant", text=reply.text))
         for call in reply.tool_calls:
-            failure = await self._apply(project_id, turn_id, call)
+            failure = await self._apply(request.user_id, project_id, turn_id, call)
             if failure is not None:
                 await self._fail(project_id, turn_id, failure)
                 return
         await self._emit(project_id, turn_id, TurnStatusData(status="completed"))
 
-    async def _apply(self, project_id: UUID, turn_id: UUID, call: ToolCall) -> FailureCode | None:
+    async def _apply(
+        self, user_id: UUID, project_id: UUID, turn_id: UUID, call: ToolCall
+    ) -> FailureCode | None:
         """Code d'erreur ou `None`. Seuls `propose_plan` et `ask_user` existent."""
         if call.name == ASK_USER:
             return await self._ask_user(project_id, turn_id, call)
@@ -292,7 +294,7 @@ class TurnService:
                 skills=arguments.skills,
             )
             # Valide, hache et persiste : un plan refusé n'écrit rien et n'émet aucune carte.
-            record, content = await self._planner.propose(project_id, draft)
+            record, content = await self._planner.propose(project_id, draft, user_id)
         except (ValidationError, InvalidPlan):
             logger.warning("invalid_plan project=%s turn=%s", project_id, turn_id)
             return "invalid_plan"

@@ -66,6 +66,40 @@ déployer : le site ne peut pas être publié ouvert par oubli. Un mot de passe 
 
    La valeur est entre apostrophes pour que les `$` de l'empreinte restent littéraux. Plusieurs utilisateurs :
    séparer par des virgules (`admin:...,bob:...`).
+
+   **Identité et rôles (S4).** Traefik pose le nom authentifié dans `X-Forwarded-User` (label
+   `basicauth.headerfield`, qui écrase tout en-tête du client).
+
+   **Étape BLOQUANTE, avant de passer `.env` en `proxy_header`.** Recopier `compose.custom.yaml` (label
+   `headerfield`) et redéployer. Puis vérifier que Traefik écrase l'en-tête envoyé par le client. En mode `none`
+   l'application ignore l'en-tête et `/api/me` répond `dev` : le contrôle se fait donc avec un conteneur
+   d'écho (`traefik/whoami`) placé derrière le même routeur et le même middleware basicAuth, ou sur une
+   instance de test déjà en `proxy_header` :
+
+   ```bash
+   curl -s -u alice:… -H 'X-Forwarded-User: bob' https://<domaine>/<chemin-de-l-écho>
+   ```
+
+   L'écho doit afficher `X-Forwarded-User: alice`, jamais `bob`. Sinon, **ne pas activer `proxy_header`**.
+   Sans le label `headerfield`, n'importe quel utilisateur basicAuth peut se faire passer pour un admin en
+   envoyant l'en-tête lui-même.
+
+   Seulement ensuite, ajouter dans le même `.env` (les noms sont ceux de `FOREMAN_BASIC_AUTH_USERS`) :
+
+   ```
+   FOREMAN_AUTH_MODE=proxy_header
+   FOREMAN_DEV_MEMBERS=alice:developer,bob:team_admin
+   ```
+
+   - `FOREMAN_AUTH_MODE=none` (défaut, poste et CI) : utilisateur `dev` de rôle `developer`, l'en-tête est **ignoré**.
+   - `proxy_header` : `FOREMAN_DEV_MEMBERS` est obligatoire (vide ou absent : l'application refuse de démarrer),
+     sans nom en double. En-tête absent ou nom absent de la liste : `401 unauthenticated`, sans écho du nom.
+   - Rôles possibles : `developer`, `team_admin`, `org_admin`. La liste est resynchronisée à chaque démarrage et
+     **remplace** la précédente : retirer un nom retire son rôle (il perd l'accès à l'API, ses plans restent).
+   - Ne jamais publier l'application sans Traefik en `proxy_header` : l'en-tête serait forgeable.
+   - Contrôle après activation : `curl -u alice:… -H 'X-Forwarded-User: bob' https://<domaine>/api/me` doit
+     répondre `alice` (rôle `developer`), pas `bob`.
+   - Migration `0003` : faire un `pg_dump` avant le déploiement (voir PERSISTENCE.md).
 2. Recopier `deploy-custom.sh` et `compose.custom.yaml` à côté l'un de l'autre sur le serveur (le compose n'est
    pas synchronisé automatiquement, voir « Limite connue »).
 3. Redéployer (merge sur `prod`, ou **Deploy** manuel avec un SHA).

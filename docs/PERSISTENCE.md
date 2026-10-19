@@ -33,12 +33,25 @@ Deux modes, choisis au démarrage par la présence de `FOREMAN_DATABASE_URL` (pr
   projet), mais un abonné ne voit en direct que les événements ajoutés par **son** processus : il rattrape les autres à
   la reconnexion. Une diffusion inter-processus (`LISTEN/NOTIFY`) est hors périmètre.
 - Les projets existants avant `0002` repartent sans historique (le chat n'était qu'en mémoire).
+- Une seule équipe (`dev`) : un `team_admin` voit et approuve tous les projets.
+
+## Rôles et plafond d'autonomie (`0003_roles_autonomy`)
+
+- `memberships(user_id, team_id, role)` (clé primaire `(user_id, team_id)`, rôle `developer`, `team_admin` ou
+  `org_admin`) est **reconstruite à chaque démarrage** depuis `FOREMAN_DEV_MEMBERS` (la synchronisation remplace ;
+  les lignes de `users` ne sont jamais supprimées). Identifiant utilisateur : `uuid5` du nom, stable.
+- `plans.requested_by` reçoit l'identifiant du demandeur, posé par le serveur (vide pour les plans antérieurs).
+- `executions.environment` est copié depuis `plans.content` ; les exécutions déjà présentes dont le plan n'a pas
+  d'environnement sont rattachées à `staging`. Deux CHECK : `autonomy_level BETWEEN 1 AND 4` et
+  `environment <> 'production' OR autonomy_level <= 3`. Si une ligne existante les viole, la migration échoue et
+  ne modifie rien.
+- `downgrade()` retire les CHECK, `environment` et `memberships` sans toucher aux plans, exécutions ni à l'audit.
 
 ## Exploitation
 
 - **Sauvegarde** : `deploy-custom.sh --with-db` lance un `pg_dump -Fc` automatique avant chaque déploiement
   (voir [DEPLOYMENT.md](DEPLOYMENT.md)).
-- **Pas de retour arrière d'image sans restauration du dump** : la migration `0002` n'est pas reconnue par une image plus
+- **Pas de retour arrière d'image sans restauration du dump** : les migrations `0002` et `0003` ne sont pas reconnues par une image plus
   ancienne. `downgrade()` supprime `project_events` ; il est refusé si la table contient des événements, sauf
   `FOREMAN_ALLOW_DESTRUCTIVE_DOWNGRADE=1` (même garde que `0001`).
 - **Migrations** : `migrations/` exige une relecture du propriétaire et une revue indépendante.

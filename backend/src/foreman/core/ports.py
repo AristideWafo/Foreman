@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import JsonValue
 
 from foreman.core.events import AnyEvent, ClarificationQuestion, EventData
+from foreman.core.identity import Member, Role
 from foreman.core.projects import Project
 
 
@@ -140,4 +141,16 @@ class EventLog(Protocol):
 
         Lève `CapacityExceeded` si un plafond d'abonnés est atteint.
         """
+        ...
+
+
+class MemberStore(Protocol):
+    """Rôles des membres de l'équipe de développement (une seule équipe au PoC)."""
+
+    async def role_of(self, user_id: UUID) -> Role | None:
+        """Rôle du membre, ou `None` s'il est inconnu."""
+        ...
+
+    async def sync(self, members: Sequence[Member]) -> None:
+        """REMPLACE l'ensemble des membres : un nom retiré perd son rôle."""
         ...

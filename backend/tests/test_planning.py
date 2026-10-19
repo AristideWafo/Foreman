@@ -19,6 +19,7 @@ from foreman.core.planning import (
     content_hash,
 )
 from foreman.core.ports import ConversationMessage, ModelReply, ToolCall
+from foreman.core.store import DEV_USER_ID
 from foreman.core.turn import TurnRequest, TurnService
 from foreman.infra.file_catalog import load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
@@ -129,7 +130,7 @@ async def turn(arguments: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[UU
         ProposalProvider(arguments), log, Planner(catalog, stores.plans), InMemoryProjectStore()
     )
     project_id = uuid4()
-    await service.run(TurnRequest("u", project_id, "salut"), service.begin(project_id))
+    await service.run(TurnRequest(DEV_USER_ID, project_id, "salut"), service.begin(project_id))
     events = [e.model_dump(mode="json") for e in await log.read_after(project_id, 0)]
     return events, state.plans
 

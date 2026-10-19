@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 
+from foreman.core.store import DEV_USER_ID
 from foreman.core.turn import ProposePlanArguments, TurnRequest, TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
@@ -106,7 +107,7 @@ async def test_a_missing_recording_is_a_typed_error_that_never_reaches_the_event
     log = InMemoryEventLog()
     service = TurnService(provider, log, make_planner(), InMemoryProjectStore())
     project_id = uuid4()
-    request = TurnRequest(user_id="u", project_id=project_id, message="inconnu-secret-xyz")
+    request = TurnRequest(user_id=DEV_USER_ID, project_id=project_id, message="inconnu-secret-xyz")
     await service.run(request, service.begin(project_id))
     events = [e.model_dump(mode="json") for e in await log.read_after(project_id, 0)]
     assert [e["type"] for e in events] == ["message", "turn_status", "error", "turn_status"]

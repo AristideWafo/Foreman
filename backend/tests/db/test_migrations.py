@@ -28,6 +28,7 @@ EXPECTED_TABLES = {
     "observed_state",
     "audit_events",
     "project_events",
+    "memberships",
 }
 HASH_A = "sha256:" + "a" * 64
 HASH_B = "sha256:" + "b" * 64
@@ -82,7 +83,13 @@ def seed_plan(
 def seed_execution(conn: sa.Connection, plan_id: UUID, project_id: UUID, state: str) -> UUID:
     return conn.execute(
         sa.insert(t.executions)
-        .values(plan_id=plan_id, project_id=project_id, state=state, autonomy_level=2)
+        .values(
+            plan_id=plan_id,
+            project_id=project_id,
+            state=state,
+            autonomy_level=2,
+            environment="staging",
+        )
         .returning(t.executions.c.id)
     ).scalar_one()
 
@@ -90,7 +97,7 @@ def seed_execution(conn: sa.Connection, plan_id: UUID, project_id: UUID, state: 
 def test_empty_database_gets_the_full_schema(blank_database_url: str) -> None:
     upgrade_head(blank_database_url)
     assert table_names(blank_database_url) == EXPECTED_TABLES
-    assert version(blank_database_url) == "0002"
+    assert version(blank_database_url) == "0003"
 
 
 def test_running_twice_changes_nothing(blank_database_url: str) -> None:
@@ -98,7 +105,7 @@ def test_running_twice_changes_nothing(blank_database_url: str) -> None:
     with connect(blank_database_url) as conn:
         conn.execute(sa.insert(t.teams).values(name="dev"))
     upgrade_head(blank_database_url)
-    assert version(blank_database_url) == "0002"
+    assert version(blank_database_url) == "0003"
     with connect(blank_database_url) as conn:
         assert conn.execute(sa.select(sa.func.count()).select_from(t.teams)).scalar() == 1
 
@@ -119,7 +126,7 @@ def test_two_concurrent_upgrades_both_succeed(blank_database_url: str) -> None:
         # Sans attendre : une migration bloquée est libérée par la suppression de la base.
         pool.shutdown(wait=False, cancel_futures=True)
     assert table_names(blank_database_url) == EXPECTED_TABLES
-    assert version(blank_database_url) == "0002"
+    assert version(blank_database_url) == "0003"
 
 
 def test_downgrade_to_base_removes_everything_then_upgrade_works_again(
@@ -255,3 +262,36 @@ def test_an_approval_must_carry_the_hash_of_its_plan(blank_database_url: str) ->
         connect(blank_database_url) as conn,
     ):
         conn.execute(sa.insert(t.approvals).values(plan_hash=HASH_A, **approval))  # double
+
+
+def test_0003_fills_environment_from_the_plan_and_downgrades_without_losing_executions(
+    blank_database_url: str,
+) -> None:
+    upgrade_head(blank_database_url)
+    downgrade(blank_database_url, "0002")  # schéma d'avant : exécutions sans `environment`
+    with connect(blank_database_url) as conn:
+        team = conn.execute(sa.text("INSERT INTO teams (name) VALUES ('t') RETURNING id")).scalar()
+        project = conn.execute(
+            sa.text("INSERT INTO projects (team_id) VALUES (:t) RETURNING id"), {"t": team}
+        ).scalar()
+        for number, content in enumerate(('{"environment": "production"}', "{}"), start=1):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO plans (project_id, version, content, content_hash, skills_used,"
+                    " expires_at) VALUES (:p, :v, CAST(:c AS jsonb), :h, '[]', now())"
+                ),
+                {"p": project, "v": number, "c": content, "h": f"sha256:{number:064d}"},
+            )
+        conn.execute(
+            sa.text(
+                "INSERT INTO executions (plan_id, project_id, state, autonomy_level)"
+                " SELECT id, project_id, 'succeeded', 3 FROM plans"
+            )
+        )
+    upgrade_head(blank_database_url)
+    with connect(blank_database_url) as conn:
+        rows = conn.execute(sa.text("SELECT environment FROM executions ORDER BY 1")).scalars()
+        assert list(rows) == ["production", "staging"]  # plan sans environnement : staging
+    downgrade(blank_database_url, "0002")
+    with connect(blank_database_url) as conn:
+        assert conn.execute(sa.text("SELECT count(*) FROM executions")).scalar() == 2

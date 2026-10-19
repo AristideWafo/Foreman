@@ -60,6 +60,7 @@ def create_app(app_state: App | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await state.lifecycle.start()  # migrations puis amorçage (profil web avec base)
+        await state.members.sync(state.dev_members)  # remplace : un nom retiré perd son rôle
         await resume_executions(state, tasks)
         try:
             yield
