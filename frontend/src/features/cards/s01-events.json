@@ -555,7 +555,8 @@
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat",
+          "reused": null
         }
       ],
       "result": null
@@ -691,13 +692,15 @@
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend",
+          "reused": null
         }
       ],
       "result": null
@@ -833,19 +836,22 @@
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend",
+          "reused": null
         }
       ],
       "result": null
@@ -981,25 +987,29 @@
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api",
+          "reused": null
         }
       ],
       "result": null
@@ -1135,31 +1145,36 @@
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web",
+          "reused": null
         }
       ],
       "result": null
@@ -1300,37 +1315,43 @@
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web",
+          "reused": null
         },
         {
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat",
-          "url": null
+          "url": null,
+          "reused": null
         }
       ],
       "result": null
@@ -1471,37 +1492,43 @@
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web",
+          "reused": null
         },
         {
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat",
-          "url": null
+          "url": null,
+          "reused": null
         }
       ],
       "result": null
@@ -1637,37 +1664,43 @@
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web",
+          "reused": null
         },
         {
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat",
-          "url": null
+          "url": null,
+          "reused": null
         }
       ],
       "result": null
@@ -1764,37 +1797,43 @@
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/backend/safe-eat-api",
+          "reused": null
         },
         {
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
-          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web"
+          "url": "https://gitlab.example.org/foreman-demo/safe-eat/frontend/safe-eat-web",
+          "reused": null
         },
         {
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat",
-          "url": null
+          "url": null,
+          "reused": null
         }
       ],
       "result": {

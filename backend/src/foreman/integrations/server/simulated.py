@@ -110,6 +110,7 @@ class SimulatedServer:
                     "changed_tasks": list(tasks),
                 },
                 logs=logs,
+                created=not already_done,
             )
             if mode == "apply":
                 self._results[idempotency_key] = copy.deepcopy(result)

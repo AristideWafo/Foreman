@@ -64,10 +64,15 @@ class AdapterResult:
     """Résultat d'un outil : `output` suit le schéma de sortie de l'outil, `logs` est brut.
 
     Les logs ne sont ni masqués ni tronqués ici : la gateway le fait avant toute sortie.
+
+    `created` : vrai si l'appel a CRÉÉ la ressource, faux si elle existait déjà (retrouvée). Un
+    outil `write_registry` de portée `create` (hors mode `check`) doit le dire : `None` est refusé
+    par la gateway (`invalid_output`). Sans objet pour les autres outils.
     """
 
     output: dict[str, JsonValue]
     logs: list[str] = field(default_factory=list)
+    created: bool | None = None
 
 
 class ToolAdapter(Protocol):

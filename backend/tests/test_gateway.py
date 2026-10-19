@@ -98,7 +98,7 @@ class LeakyAdapter:
             "note": f"password={SECRET_PASSWORD} " + "x" * 800,
         }
         logs = [f"connexion avec {SECRET_TOKEN}", "y" * 900, *(f"ligne {i}" for i in range(120))]
-        return AdapterResult(output=output, logs=logs)
+        return AdapterResult(output=output, logs=logs, created=True)
 
 
 class BigAdapter:
@@ -109,7 +109,7 @@ class BigAdapter:
     ) -> AdapterResult:
         blob: list[JsonValue] = [f"enregistrement-{i}" for i in range(2000)]
         return AdapterResult(
-            output={"group_id": 2000, "web_url": "https://g.example/x", "dump": blob}
+            output={"group_id": 2000, "web_url": "https://g.example/x", "dump": blob}, created=True
         )
 
 
@@ -127,7 +127,9 @@ class GatedAdapter:
         self.calls += 1
         self.entered.set()
         await self.release.wait()
-        return AdapterResult(output={"group_id": 2000, "web_url": "https://g.example/x"})
+        return AdapterResult(
+            output={"group_id": 2000, "web_url": "https://g.example/x"}, created=True
+        )
 
 
 class SlowAdapter:
@@ -157,13 +159,13 @@ class ForeignAdapter:
 class MalformedAdapter:
     """Renvoie un résultat qui n'a pas la forme du port (ensemble, octets, entier dans les logs)."""
 
-    def __init__(self, output: Any, logs: Any) -> None:
-        self._output, self._logs = output, logs
+    def __init__(self, output: Any, logs: Any, created: bool | None = True) -> None:
+        self._output, self._logs, self._created = output, logs, created
 
     async def execute(
         self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str
     ) -> AdapterResult:
-        return AdapterResult(output=self._output, logs=self._logs)
+        return AdapterResult(output=self._output, logs=self._logs, created=self._created)
 
 
 class ExplodingRegistry:
@@ -822,15 +824,42 @@ async def adapter_logs_an_integer() -> Failure:
 
 async def adapter_returns_a_group_of_another_project() -> Failure:
     """GitLab « retrouve » le groupe d'un autre projet : la ressource n'est pas adoptée."""
-    world = make_world(gitlab=MalformedAdapter({"group_id": 2000}, []))
+    world = make_world(gitlab=MalformedAdapter({"group_id": 2000}, [], created=False))
     await register(world, ONE_GROUP, NewResource("gitlab", "gitlab_group", "2000"))
     return Failure(world, await start(world, ONE_GROUP), "foreign_resource", ("allow", "error"))
+
+
+async def adapter_forgets_to_say_created() -> Failure:
+    world = make_world(gitlab=MalformedAdapter({"group_id": 2000}, [], created=None))
+    return Failure(world, await start(world, ONE_GROUP), "invalid_output", ("allow", "error"))
 
 
 async def registry_is_down() -> Failure:
     world = make_world(registry=ExplodingRegistry())
     started = await start(world, [group_step(1, 2000, "backend")])  # parent hors racine
     return Failure(world, started, "internal_error", ("error",))
+
+
+async def test_a_found_group_missing_from_every_registry_is_not_adopted() -> None:
+    world = make_world(gitlab=MalformedAdapter({"group_id": 2000}, [], created=False))
+    started = await start(world, ONE_GROUP)
+    with pytest.raises(CallFailed) as raised:
+        await world.gateway.call(call_for(started))
+    assert raised.value.code == "foreign_resource"
+    assert await world.stores.registry.list_for_project(started.project_id) == []
+
+
+async def test_a_group_found_in_this_projects_registry_is_reused_without_a_new_row() -> None:
+    world = make_world()
+    first = await start(world, ONE_GROUP)
+    await engine_step(world, first, 1)
+    await world.stores.executions.finish(first.lease, "succeeded")
+    again = [{**group_step(1, 1000, "safe-eat"), "idempotency_key": "k-replay"}]
+    second = await start(world, again, project_id=first.project_id)
+    result = await world.gateway.call(call_for(second))
+    assert result.resources == () and result.output["reused"] is True
+    assert result.audit.decision == "executed" and result.audit.result_redacted == result.output
+    assert len(await world.stores.registry.list_for_project(first.project_id)) == 1
 
 
 @pytest.mark.parametrize(
@@ -844,6 +873,7 @@ async def registry_is_down() -> Failure:
         adapter_returns_bytes,
         adapter_logs_an_integer,
         adapter_returns_a_group_of_another_project,
+        adapter_forgets_to_say_created,
         registry_is_down,
     ],
 )
