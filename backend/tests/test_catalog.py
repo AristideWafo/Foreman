@@ -534,7 +534,7 @@ def test_apply_playbook_resolves_reversibility_and_scope_per_playbook() -> None:
 def test_apply_playbook_targets_staging_and_production_and_registers_the_project_slug() -> None:
     source = tool_source("server.apply_playbook")
     assert source["input"]["properties"]["environment"] == {"enum": ["staging", "production"]}
-    assert source["registry"]["external_id"] == "project"
+    assert source["registry"]["external_id"] == "{input.environment}/{input.project}"
     assert "run_id" in source["output"]
 
 

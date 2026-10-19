@@ -441,7 +441,7 @@ class ToolGateway:
         if raw.created is None:
             raise CallFailed("invalid_output")  # l'adaptateur doit dire créé ou retrouvé
         output = raw.output
-        external_id = _identifier(output.get(entry.external_id, call.params.get(entry.external_id)))
+        external_id = _identifier(entry.identify(call.params, output))
         if external_id is None:
             raise CallFailed("invalid_output")
         registry = self._stores.registry

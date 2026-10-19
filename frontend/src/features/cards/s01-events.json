@@ -1359,7 +1359,7 @@
         {
           "provider": "server",
           "resource_type": "server_project",
-          "name": "safe-eat",
+          "name": "staging/safe-eat",
           "url": null,
           "reused": null
         }
@@ -1536,7 +1536,7 @@
         {
           "provider": "server",
           "resource_type": "server_project",
-          "name": "safe-eat",
+          "name": "staging/safe-eat",
           "url": null,
           "reused": null
         }
@@ -1710,7 +1710,7 @@
         {
           "provider": "server",
           "resource_type": "server_project",
-          "name": "safe-eat",
+          "name": "staging/safe-eat",
           "url": null,
           "reused": null
         }
@@ -1843,7 +1843,7 @@
         {
           "provider": "server",
           "resource_type": "server_project",
-          "name": "safe-eat",
+          "name": "staging/safe-eat",
           "url": null,
           "reused": null
         }

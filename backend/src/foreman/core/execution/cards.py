@@ -72,9 +72,7 @@ def _step_resources(
             continue
         if tool.effective_scope(step.params).kind != "create" or step.params.get("mode") == "check":
             continue
-        value = step.result.get(
-            tool.registry.external_id, step.params.get(tool.registry.external_id)
-        )
+        value = tool.registry.identify(step.params, step.result)
         record = known.get((tool.connector, tool.registry.resource_type, str(value)))
         if record is not None:
             found.append(record)
