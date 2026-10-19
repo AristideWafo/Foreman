@@ -697,6 +697,10 @@ def _never_autonomous_without_admin(d: dict[str, Any]) -> None:
     _rule(d, "R10-destructif")["requires"] = ["plan_approved"]
 
 
+def _never_autonomous_flag_removed(d: dict[str, Any]) -> None:
+    del _rule(d, "R10-destructif")["never_autonomous"]
+
+
 def _staging_rule_moved_to_production(d: dict[str, Any]) -> None:
     _rule(d, "R6-ecriture-staging")["match"]["env"] = "production"
 
@@ -715,6 +719,7 @@ def _staging_rule_moved_to_production(d: dict[str, Any]) -> None:
         _staging_rule_moved_to_production,
         _production_at_level_four,
         _never_autonomous_without_admin,
+        _never_autonomous_flag_removed,
     ],
 )
 def test_a_matrix_weakening_a_rule_is_refused(mutate: Callable[[dict[str, Any]], None]) -> None:

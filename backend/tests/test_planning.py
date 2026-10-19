@@ -10,7 +10,14 @@ import pytest
 from pydantic import JsonValue
 
 from foreman.core.catalog import Catalog, SkillDocument, parse_skill
-from foreman.core.planning import Draft, DraftStep, Planner, build_content, content_hash
+from foreman.core.planning import (
+    Draft,
+    DraftStep,
+    InvalidPlan,
+    Planner,
+    build_content,
+    content_hash,
+)
 from foreman.core.ports import ConversationMessage, ModelReply, ToolCall
 from foreman.core.store import DEV_USER_ID
 from foreman.core.turn import TurnRequest, TurnService
@@ -51,6 +58,16 @@ def with_skill_bytes(catalog: Catalog, name: str, change: bytes) -> Catalog:
     raw = (CATALOG_ROOT / "skills" / name / "SKILL.md").read_bytes()
     edited: SkillDocument = parse_skill(raw.replace(b"# Objectif", b"# Objectif" + change, 1), name)
     return replace(catalog, skills={**catalog.skills, name: edited})
+
+
+def test_a_draft_skill_in_a_production_plan_is_refused() -> None:
+    # Catalog construit à la main : le brouillon y est admis, le planner doit quand même refuser.
+    catalog = load_catalog(CATALOG_ROOT, environment="staging")
+    drafted = catalog.skills[SKILL].model_copy(update={"status": "draft"})
+    catalog = replace(catalog, skills={**catalog.skills, SKILL: drafted})
+    proposed = replace(draft(), environment="production")
+    with pytest.raises(InvalidPlan):
+        build_content(proposed, PROJECT, catalog)
 
 
 # --- 1. Hash stable et sensible ---------------------------------------------------------------

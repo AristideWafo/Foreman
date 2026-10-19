@@ -74,6 +74,8 @@ def evaluate(matrix: PolicyMatrix, request: PolicyRequest) -> Verdict:
     """Première règle qui s'applique, dans l'ordre du fichier ; sinon refus."""
     if request.environment not in matrix.autonomy.environments:
         return Deny("unknown_environment")
+    if request.role not in matrix.roles:
+        return Deny("role_not_allowed")
     near_miss: Deny | None = None
     for rule in matrix.rules:
         match = rule.match

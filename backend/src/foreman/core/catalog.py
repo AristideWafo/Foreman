@@ -484,6 +484,10 @@ class Rule(_Strict):
             self.decision != "allow_if" or "admin_approved" not in self.requires
         ):
             raise ValueError("never_autonomous exige allow_if avec admin_approved")
+        if tool_class == "destructive" and (
+            "admin_approved" not in self.requires or not self.never_autonomous
+        ):
+            raise ValueError("une règle destructive exige admin_approved et never_autonomous")
         bound_class, bound_env = RULE_BINDINGS[self.id]
         if tool_class != bound_class:
             raise ValueError(f"la règle {self.id} porte sur la classe {bound_class}")
