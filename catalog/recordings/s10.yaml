@@ -1,0 +1,27 @@
+# Réponse enregistrée du modèle pour le scénario S10 : production sans droit (valeurs fictives).
+# Le choix se fait sur le sha256 EXACT du dernier message, jamais sur une regex, et sans entrée
+# default (S1 porte la seule). Aucun Skill : un Skill brouillon est refusé hors staging (D9).
+version: 1
+exchanges:
+  # sha256("Déploie Safe Eat en production")
+  - when: {last_user_sha256: c259a99d9484534a932fd8123ca8434f48069c6dd4623d6642dd5bd4b13baf56}
+    reply:
+      text: "Voici le plan pour Safe Eat en production. Il demande la validation d'un administrateur avant toute exécution."
+      tool_calls:
+        - name: propose_plan
+          arguments:
+            title: "Safe Eat : déploiement en production"
+            summary: "Préparation du serveur de production, déploiement Compose, puis vérification de santé. Un administrateur doit approuver avant l'exécution."
+            environment: production
+            stack: {backend: go-api}
+            skills: []
+            steps:
+              - title: "Préparer le serveur de production"
+                tool: server.apply_playbook
+                params: {environment: production, project: safe-eat, playbook: bootstrap_project, mode: apply}
+              - title: "Déployer avec Docker Compose"
+                tool: server.apply_playbook
+                params: {environment: production, project: safe-eat, playbook: deploy_compose, mode: apply}
+              - title: "Vérifier la santé du projet"
+                tool: server.healthcheck
+                params: {environment: production, project: safe-eat}

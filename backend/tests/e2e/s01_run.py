@@ -21,7 +21,7 @@ from foreman.surfaces.web.app import create_app
 USER_MESSAGE = "Crée le projet Safe Eat : GitLab, puis déploiement en staging."
 BASE_TIME = datetime(2026, 10, 20, 9, 0, 0, tzinfo=UTC)
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-_HEX32 = re.compile(r"^[0-9a-f]{32}$")
+_HEX32 = re.compile(r"^(approval-)?[0-9a-f]{32}$")  # `card_id` : brut ou préfixé
 
 
 async def _wait_for(events: EventLog, project_id: UUID, kind: str, field: str, value: str) -> None:
@@ -88,8 +88,9 @@ def normalize(events: list[AnyEvent]) -> list[dict[str, Any]]:
         if isinstance(value, str):
             if _UUID.match(value):
                 return stable_uuid(value)
-            if _HEX32.match(value):
-                return stable_uuid(str(uuid.UUID(value))).replace("-", "")
+            if hexed := _HEX32.match(value):
+                prefix = hexed.group(1) or ""
+                return prefix + stable_uuid(str(uuid.UUID(value[len(prefix) :]))).replace("-", "")
             if key == "plan_hash":
                 return hashes.setdefault(value, f"sha256:{len(hashes) + 1:064x}")
         if key == "elapsed_s":
