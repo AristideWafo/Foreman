@@ -13,9 +13,9 @@ Source : `dev platform .md` (décisions D1 à D15, scénarios S1 à S12, étapes
 | --- | --- |
 | ~~Phase 0 — squelette du dépôt~~ | terminée |
 | ~~Semaine 1 — squelette de bout en bout~~ | code et déploiement terminés ; authentification en ligne vérifiée (#106) ; **reste à vérifier** : flux SSE derrière Traefik (#105) |
-| Semaine 2 — scénario S1 | code fusionné dans `prod` (0.5.0 à 0.6.0) : persistance PostgreSQL, gateway, moteur, approbation, cartes ; **reste à vérifier** sur env-perso : #127 (persistance après redéploiement), #32 (carte vue) ; #27 et #31 : critères à aligner |
+| Semaine 2 — scénario S1 | code fusionné dans `prod` (0.5.0 à 0.6.0) : persistance PostgreSQL, gateway, moteur, approbation, cartes ; ~~#127 (persistance après redéploiement) et #32 (carte vue) fermés~~ ; #27 et #31 : critères à aligner |
 | ~~Semaine 3 — scénario S2~~ | code terminé et fusionné dans `prod` (0.9.0) : journal d'événements persisté (migration 0002), badge « Mode mémoire », clarification (`ask_user`, questions ouvertes), scénario S2 et carte de clarification ; **reste à vérifier** sur env-perso : chat intact après redéploiement (#127), `/healthz` → `persistence: postgres` |
-| Semaine 4 — scénario S10 | **en cours** : plan dans `docs/plans/semaine-4.md` (rôles, matrice R1 à R10, approbation admin, carte d'approbation) |
+| ~~Semaine 4 — scénario S10~~ | code terminé et fusionné dans `prod` (#167 à #172) : matrice R1 à R10, rôles et authentification de développement (migration 0003), approbation administrateur, scénario S10 et carte d'approbation ; **reste** : PR-G (suivi de la revue du journal, #176), badge de rôle dans la barre latérale, contrôle serveur Traefik avant `proxy_header` |
 | Semaines 5 et 6, essai jetable, fournisseurs réels, scénarios d'échec, évaluation | à venir |
 
 ## ~~Phase 0 — Squelette du dépôt (terminée)~~
@@ -50,7 +50,7 @@ depuis le journal.
 | ~~**Semaine 1 — Squelette**~~ | ~~Chat dans le front, `POST` d'un message, faux agent derrière `Provider`, flux SSE d'événements typés, une carte affichée, déploiement automatique en staging. Figer l'OpenAPI et le schéma d'événements.~~ **Reste :** vérifier le flux SSE derrière Traefik (#105), l'authentification en ligne (#106), protéger `prod` (#22). | ~~La carte apparaît sur l'URL de staging~~ (déployé ; vérification de la carte et du flux : #105) |
 | **Semaine 2 — S1** (**en cours**) | Chemin nominal sur fakes : schéma SQL en migrations Alembic, registre des ressources, journal append-only, gateway minimale, moteur d'exécution (plan haché, étapes idempotentes), 3 Skills de départ. Cartes plan et exécution. | S1 vert en CI, cartes visibles |
 | ~~**Semaine 3 — S2**~~ | ~~Clarification : l'agent redemande les environnements manquants, questions ouvertes du projet, reprise de la conversation. Carte de clarification.~~ | ~~S2 vert en CI~~ |
-| **Semaine 4 — S10** (**en cours**) | Matrice YAML R1 à R10, rôles, niveaux d'autonomie, `approval_required` transmis à l'admin. Carte d'approbation. Authentification de développement avec rôles. | S10 vert en CI |
+| ~~**Semaine 4 — S10**~~ (**terminé**) | Matrice YAML R1 à R10, rôles, niveaux d'autonomie, `approval_required` transmis à l'admin. Carte d'approbation. Authentification de développement avec rôles. | S10 vert en CI |
 | **Semaine 5 — S11** | Idempotence de bout en bout : même demande rejouée, aucune ressource en double (contraintes d'unicité, clés d'idempotence). | S11 vert en CI |
 | **Semaine 6 — S12** | Approbation sur le hash, plan invalidé si l'état change, expiration. Carte « plan invalidé ». | S12 vert en CI |
 | **Essai jetable** | Bootstrap et wrapper Compose sur un conteneur SSH local : exécution, cas d'abus (Compose privilégié, montage hors projet, arguments hostiles), compte rendu dans `docs/spikes/`. | Compte rendu validé, conception ajustée si besoin |
