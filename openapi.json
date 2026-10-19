@@ -183,6 +183,27 @@
         "title": "ApprovalPending",
         "type": "object"
       },
+      "ApprovalRejected": {
+        "description": "200 : l'administrateur a refus\u00e9 le plan (il est invalid\u00e9, aucune ex\u00e9cution n'existe).",
+        "properties": {
+          "approval_id": {
+            "format": "uuid",
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "rejected",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "status"
+        ],
+        "title": "ApprovalRejected",
+        "type": "object"
+      },
       "ApprovalRequest": {
         "additionalProperties": false,
         "description": "Approbation d'un plan : elle porte sur le HASH affich\u00e9, pas sur \u00ab le dernier plan \u00bb.",
@@ -2615,11 +2636,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApprovalAccepted"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ApprovalAccepted"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApprovalRejected"
+                    }
+                  ],
+                  "title": "Response 200 Admin Approve Plan Api Projects  Project Id  Plans  Plan Id  Admin Approvals Post"
                 }
               }
             },
-            "description": "Rejeu idempotent d'une approbation (m\u00eames identifiants), ou refus (`decision: rejected`, corps `ApprovalRejected`) : le plan est invalid\u00e9"
+            "description": "Rejeu idempotent d'une approbation (`ApprovalAccepted`, m\u00eames identifiants), ou refus (`decision: rejected`, `ApprovalRejected`) : le plan est invalid\u00e9"
           },
           "201": {
             "content": {

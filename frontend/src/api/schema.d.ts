@@ -307,6 +307,22 @@ export interface components {
             status: "approval_required";
         };
         /**
+         * ApprovalRejected
+         * @description 200 : l'administrateur a refusé le plan (il est invalidé, aucune exécution n'existe).
+         */
+        ApprovalRejected: {
+            /**
+             * Approval Id
+             * Format: uuid
+             */
+            approval_id: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "rejected";
+        };
+        /**
          * ApprovalRequest
          * @description Approbation d'un plan : elle porte sur le HASH affiché, pas sur « le dernier plan ».
          */
@@ -1673,13 +1689,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Rejeu idempotent d'une approbation (mêmes identifiants), ou refus (`decision: rejected`, corps `ApprovalRejected`) : le plan est invalidé */
+            /** @description Rejeu idempotent d'une approbation (`ApprovalAccepted`, mêmes identifiants), ou refus (`decision: rejected`, `ApprovalRejected`) : le plan est invalidé */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApprovalAccepted"];
+                    "application/json": components["schemas"]["ApprovalAccepted"] | components["schemas"]["ApprovalRejected"];
                 };
             };
             /** @description Successful Response */
