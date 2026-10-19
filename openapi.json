@@ -1675,6 +1675,19 @@
             "title": "Resource Type",
             "type": "string"
           },
+          "reused": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Vrai si la ressource existait d\u00e9j\u00e0 (rejeu), non cr\u00e9\u00e9e",
+            "title": "Reused"
+          },
           "url": {
             "anyOf": [
               {
