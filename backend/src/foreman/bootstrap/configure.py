@@ -126,7 +126,7 @@ def configure(profile: Profile) -> App:
     auth_mode = AuthMode(os.environ.get(ENV_AUTH_MODE, DEFAULT_AUTH_MODE))
     dev_members = parse_dev_members(os.environ.get(ENV_DEV_MEMBERS, ""))
     if auth_mode is AuthMode.PROXY_HEADER and not dev_members:
-        # Sans membre, personne ne peut s'authentifier : on échoue au démarrage plutôt qu'en 401 partout.
+        # Sans membre, personne ne peut s'authentifier : on échoue au démarrage.
         raise ValueError(f"{ENV_DEV_MEMBERS} est obligatoire en mode {AuthMode.PROXY_HEADER}")
     # 4. Services du cœur
     gateway = build_gateway(catalog, stores)
