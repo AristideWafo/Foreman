@@ -273,6 +273,11 @@ Reservation = NewReservation | CompletedReservation | OrphanReservation
 
 
 @dataclass(frozen=True, slots=True)
+class TakenOverReservation:
+    """Réservation orpheline rattachée à l'étape courante : l'étape peut s'exécuter."""
+
+
+@dataclass(frozen=True, slots=True)
 class NewResource:
     provider: str
     resource_type: str
@@ -336,6 +341,14 @@ class ExecutionStore(Protocol):
         """Réserve la clé (`INSERT … ON CONFLICT DO NOTHING`) et passe l'étape à `running`."""
         ...
 
+    async def take_over(self, lease: Lease, step_seq: int) -> TakenOverReservation:
+        """Rattache la clé `reserved` (orpheline) à l'étape courante, en une transaction.
+
+        L'appelant décide si la reprise est sûre (outil `read` ou idempotent).
+        `InvalidTransition` si la clé n'est plus orpheline ; `StaleLease` si le bail a changé.
+        """
+        ...
+
     async def complete_step(
         self,
         lease: Lease,
@@ -352,12 +365,15 @@ class ExecutionStore(Protocol):
         """
         ...
 
-    async def release(self, lease: Lease, step_seq: int | None) -> None:
+    async def release(
+        self, lease: Lease, step_seq: int | None, *, keep_lease: bool = False
+    ) -> None:
         """Arrêt propre : libère le bail et, si `step_seq` est donné, l'étape réservée SANS résultat
         (réservation supprimée, étape `pending`). Sans effet sur une étape déjà réussie.
 
         À ne pas confondre avec un crash : sans appel à `release`, la réservation reste orpheline
-        et la reprise bloque l'exécution. Lève `StaleLease` si le bail n'est plus le nôtre.
+        et la reprise bloque l'exécution. `keep_lease` : ne libère que la réservation (refus avant
+        effet ; le bail sert encore au blocage). Lève `StaleLease` si le bail n'est plus le nôtre.
         """
         ...
 

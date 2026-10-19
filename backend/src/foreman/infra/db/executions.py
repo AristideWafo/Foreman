@@ -30,6 +30,7 @@ from foreman.core.store import (
     StaleLease,
     StepRecord,
     StoreError,
+    TakenOverReservation,
     ensure_audit_scope,
 )
 from foreman.infra.db import tables as t
@@ -247,6 +248,40 @@ class PostgresExecutionStore:
             log_failure("execution.reserve_idempotency", exc)
             raise StoreError("stockage indisponible") from None
 
+    async def take_over(self, lease: Lease, step_seq: int) -> TakenOverReservation:
+        try:
+            async with self._engine.begin() as conn:
+                execution = await _held(conn, lease)
+                step = (
+                    await conn.execute(
+                        sa.select(t.execution_steps.c.id, t.execution_steps.c.idempotency_key)
+                        .where(
+                            t.execution_steps.c.execution_id == lease.execution_id,
+                            t.execution_steps.c.seq == step_seq,
+                            t.execution_steps.c.status == "running",
+                        )
+                        .with_for_update()
+                    )
+                ).one_or_none()
+                if step is None:
+                    raise InvalidTransition
+                moved = await conn.execute(
+                    sa.update(t.step_idempotency)
+                    .where(
+                        t.step_idempotency.c.project_id == execution.project_id,
+                        t.step_idempotency.c.key == step.idempotency_key,
+                        t.step_idempotency.c.status == "reserved",
+                    )
+                    .values(step_id=step.id)
+                    .returning(t.step_idempotency.c.key)
+                )
+                if moved.one_or_none() is None:
+                    raise InvalidTransition
+                return TakenOverReservation()
+        except SQLAlchemyError as exc:
+            log_failure("execution.take_over", exc)
+            raise StoreError("stockage indisponible") from None
+
     async def complete_step(
         self,
         lease: Lease,
@@ -315,7 +350,9 @@ class PostgresExecutionStore:
             log_failure("execution.complete_step", exc)
             raise StoreError("écriture refusée") from None
 
-    async def release(self, lease: Lease, step_seq: int | None) -> None:
+    async def release(
+        self, lease: Lease, step_seq: int | None, *, keep_lease: bool = False
+    ) -> None:
         try:
             async with self._engine.begin() as conn:
                 await _held(conn, lease)
@@ -343,14 +380,15 @@ class PostgresExecutionStore:
                             .where(t.execution_steps.c.id == step.id)
                             .values(status="pending", started_at=None)
                         )
-                await conn.execute(
-                    sa.update(t.executions)
-                    .where(
-                        t.executions.c.id == lease.execution_id,
-                        t.executions.c.lease_epoch == lease.epoch,
+                if not keep_lease:
+                    await conn.execute(
+                        sa.update(t.executions)
+                        .where(
+                            t.executions.c.id == lease.execution_id,
+                            t.executions.c.lease_epoch == lease.epoch,
+                        )
+                        .values(lease_owner=None, lease_expires_at=None)
                     )
-                    .values(lease_owner=None, lease_expires_at=None)
-                )
         except SQLAlchemyError as exc:
             log_failure("execution.release", exc)
             raise StoreError("stockage indisponible") from None
