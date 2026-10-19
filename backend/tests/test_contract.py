@@ -95,6 +95,7 @@ NEW_EXAMPLES = {
                     "resource_type": "group",
                     "name": "safe-eat",
                     "url": "https://gitlab.example.org/safe-eat",
+                    "reused": True,
                 }
             ],
             "result": {

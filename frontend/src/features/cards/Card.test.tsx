@@ -166,8 +166,20 @@ test("texte de l'API affiché comme texte ; liens non http(s) jamais cliquables"
     ],
     budget: { tool_calls_used: 0, tool_calls_max: 1, elapsed_s: 0, max_minutes: 1 },
     resources: [
-      { name: "piège", provider: "p", resource_type: "t", url: "javascript:alert(1)" },
-      { name: "données", provider: "p", resource_type: "t", url: "data:text/html,<b>x</b>" },
+      {
+        name: "piège",
+        provider: "p",
+        resource_type: "t",
+        reused: null,
+        url: "javascript:alert(1)",
+      },
+      {
+        name: "données",
+        provider: "p",
+        resource_type: "t",
+        reused: null,
+        url: "data:text/html,<b>x</b>",
+      },
     ],
     result: { summary: html, links: [{ label: "lien", url: "javascript:alert(2)" }] },
   };
