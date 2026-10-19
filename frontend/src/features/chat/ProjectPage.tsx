@@ -1,9 +1,8 @@
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { describeError, postMessage } from "../../api/client";
-import { LinkButton } from "@/components/LinkButton";
 import { PageHeader } from "@/components/PageHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
@@ -145,23 +144,21 @@ export function ProjectPage({ projectId }: { projectId: string }) {
 
   if (connection.status === "error") {
     const notFound = connection.reason === "not_found";
+    // 404 : retour à la liste avec un message neutre (introuvable ou non accessible, sans distinguer).
+    if (notFound) {
+      return (
+        <Navigate to="/" replace state={{ notice: "Ce projet est introuvable ou inaccessible." }} />
+      );
+    }
     return (
       <>
         <PageHeader>{title}</PageHeader>
         <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-start gap-4 px-4 py-8">
-          <p role="alert">
-            {notFound
-              ? "Projet introuvable. Il a peut-être été supprimé."
-              : "Impossible de joindre le projet pour le moment."}
-          </p>
-          {notFound ? (
-            <LinkButton to="/">Retour à l'accueil</LinkButton>
-          ) : (
-            <Button type="button" onClick={retry}>
-              <ArrowPathIcon data-icon="inline-start" />
-              Réessayer
-            </Button>
-          )}
+          <p role="alert">Impossible de joindre le projet pour le moment.</p>
+          <Button type="button" onClick={retry}>
+            <ArrowPathIcon data-icon="inline-start" />
+            Réessayer
+          </Button>
         </main>
       </>
     );

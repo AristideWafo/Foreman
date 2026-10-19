@@ -1,4 +1,5 @@
 import {
+  ArrowRightStartOnRectangleIcon,
   Cog6ToothIcon,
   FolderIcon,
   HomeIcon,
@@ -41,6 +42,8 @@ interface AppSidebarProps {
   memoryMode?: boolean;
   /** Utilisateur courant (`/api/me`), `undefined` tant qu'il n'est pas connu. */
   me?: { name: string; role: UserRole };
+  /** Absent hors session : pas de bouton de déconnexion. */
+  onLogout?: () => void;
 }
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -83,6 +86,7 @@ export function AppSidebar({
   homeActive,
   memoryMode = false,
   me,
+  onLogout,
 }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" className="overflow-hidden *:data-[sidebar=sidebar]:flex-row">
@@ -111,6 +115,18 @@ export function AppSidebar({
               label={me ? `${me.name}, ${ROLE_LABELS[me.role]}` : "Compte"}
               icon={UserCircleIcon}
             />
+            {onLogout ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip={{ children: "Se déconnecter", hidden: false }}
+                  className={RAIL_BUTTON}
+                  onClick={onLogout}
+                >
+                  <ArrowRightStartOnRectangleIcon />
+                  <span className="sr-only">Se déconnecter</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
