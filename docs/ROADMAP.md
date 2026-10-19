@@ -13,7 +13,7 @@ Source : `dev platform .md` (décisions D1 à D15, scénarios S1 à S12, étapes
 | --- | --- |
 | ~~Phase 0 — squelette du dépôt~~ | terminée |
 | ~~Semaine 1 — squelette de bout en bout~~ | code et déploiement terminés ; authentification en ligne vérifiée (#106) ; **reste à vérifier** : flux SSE derrière Traefik (#105) |
-| Semaine 2 — scénario S1 | code fusionné dans `prod` (0.5.0 à 0.6.0) : persistance PostgreSQL, gateway, moteur, approbation, cartes ; **reste à vérifier** sur env-perso : #127 (persistance après redéploiement), #32 (carte vue) ; #27 et #31 : critères à aligner |
+| Semaine 2 — scénario S1 | code fusionné dans `prod` (0.5.0 à 0.6.0) : persistance PostgreSQL, gateway, moteur, approbation, cartes ; ~~#127 (persistance après redéploiement) et #32 (carte vue) fermés~~ ; #27 et #31 : critères à aligner |
 | ~~Semaine 3 — scénario S2~~ | code terminé et fusionné dans `prod` (0.9.0) : journal d'événements persisté (migration 0002), badge « Mode mémoire », clarification (`ask_user`, questions ouvertes), scénario S2 et carte de clarification ; **reste à vérifier** sur env-perso : chat intact après redéploiement (#127), `/healthz` → `persistence: postgres` |
 | ~~Semaine 4 — scénario S10~~ | code terminé et fusionné dans `prod` (#167 à #172) : matrice R1 à R10, rôles et authentification de développement (migration 0003), approbation administrateur, scénario S10 et carte d'approbation ; **reste** : PR-G (suivi de la revue du journal, #176), badge de rôle dans la barre latérale, contrôle serveur Traefik avant `proxy_header` |
 | Semaines 5 et 6, essai jetable, fournisseurs réels, scénarios d'échec, évaluation | à venir |
