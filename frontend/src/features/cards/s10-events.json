@@ -1,0 +1,695 @@
+[
+  {
+    "v": 1,
+    "seq": 1,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:01Z",
+    "type": "message",
+    "data": {
+      "role": "user",
+      "text": "Déploie Safe Eat en production"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 2,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:02Z",
+    "type": "turn_status",
+    "data": {
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 3,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:03Z",
+    "type": "message",
+    "data": {
+      "role": "assistant",
+      "text": "Voici le plan pour Safe Eat en production. Il demande la validation d'un administrateur avant toute exécution."
+    }
+  },
+  {
+    "v": 1,
+    "seq": 4,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:04Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000003",
+      "kind": "plan",
+      "title": "Safe Eat : déploiement en production",
+      "summary": "Préparation du serveur de production, déploiement Compose, puis vérification de santé. Un administrateur doit approuver avant l'exécution.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Préparer le serveur de production",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "plan_id": "00000000-0000-4000-8000-000000000003",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "status": "proposed",
+      "environment": "production",
+      "autonomy_level": 2,
+      "stack": {
+        "backend": "go-api"
+      },
+      "skills": [],
+      "expected_resources": [
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        }
+      ],
+      "approvable": true,
+      "admin_approval_required": true
+    }
+  },
+  {
+    "v": 1,
+    "seq": 5,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000002",
+    "at": "2026-10-20T09:00:05Z",
+    "type": "turn_status",
+    "data": {
+      "status": "completed"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 6,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:00:06Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000003",
+      "kind": "plan",
+      "title": "Safe Eat : déploiement en production",
+      "summary": "Préparation du serveur de production, déploiement Compose, puis vérification de santé. Un administrateur doit approuver avant l'exécution.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Préparer le serveur de production",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "plan_id": "00000000-0000-4000-8000-000000000003",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "status": "dev_approved",
+      "environment": "production",
+      "autonomy_level": 2,
+      "stack": {
+        "backend": "go-api"
+      },
+      "skills": [],
+      "expected_resources": [
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        }
+      ],
+      "approvable": false,
+      "admin_approval_required": true
+    }
+  },
+  {
+    "v": 1,
+    "seq": 7,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:00:07Z",
+    "type": "card",
+    "data": {
+      "card_id": "approval-00000000000040008000000000000003",
+      "kind": "approval",
+      "plan_id": "00000000-0000-4000-8000-000000000003",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "plan_card_id": "00000000000040008000000000000003",
+      "environment": "production",
+      "rule_id": "R7-ecriture-production",
+      "missing": ["admin_approved"],
+      "approver_roles": ["team_admin", "org_admin"],
+      "requested_by": {
+        "name": "dev"
+      },
+      "status": "pending",
+      "decided_by": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 8,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000003",
+    "at": "2026-10-20T09:00:08Z",
+    "type": "card",
+    "data": {
+      "card_id": "approval-00000000000040008000000000000003",
+      "kind": "approval",
+      "plan_id": "00000000-0000-4000-8000-000000000003",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "plan_card_id": "00000000000040008000000000000003",
+      "environment": "production",
+      "rule_id": "R7-ecriture-production",
+      "missing": [],
+      "approver_roles": ["team_admin", "org_admin"],
+      "requested_by": {
+        "name": "dev"
+      },
+      "status": "approved",
+      "decided_by": {
+        "name": "admin"
+      }
+    }
+  },
+  {
+    "v": 1,
+    "seq": 9,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:09Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000003",
+      "kind": "plan",
+      "title": "Safe Eat : déploiement en production",
+      "summary": "Préparation du serveur de production, déploiement Compose, puis vérification de santé. Un administrateur doit approuver avant l'exécution.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Préparer le serveur de production",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "plan_id": "00000000-0000-4000-8000-000000000003",
+      "plan_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "status": "dev_approved",
+      "environment": "production",
+      "autonomy_level": 2,
+      "stack": {
+        "backend": "go-api"
+      },
+      "skills": [],
+      "expected_resources": [
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        },
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat"
+        }
+      ],
+      "approvable": false,
+      "admin_approval_required": true
+    }
+  },
+  {
+    "v": 1,
+    "seq": 10,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:10Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Préparer le serveur de production",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 0,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 11,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:11Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 1,
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 12,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:12Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 1,
+      "lines": [
+        "PLAY [bootstrap_project] projet=safe-eat mode=apply",
+        "changed: Créer le répertoire du projet",
+        "changed: Installer le fichier Compose",
+        "changed: Créer le réseau du projet"
+      ]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 13,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:13Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 1,
+      "status": "succeeded"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 14,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:14Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Préparer le serveur de production",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Déployer avec Docker Compose",
+          "status": "pending",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 1,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat",
+          "url": null
+        }
+      ],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 15,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:15Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 2,
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 16,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:16Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 2,
+      "lines": [
+        "PLAY [deploy_compose] projet=safe-eat mode=apply",
+        "changed: Tirer les images",
+        "changed: Démarrer les services Compose",
+        "changed: Déclarer le sous-domaine dans Caddy"
+      ]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 17,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:17Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 2,
+      "status": "succeeded"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 18,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:18Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Préparer le serveur de production",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Déployer avec Docker Compose",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la santé du projet",
+          "status": "pending",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 2,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat",
+          "url": null
+        }
+      ],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 19,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:19Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 3,
+      "status": "running"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 20,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:20Z",
+    "type": "execution_log",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 3,
+      "lines": ["healthcheck : ok"]
+    }
+  },
+  {
+    "v": 1,
+    "seq": 21,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:21Z",
+    "type": "execution_step",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "step": 3,
+      "status": "succeeded"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 22,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:22Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "running",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Préparer le serveur de production",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Déployer avec Docker Compose",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la santé du projet",
+          "status": "succeeded",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 3,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat",
+          "url": null
+        }
+      ],
+      "result": null
+    }
+  },
+  {
+    "v": 1,
+    "seq": 23,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "at": "2026-10-20T09:00:23Z",
+    "type": "card",
+    "data": {
+      "card_id": "00000000000040008000000000000004",
+      "kind": "execution",
+      "execution_id": "00000000-0000-4000-8000-000000000004",
+      "plan_card_id": "00000000000040008000000000000003",
+      "state": "succeeded",
+      "autonomy_level": 2,
+      "steps": [
+        {
+          "step": 1,
+          "title": "Préparer le serveur de production",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 2,
+          "title": "Déployer avec Docker Compose",
+          "status": "succeeded",
+          "tool": "server.apply_playbook",
+          "tool_class": "write_registry",
+          "reversibility": "compensable"
+        },
+        {
+          "step": 3,
+          "title": "Vérifier la santé du projet",
+          "status": "succeeded",
+          "tool": "server.healthcheck",
+          "tool_class": "read",
+          "reversibility": "not_applicable"
+        }
+      ],
+      "budget": {
+        "tool_calls_used": 3,
+        "tool_calls_max": 60,
+        "elapsed_s": 0,
+        "max_minutes": 30
+      },
+      "resources": [
+        {
+          "provider": "server",
+          "resource_type": "server_project",
+          "name": "safe-eat",
+          "url": null
+        }
+      ],
+      "result": {
+        "summary": "3 étapes réussies sur 3 en production.",
+        "links": []
+      }
+    }
+  }
+]
