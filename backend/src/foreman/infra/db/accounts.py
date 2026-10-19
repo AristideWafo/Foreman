@@ -24,6 +24,7 @@ from foreman.core.accounts import (
     LastAdmin,
     LastTeamAdmin,
     NotFound,
+    PersonalTeam,
     Team,
     rank,
     require_grant,
@@ -84,7 +85,7 @@ class PostgresAccountStore:
         async with self._tx("member.add") as conn:
             require_grant(await self._actor_role(conn, actor, team_id), role)
             await self._require_active(conn, user_id)
-            await self._require_team(conn, team_id)
+            await self._require_shared_team(conn, team_id)
             await conn.execute(sa.insert(_M).values(user_id=user_id, team_id=team_id, role=role))
 
     async def change_role(self, team_id: UUID, user_id: UUID, role: Role, actor: UUID) -> None:
@@ -149,6 +150,8 @@ class PostgresAccountStore:
     ) -> Invitation:
         async with self._tx("invitation.create") as conn:
             require_grant(await self._actor_role(conn, invited_by, team_id), role)
+            if team_id is not None:
+                await self._require_shared_team(conn, team_id)
             await self._cap(
                 conn, t.invitations, self._max_invitations, t.invitations.c.used_at.is_(None)
             )
@@ -382,10 +385,15 @@ class PostgresAccountStore:
         if found.first() is None:
             raise NotFound("compte introuvable")
 
-    async def _require_team(self, conn: AsyncConnection, team_id: UUID) -> None:
-        found = await conn.execute(sa.select(t.teams.c.id).where(t.teams.c.id == team_id))
-        if found.first() is None:
+    async def _require_shared_team(self, conn: AsyncConnection, team_id: UUID) -> None:
+        """Existe et n'est pas personnelle (le propriétaire d'une équipe personnelle est unique :
+        la validation des plans remonte la chaîne `invited_by` depuis lui)."""
+        found = await conn.execute(sa.select(t.teams.c.personal).where(t.teams.c.id == team_id))
+        row = found.first()
+        if row is None:
             raise NotFound("équipe introuvable")
+        if row.personal:
+            raise PersonalTeam("équipe personnelle")
 
 
 class _Tx:

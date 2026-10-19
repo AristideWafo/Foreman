@@ -175,8 +175,8 @@ class ApprovalService:
         (`self_ok` faux) et, pour une équipe personnelle, seulement l'approbateur désigné."""
         if approver.role == "org_admin":
             return True
-        if not self_ok and approver.user_id == plan.requested_by:
-            return False
+        if approver.user_id == plan.requested_by:
+            return self_ok  # son propre plan : refuser n'est pas valider
         project = await self._stores.projects.get(plan.project_id)
         if project is None:
             return False

@@ -120,6 +120,9 @@ class InMemoryMemberStore:
         role = self._roles.get(user_id)
         return role if role == "org_admin" or team_id == DEV_TEAM_ID else None
 
+    async def team_exists(self, team_id: UUID) -> bool:
+        return team_id == DEV_TEAM_ID
+
     async def teams_of(self, user_id: UUID) -> frozenset[UUID] | None:
         role = self._roles.get(user_id)
         if role == "org_admin":

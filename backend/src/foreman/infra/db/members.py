@@ -56,6 +56,12 @@ class PostgresMemberStore:
         roles = await self._all("members.role_in", statement)
         return max((r for (r,) in roles), key=rank, default=None)
 
+    async def team_exists(self, team_id: UUID) -> bool:
+        rows = await self._all(
+            "members.team_exists", sa.select(t.teams.c.id).where(t.teams.c.id == team_id)
+        )
+        return bool(rows)
+
     async def teams_of(self, user_id: UUID) -> frozenset[UUID] | None:
         statement = (
             sa.select(_M.c.team_id, _M.c.role)

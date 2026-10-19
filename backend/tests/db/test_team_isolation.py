@@ -17,7 +17,7 @@ import sqlalchemy as sa
 import foreman.surfaces.web.api as api_module
 from foreman.bootstrap.configure import App, Profile, configure
 from foreman.config.env import ENV_AUTH_MODE, ENV_COOKIE_SECURE, ENV_DATABASE_URL
-from foreman.core.accounts import Account
+from foreman.core.accounts import Account, PersonalTeam
 from foreman.core.planning import Draft, DraftStep, Planner
 from foreman.infra.db import tables as t
 from foreman.infra.db.engine import make_engine
@@ -188,6 +188,33 @@ async def test_a_personal_plan_is_validated_by_the_inviter_with_fallbacks(world:
     personal = await members.personal_team_of(user.id)
     assert personal is not None
 
+    # Inviteur actif et admin : il voit le projet et valide en admin, rien d'autre (404 opaque) ;
+    # un autre team_admin n'a aucun accès ; on ne rejoint jamais une équipe personnelle.
+    assert world.state.accounts is not None
+    with pytest.raises(PersonalTeam):
+        await world.state.accounts.add_member(personal, stranger.id, "developer", user.id)
+    user_client = await world.client(user)
+    ops_client, stranger_client = await world.client(ops2), await world.client(stranger)
+    first = await world.project(user_client)
+    first_plan, first_hash = await world.plan(first, user)
+    body = {"plan_hash": first_hash, "decision": "approved"}
+    base = f"/api/projects/{first}"
+    assert (
+        await user_client.post(f"{base}/plans/{first_plan}/approvals", json=body)
+    ).status_code == 202
+    assert (await ops_client.get(base)).status_code == 200
+    assert (await stranger_client.get(base)).status_code == 404
+    for path, payload in (
+        (f"{base}/plans/{first_plan}/approvals", body),
+        (f"{base}/messages", {"text": "x"}),
+        (f"{base}/questions/q1", {"decision": "answer", "value": "x"}),
+    ):
+        refused = await ops_client.post(path, json=payload)
+        assert (refused.status_code, refused.json()) == (404, NOT_FOUND), path
+    admin_path = f"{base}/plans/{first_plan}/admin-approvals"
+    assert (await stranger_client.post(admin_path, json=body)).status_code == 404
+    assert (await ops_client.post(admin_path, json=body)).status_code == 201
+
     # L'inviteur direct (admin d'une équipe non personnelle) ; puis l'ancêtre actif ; sans inviteur
     # admin, repli sur tout org_admin (ensemble vide).
     assert await members.designated_admins(personal) == {ops2.id}
@@ -200,7 +227,6 @@ async def test_a_personal_plan_is_validated_by_the_inviter_with_fallbacks(world:
     assert await members.designated_admins(uuid4()) is None  # pas une équipe personnelle
 
     # Bout en bout : l'utilisateur ne valide jamais son propre plan ; seul l'inviteur le peut.
-    user_client = await world.client(user)
     project = await world.project(user_client)
     plan_id, plan_hash = await world.plan(project, user)
     body = {"plan_hash": plan_hash, "decision": "approved"}

@@ -99,6 +99,12 @@ def _frame(event: AnyEvent) -> bytes:
 _REFUSALS: dict[str, int] = {"not_found": 404, "forbidden": 403}  # le reste : 409
 
 
+def _members_only(access: ProjectAccess) -> None:
+    """L'approbateur désigné voit le projet et décide en admin, rien d'autre : 404 opaque."""
+    if access.designated:
+        raise ApiError(404, "not_found")
+
+
 def _refused(refusal: ApprovalRefused) -> ApiError:
     return ApiError(_REFUSALS.get(refusal.reason, 409), refusal.reason)
 
@@ -126,7 +132,10 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
                 team_id = DEV_TEAM_ID
         if team_id is None:
             raise ApiError(422, "invalid_request")
-        if await app.members.role_in(caller.user_id, team_id) is None:
+        if (
+            not await app.members.team_exists(team_id)
+            or await app.members.role_in(caller.user_id, team_id) is None
+        ):
             raise ApiError(404, "not_found")  # équipe inconnue ou étrangère : indiscernables
         try:
             return await app.projects.create(body.title if body else "", team_id, caller.user_id)
@@ -157,6 +166,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
     )
     async def post_message(body: MessageRequest, access: Access) -> MessageAccepted:
         """Un seul tour à la fois par projet : un second message pendant un tour renvoie 409."""
+        _members_only(access)
         project_id, caller = access.project.id, access.principal
         try:
             turn_id = app.turns.begin(project_id)
@@ -273,6 +283,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         """
         if app.approvals is None or app.engine is None:
             raise ApiError(501, "not_implemented")
+        _members_only(access)
         project_id = access.project.id
         result = await app.approvals.approve(project_id, plan_id, body.plan_hash, access.principal)
         if isinstance(result, ApprovalRefused):
@@ -378,6 +389,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         La réponse doit être l'une des options de la question ; le message du tour est produit
         par le serveur à partir de ce choix. Un refus ne lance aucun tour ni ne cite la saisie.
         """
+        _members_only(access)
         project_id, caller = access.project.id, access.principal
         try:
             outcome = await app.turns.resolve_question(

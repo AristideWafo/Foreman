@@ -95,6 +95,7 @@ class ProjectAccess:
 
     project: Project
     principal: Principal
+    designated: bool = False  # approbateur désigné d'une équipe personnelle, non membre
 
 
 async def resolve_access(app: App, caller: Principal, project_id: UUID) -> ProjectAccess | None:
@@ -103,14 +104,15 @@ async def resolve_access(app: App, caller: Principal, project_id: UUID) -> Proje
     if project is None:
         return None
     role = await app.members.role_in(caller.user_id, project.team_id)
+    designated = False
     if role is None:
         # Équipe personnelle : l'approbateur admin désigné doit pouvoir voir le plan à valider.
-        designated = await app.members.designated_admins(project.team_id)
-        if designated and caller.user_id in designated:
-            role = "team_admin"
+        admins = await app.members.designated_admins(project.team_id)
+        if admins and caller.user_id in admins:
+            role, designated = "team_admin", True
     if role is None:
         return None
-    return ProjectAccess(project, caller.model_copy(update={"role": role}))
+    return ProjectAccess(project, caller.model_copy(update={"role": role}), designated)
 
 
 def make_project_access(
