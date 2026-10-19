@@ -8,6 +8,8 @@ import { Card } from "./Card";
 import s01 from "./s01-events.json";
 // Fixture réel : exporté par `make s02-fixture` depuis le scénario S2 (#34).
 import s02 from "./s02-events.json";
+// Fixture réel : exporté par `make s10-fixture` depuis le scénario S10 (#39).
+import s10 from "./s10-events.json";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000001";
 const PLAN_ID = "00000000-0000-4000-8000-000000000003";
@@ -213,4 +215,35 @@ test("une carte de kind inconnu affiche le repli", () => {
   const unknown = { card_id: "x", kind: "chart" } as unknown as PlanCardData;
   render(<Card card={unknown} projectId={PROJECT_ID} />);
   expect(screen.getByText("Carte non prise en charge.")).toBeInTheDocument();
+});
+
+// --- Critère de fin : S10, carte d'approbation rendue selon le rôle de /api/me ----------------------------
+
+/** Faux `fetch` : `/api/me` répond avec le rôle voulu. */
+function stubMe(role: "developer" | "team_admin") {
+  const fake = new FakeFetch(200, { name: "x", role, user_id: "u" });
+  stubFetch(fake);
+  return fake;
+}
+
+test("S10, développeur : carte d'approbation sans bouton « Approuver », en attente d'un administrateur", async () => {
+  const fake = stubMe("developer");
+  renderCards(replay(7, s10)); // seq 7 : demande en attente
+  const card = screen.getByRole("group", { name: "Approbation administrateur" });
+  expect(within(card).getByText("production")).toBeVisible();
+  expect(within(card).getByText("R7-ecriture-production")).toBeVisible();
+  await waitFor(() => expect(fake.calls).toHaveLength(1)); // /api/me a répondu : toujours aucun bouton
+  expect(within(card).getByRole("status")).toHaveTextContent("En attente d'un administrateur");
+  expect(within(card).queryByRole("button")).toBeNull();
+});
+
+test("S10, team_admin : boutons « Approuver » et « Refuser » ; approuvée, plus de bouton", async () => {
+  stubMe("team_admin");
+  const { unmount } = renderCards(replay(7, s10));
+  expect(await screen.findByRole("button", { name: "Approuver" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Refuser" })).toBeEnabled();
+  unmount();
+  renderCards(replay(8, s10)); // seq 8 : approuvée par admin
+  expect(screen.getByRole("status")).toHaveTextContent("Approuvée par admin");
+  expect(screen.queryByRole("button", { name: "Approuver" })).toBeNull();
 });

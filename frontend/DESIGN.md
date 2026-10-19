@@ -165,6 +165,27 @@ Les questions sont indépendantes : chaque réponse relance un tour (202) ; pend
 restent ouvertes et reprennent leur état normal à la carte réémise. Aucun contrôle sans effet : tout appelle
 `POST /api/projects/{id}/questions/{question_id}`.
 
+## Carte d'approbation (Semaine 4)
+
+Rendue depuis l'événement `card` de `kind = "approval"` (remplacée par `card_id` à chaque changement de `status`,
+jamais dupliquée). C'est une `Card` shadcn (`CardHeading` : icône `ShieldCheckIcon`, titre « Approbation
+administrateur », description « Ce plan vise la production : un administrateur doit l'approuver. »). Une `FactList` :
+environnement, demandé par, règle, empreinte courte (comme la carte plan). Tout est du texte.
+
+Le rôle de l'utilisateur vient de `GET /api/me` (`useMe`), jamais d'une règle du front : le serveur reste seul juge
+(403 `forbidden` si le rôle ne suffit pas).
+
+- **Rôle dans `approver_roles` et `status = pending`** : deux boutons, **« Approuver »** (`Button` par défaut, un clic)
+  et **« Refuser »** (`outline`). Pendant l'appel : boutons désactivés, `aria-busy`.
+- **Autre rôle (ou rôle pas encore connu), `pending`** : ligne `role="status"` « En attente d'un administrateur », sans bouton.
+- **Approuvée** : ligne `role="status"` « Approuvée par _nom_ » (`CheckIcon`). **Refusée** : « Refusée par _nom_ »
+  (`MinusCircleIcon`). Plus de bouton.
+- **Erreur** : `Alert` (`role="alert"`) en français, sans détail technique. 409 et 404 : boutons désactivés jusqu'à ce
+  que le serveur réémette la carte (le front ne devine pas l'état). 403 : « Votre rôle ne permet pas cette décision. ».
+
+**Carte plan** : si `admin_approval_required`, l'action devient **« Valider et transmettre à l'admin »** ; sur 202
+(`ApprovalPending`), la ligne de statut dit « Validé. En attente d'un administrateur. ».
+
 ## États d'un écran
 
 Chargement (une ligne de texte), vide (une phrase qui dit quoi faire), erreur (`Alert` + « Réessayer »),

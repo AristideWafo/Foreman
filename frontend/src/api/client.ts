@@ -11,12 +11,15 @@ type MessageAccepted =
 
 type ApprovalBody = components["schemas"]["ApprovalRequest"];
 type ApprovalAccepted = components["schemas"]["ApprovalAccepted"];
+type ApprovalPending = components["schemas"]["ApprovalPending"];
+type AdminApprovalBody = components["schemas"]["AdminApprovalRequest"];
+type AdminApprovalResult = ApprovalAccepted | components["schemas"]["ApprovalRejected"];
+export type Me = components["schemas"]["Me"];
 
 type QuestionBody = components["schemas"]["QuestionAnswerRequest"];
 type QuestionAccepted = components["schemas"]["QuestionAccepted"];
 
-// `/healthz` est décrit dans l'OpenAPI comme `{ [clé]: string }` (sans champ nommé) : on en tire le type.
-type Health = paths["/healthz"]["get"]["responses"][200]["content"]["application/json"];
+type Health = components["schemas"]["HealthResponse"];
 
 const ERROR_CODES: readonly ErrorCode[] = [
   "not_found",
@@ -30,6 +33,9 @@ const ERROR_CODES: readonly ErrorCode[] = [
   "plan_not_approvable",
   "execution_in_progress",
   "question_closed",
+  "unauthenticated",
+  "forbidden",
+  "policy_denied",
 ];
 
 /** Erreur d'API : seuls le statut et le code opaque du contrat sont conservés. */
@@ -78,7 +84,7 @@ function jsonPost(body: unknown): RequestInit {
 /** Mode de persistance annoncé par le serveur (`postgres`, `memory`), ou `null` s'il est absent. */
 export async function getPersistence(): Promise<string | null> {
   const health = await request<Health>("/healthz");
-  return health.persistence ?? null;
+  return health.persistence;
 }
 
 export function createProject(body: CreateProjectBody = { title: "" }): Promise<Project> {
@@ -100,15 +106,37 @@ export function postMessage(projectId: string, text: string): Promise<MessageAcc
   );
 }
 
-/** Approuve un plan (201 à la création, 200 au rejeu idempotent : les deux sont des succès). */
+/** Identité de l'appelant, lue côté serveur (le rôle ne vient jamais du front). */
+export function getMe(): Promise<Me> {
+  return request<Me>("/api/me");
+}
+
+/**
+ * Valide un plan (201 à la création, 200 au rejeu idempotent, 202 si un administrateur doit encore approuver :
+ * trois succès, le 202 se reconnaît à `status = "approval_required"`).
+ */
 export function approvePlan(
   projectId: string,
   planId: string,
   planHash: string,
-): Promise<ApprovalAccepted> {
+): Promise<ApprovalAccepted | ApprovalPending> {
   const body: ApprovalBody = { plan_hash: planHash, decision: "approved" };
-  return request<ApprovalAccepted>(
+  return request<ApprovalAccepted | ApprovalPending>(
     `/api/projects/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(planId)}/approvals`,
+    jsonPost(body),
+  );
+}
+
+/** Décision d'un administrateur (200 ou 201) : `ApprovalRejected` (`status = "rejected"`) ou `ApprovalAccepted` (`execution_id`). */
+export function adminApprove(
+  projectId: string,
+  planId: string,
+  planHash: string,
+  decision: AdminApprovalBody["decision"],
+): Promise<AdminApprovalResult> {
+  const body: AdminApprovalBody = { plan_hash: planHash, decision };
+  return request<AdminApprovalResult>(
+    `/api/projects/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(planId)}/admin-approvals`,
     jsonPost(body),
   );
 }
@@ -159,6 +187,9 @@ export function describeApprovalError(error: unknown): ApprovalFailure {
   const code = error instanceof ApiError ? error.code : null;
   if (status === 501 || code === "not_implemented") {
     return { message: "La validation n'est pas encore disponible.", waitForCard: false };
+  }
+  if (status === 403 || code === "forbidden") {
+    return { message: "Votre rôle ne permet pas cette décision.", waitForCard: false };
   }
   if (code === "execution_in_progress") {
     return { message: "Une exécution est déjà en cours pour ce plan.", waitForCard: true };
