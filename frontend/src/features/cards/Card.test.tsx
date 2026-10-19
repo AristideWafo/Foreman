@@ -6,6 +6,8 @@ import { applyEvent, initialTimeline, parseEvent, type TimelineState } from "../
 import { Card } from "./Card";
 // Fixture réel : exporté par `make s01-fixture` depuis le scénario `test_s01_nominal` (#31).
 import s01 from "./s01-events.json";
+// Fixture réel : exporté par `make s02-fixture` depuis le scénario S2 (#34).
+import s02 from "./s02-events.json";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000001";
 const PLAN_ID = "00000000-0000-4000-8000-000000000003";
@@ -14,8 +16,8 @@ const PLAN_SEQ = 4; // première carte plan (proposée)
 const LAST_SEQ = 40; // carte d'exécution terminée
 
 /** Rejoue les `count` premiers événements du fixture par le parseur puis le reducer, comme le flux SSE. */
-function replay(count: number): TimelineState {
-  return s01
+function replay(count: number, events: readonly unknown[] = s01): TimelineState {
+  return events
     .slice(0, count)
     .map((raw) => parseEvent(JSON.stringify(raw)))
     .reduce((state, event) => (event ? applyEvent(state, event) : state), initialTimeline);
@@ -192,6 +194,19 @@ test("plan dont le statut n'est pas « proposed » ou non approuvable : pas de b
     expect(screen.queryByRole("button", { name: "Valider le plan" })).toBeNull();
     unmount();
   }
+});
+
+// --- Critère de fin : S2, carte de clarification rendue depuis l'événement `clarification` ----------
+
+test("S2, carte de clarification : question, option imposée, boutons Répondre et Reporter", () => {
+  renderCards(replay(4, s02)); // seq 4 : première carte de clarification (question ouverte)
+  const card = screen.getByRole("group", { name: "Clarification" });
+  const options = within(card).getByRole("group", {
+    name: "Sur quel environnement faut-il déployer Safe Eat ?",
+  });
+  expect(within(options).getByRole("button", { name: "staging" })).toBeVisible();
+  expect(within(card).getByRole("button", { name: "Répondre" })).toBeDisabled();
+  expect(within(card).getByRole("button", { name: "Reporter" })).toBeEnabled();
 });
 
 test("une carte de kind inconnu affiche le repli", () => {

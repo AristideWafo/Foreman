@@ -96,6 +96,8 @@ function hasExpectedShape(card: CardData): boolean {
         typeof card.budget === "object" &&
         card.budget !== null
       );
+    case "clarification":
+      return Array.isArray(card.questions);
     default:
       return true;
   }
