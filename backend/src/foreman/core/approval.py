@@ -236,14 +236,19 @@ class ApprovalService:
         status: Literal["approved", "rejected"],
         approver: Principal,
     ) -> None:
-        rule = await self._precheck(plan, content)  # la règle qui exigeait l'admin
+        # La règle est celle de la carte `pending` (le rôle courant est celui de l'admin).
+        rule_id = "inconnue"
+        for event in await self._events.read_after(project_id, 0):
+            data = event.data
+            if isinstance(data, ApprovalCardData) and data.plan_id == plan.id:
+                rule_id = data.rule_id
         await self._emit_approval_card(
             project_id,
             plan,
             content,
             status,
             UserRef(name=approver.name),
-            rule if isinstance(rule, str) else "inconnue",
+            rule_id,
         )
 
     async def _emit_approval_card(

@@ -272,10 +272,10 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         responses={
             **_ERRORS,
             200: {
-                "model": ApprovalAccepted,
+                "model": ApprovalAccepted | ApprovalRejected,
                 "description": (
-                    "Rejeu idempotent d'une approbation (mêmes identifiants), ou refus "
-                    "(`decision: rejected`, corps `ApprovalRejected`) : le plan est invalidé"
+                    "Rejeu idempotent d'une approbation (`ApprovalAccepted`, mêmes identifiants), "
+                    "ou refus (`decision: rejected`, `ApprovalRejected`) : le plan est invalidé"
                 ),
             },
             409: {
@@ -293,7 +293,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         body: AdminApprovalRequest,
         response: Response,
         caller: Caller,
-    ) -> ApprovalAccepted | ApprovalRejected:
+    ) -> ApprovalAccepted | JSONResponse:
         """Un administrateur approuve (crée l'exécution et la démarre) ou refuse un plan.
 
         Seuls les rôles de `approvers.admin` le peuvent (sinon 403, rien n'est écrit).
@@ -304,8 +304,8 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             rejected = await app.approvals.reject_admin(project_id, plan_id, body.plan_hash, caller)
             if isinstance(rejected, ApprovalRefused):
                 raise _refused(rejected)
-            response.status_code = 200
-            return ApprovalRejected(approval_id=rejected.approval_id, status="rejected")
+            refusal = ApprovalRejected(approval_id=rejected.approval_id, status="rejected")
+            return JSONResponse(status_code=200, content=refusal.model_dump(mode="json"))
         approved = await app.approvals.approve_admin(project_id, plan_id, body.plan_hash, caller)
         if isinstance(approved, ApprovalRefused):
             raise _refused(approved)
