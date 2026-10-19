@@ -8,7 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from foreman.bootstrap.configure import App, Profile
+from foreman.bootstrap.configure import App, Profile, configure, parse_dev_members
 from foreman.core.clarification import answer_text
 from foreman.core.events import ClarificationQuestion
 from foreman.core.ports import ConversationMessage, ModelReply, Provider
@@ -329,6 +329,17 @@ def test_proxy_header_mode_requires_a_known_identity_and_reads_the_role_from_the
         assert client.get("/api/projects").status_code == 401  # toutes les routes, pas /me seul
         bob = client.get("/api/me", headers={"X-Forwarded-User": "bob"}).json()
         assert (bob["name"], bob["role"]) == ("bob", "team_admin")
+
+
+def test_proxy_header_refuses_empty_members_and_duplicate_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FOREMAN_AUTH_MODE", "proxy_header")
+    monkeypatch.delenv("FOREMAN_DEV_MEMBERS", raising=False)
+    with pytest.raises(ValueError):
+        configure(Profile.WEB)
+    with pytest.raises(ValueError):
+        parse_dev_members("alice:developer,alice:team_admin")
 
 
 def test_none_mode_ignores_the_forwarded_user_header(monkeypatch: pytest.MonkeyPatch) -> None:

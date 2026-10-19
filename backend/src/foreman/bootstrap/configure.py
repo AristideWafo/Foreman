@@ -69,6 +69,8 @@ def parse_dev_members(raw: str) -> tuple[Member, ...]:
         name = name.strip()
         if not name or len(name) > 100 or role.strip() not in ROLES:
             raise ValueError(f"{ENV_DEV_MEMBERS} invalide : attendu nom:role (rôles {ROLES})")
+        if name in members:
+            raise ValueError(f"{ENV_DEV_MEMBERS} invalide : nom en double")
         members[name] = Member(name, role.strip())  # type: ignore[arg-type]
     return tuple(members.values())
 
@@ -121,6 +123,11 @@ def configure(profile: Profile) -> App:
         stores = in_memory_stores(projects=memory_projects)[1]
         members = InMemoryMemberStore()
         lifecycle = NoLifecycle()
+    auth_mode = AuthMode(os.environ.get(ENV_AUTH_MODE, DEFAULT_AUTH_MODE))
+    dev_members = parse_dev_members(os.environ.get(ENV_DEV_MEMBERS, ""))
+    if auth_mode is AuthMode.PROXY_HEADER and not dev_members:
+        # Sans membre, personne ne peut s'authentifier : on échoue au démarrage plutôt qu'en 401 partout.
+        raise ValueError(f"{ENV_DEV_MEMBERS} est obligatoire en mode {AuthMode.PROXY_HEADER}")
     # 4. Services du cœur
     gateway = build_gateway(catalog, stores)
     return App(
@@ -132,8 +139,8 @@ def configure(profile: Profile) -> App:
         lifecycle=lifecycle,
         persistence=persistence,
         members=members,
-        auth_mode=AuthMode(os.environ.get(ENV_AUTH_MODE, DEFAULT_AUTH_MODE)),
-        dev_members=parse_dev_members(os.environ.get(ENV_DEV_MEMBERS, "")),
+        auth_mode=auth_mode,
+        dev_members=dev_members,
         catalog=catalog,
         gateway=gateway,
         approvals=ApprovalService(catalog, stores, events),
