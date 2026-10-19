@@ -1,7 +1,7 @@
 """Contrat des dépôts du moteur : la même suite tourne sur la mémoire et sur PostgreSQL."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -352,6 +352,50 @@ async def test_a_reservation_without_result_is_reported_and_never_replayed_blind
     taker = await store.claim_lease(execution_id, "w2")
     assert taker is not None
     assert isinstance(await store.reserve_idempotency(taker, 1), OrphanReservation)
+
+
+async def test_take_over_follows_the_liveness_of_the_previous_owner(harness: Harness) -> None:
+    project = await new_project(harness)
+    store = harness.stores.executions
+    key = f"k-{uuid4().hex}"
+    owner_id = (await approve(harness, await new_plan(harness, project, keys=(key,)))).execution_id
+    owner = await store.claim_lease(owner_id, "w1")
+    assert owner is not None
+    assert isinstance(await store.reserve_idempotency(owner, 1), NewReservation)
+    # Le projet n'a qu'une exécution active : l'autre n'existe qu'une fois la première arrêtée.
+    await store.finish(owner, "blocked")
+    taker_id = (await approve(harness, await new_plan(harness, project, keys=(key,)))).execution_id
+    taker = await store.claim_lease(taker_id, "w2")
+    assert taker is not None
+    assert isinstance(await store.reserve_idempotency(taker, 1), OrphanReservation)
+    await store.take_over(taker, 1)  # l'ancien propriétaire est arrêté : reprise permise
+
+
+async def test_take_over_is_refused_while_the_other_execution_lease_is_alive(
+    harness: Harness,
+) -> None:
+    if not hasattr(harness, "state"):
+        pytest.skip(
+            "deux exécutions actives du même projet sont impossibles en base (index unique)"
+        )
+    project = await new_project(harness)
+    store = harness.stores.executions
+    key = f"k-{uuid4().hex}"
+    owner_id = (await approve(harness, await new_plan(harness, project, keys=(key,)))).execution_id
+    owner = await store.claim_lease(owner_id, "w1")
+    assert owner is not None
+    assert isinstance(await store.reserve_idempotency(owner, 1), NewReservation)
+    await store.finish(owner, "blocked")
+    taker_id = (await approve(harness, await new_plan(harness, project, keys=(key,)))).execution_id
+    taker = await store.claim_lease(taker_id, "w2")
+    assert taker is not None
+    assert isinstance(await store.reserve_idempotency(taker, 1), OrphanReservation)
+    # Défense en profondeur : on ressuscite l'ancienne exécution avec un bail vivant.
+    old = harness.state.executions[owner_id]  # type: ignore[attr-defined]
+    old.state, old.lease_owner = "running", "w1"
+    old.lease_expires_at = harness.clock.now + timedelta(hours=1)  # type: ignore[attr-defined]
+    with pytest.raises(InvalidTransition):
+        await store.take_over(taker, 1)
 
 
 # --- complete_step ----------------------------------------------------------------------------
