@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.10.0](https://github.com/AristideWafo/Foreman/compare/v0.9.0...v0.10.0) (2026-10-19)
+
+
+### Features
+
+* enregistrement S2 et fixture des cartes de clarification ([4fdf8be](https://github.com/AristideWafo/Foreman/commit/4fdf8be5dff42d7dc33e6fa236265f69087def85))
+* **front:** carte de clarification (S2) ([cc38b98](https://github.com/AristideWafo/Foreman/commit/cc38b98820f6a74c94fbc78b72db20e53cca1e98))
+* **front:** carte de clarification (S2) ([8aabcea](https://github.com/AristideWafo/Foreman/commit/8aabcea811280e8f7c8e08bc763b77255822dbfa))
+* **front:** composants shadcn toggle et toggle-group ([7d198a4](https://github.com/AristideWafo/Foreman/commit/7d198a4d0deef7aadfd9ee5798a5e2170a3caef5))
+
 ## [0.9.0](https://github.com/AristideWafo/Foreman/compare/v0.8.0...v0.9.0) (2026-10-18)
 
 
