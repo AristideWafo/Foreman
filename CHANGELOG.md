@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.19.0](https://github.com/AristideWafo/Foreman/compare/v0.18.0...v0.19.0) (2026-10-20)
+
+
+### Features
+
+* étape d'origine des ressources du plan et de l'exécution ([#250](https://github.com/AristideWafo/Foreman/issues/250)) ([41fe38a](https://github.com/AristideWafo/Foreman/commit/41fe38a8f3cbdf9cd99adaf253e741c660ebfd5e))
+* étape d'origine des ressources du plan et de l'exécution ([#250](https://github.com/AristideWafo/Foreman/issues/250)) ([8ec1493](https://github.com/AristideWafo/Foreman/commit/8ec149337b18b9b2052e97a302be3ca8baf6d890))
+* **front:** avatar à droite des messages et nom aligné à droite ([#249](https://github.com/AristideWafo/Foreman/issues/249)) ([0f32357](https://github.com/AristideWafo/Foreman/commit/0f323570f67ffff3fd824c2fb99d4abc851a365c))
+* **front:** avatar à droite des messages et nom aligné à droite ([#249](https://github.com/AristideWafo/Foreman/issues/249)) ([ac48896](https://github.com/AristideWafo/Foreman/commit/ac488960f2cc6068a6bd7fc3ecab0dda11d7526d))
+* **front:** barre flottante des ressources et résumé d'état ([#250](https://github.com/AristideWafo/Foreman/issues/250)) ([a276621](https://github.com/AristideWafo/Foreman/commit/a2766213b2c57cab3144adcaf7f918db3c86d9a9))
+* **front:** barre flottante des ressources et résumé d'état ([#250](https://github.com/AristideWafo/Foreman/issues/250)) ([e857bbd](https://github.com/AristideWafo/Foreman/commit/e857bbd0d677f71ac24727ef3bd42d40fbfd891a))
+
+
+### Bug Fixes
+
+* l'étape de validation suit l'approbateur désigné des équipes personnelles ([#248](https://github.com/AristideWafo/Foreman/issues/248)) ([f2d64b4](https://github.com/AristideWafo/Foreman/commit/f2d64b4adbd3767c20671ad4d617e4572bb77689))
+* la validation des plans est réservée aux administrateurs ([#248](https://github.com/AristideWafo/Foreman/issues/248)) ([3a87c9c](https://github.com/AristideWafo/Foreman/commit/3a87c9c700719f1774e852621f38de7051154edd))
+* la validation des plans est réservée aux administrateurs ([#248](https://github.com/AristideWafo/Foreman/issues/248)) ([cfdaf88](https://github.com/AristideWafo/Foreman/commit/cfdaf88d5bfd9f8a469483915f9de6e3f69fe82e))
+
 ## [0.18.0](https://github.com/AristideWafo/Foreman/compare/v0.17.0...v0.18.0) (2026-10-20)
 
 
