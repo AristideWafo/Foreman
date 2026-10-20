@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { useMe } from "../cards/useMe";
 import { PROJECTS_KEY } from "../projects/useProjects";
+import { useTeamSelection } from "../projects/useTeamSelection";
 import { MessageInput } from "./MessageInput";
 import { PromptSuggestions } from "./PromptSuggestions";
 
@@ -27,8 +28,12 @@ export function HomePage() {
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
   const teams = useMe()?.teams ?? [];
+  // `null` : on suit la sélection de la barre latérale (une seule équipe active = défaut).
   // Vide : le serveur choisit l'équipe par défaut (personnelle, ou de développement).
-  const [teamId, setTeamId] = useState("");
+  const [choice, setChoice] = useState<string | null>(null);
+  const { stored } = useTeamSelection();
+  const active = stored.filter((id) => teams.some((t) => t.id === id));
+  const teamId = choice ?? (stored.length === 1 && active.length === 1 ? active[0] : "");
   const create = useMutation({
     mutationFn: (title: string) => createProject({ title, team_id: teamId || null }),
   });
@@ -66,7 +71,7 @@ export function HomePage() {
               id="project-team"
               className="w-56"
               value={teamId}
-              onChange={(e) => setTeamId(e.target.value)}
+              onChange={(e) => setChoice(e.target.value)}
             >
               <option value="">Équipe par défaut</option>
               {teams.map((t) => (

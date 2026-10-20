@@ -208,8 +208,14 @@ seule fois, avec avertissement). Rétrograder, retirer, désactiver et révoquer
 confirmation. Les listes déroulantes sont des `<select>` natifs (`NativeSelect`). Les erreurs 403/409
 (`last_admin`, `last_team_admin`) sont traduites en messages clairs, jamais le détail serveur.
 
-Accueil : sélecteur « Équipe du projet » (équipes de `/api/me`, « Équipe par défaut » = choix du serveur).
-Barre latérale : filtre « Filtrer par équipe » dans la liste des projets, à partir de deux équipes.
+Accueil : sélecteur « Équipe du projet » (équipes de `/api/me`, « Équipe par défaut » = choix du serveur) ;
+il suit la sélection de la barre latérale quand une seule équipe partagée y est active.
+Barre latérale : groupe « Équipes actives » (`ToggleGroup` à choix multiple, pastilles `aria-pressed`) au-dessus
+de la liste des projets, à partir de deux choix (équipes partagées de `/api/me` + « Personnel » si des projets
+n'appartiennent à aucune d'elles). « Toutes » (défaut) = aucune restriction ; cocher une équipe la décoche. La
+liste est groupée par équipe (titre de groupe = nom de l'équipe) dès que plusieurs groupes sont visibles. La
+sélection est mémorisée dans `localStorage` (`foreman.activeTeams`, essai/erreur : la page marche sans) ; une
+équipe disparue de `/api/me` en est retirée.
 
 ## Badge nom et rôle (barre latérale)
 
