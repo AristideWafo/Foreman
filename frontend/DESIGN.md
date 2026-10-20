@@ -62,6 +62,15 @@ Limite du contrat v1 : le serveur n'envoie ni texte de raisonnement ni appel d'o
 de `turn_status` et des cartes. Un vrai raisonnement ou des outils détaillés demandent de nouveaux types
 d'événements (évolution additive du contrat), pas un changement d'interface.
 
+## Auteurs et participants (#241)
+
+Au-dessus d'un message utilisateur qui a un `author` : son nom en `text-[0.6875rem]`, `text-muted-foreground`,
+aligné sur la bulle, une seule fois par suite de messages du même auteur. Rien pour l'assistant ni l'ancien
+historique (sans `author`). À droite de l'en-tête du projet (`PageHeader actions`) : pastilles rondes `size-6`
+d'initiales, nuance stable tirée de l'id parmi les jetons `chart-2` à `chart-5` (thème neutre, pas de couleur
+codée), 4 au plus puis « +N ». Nom au survol et au focus (`Tooltip`) et en `aria-label`. Participants déduits
+des messages du flux ; aucune pastille sans auteur connu.
+
 ## Typographie, graisses et icônes (une seule échelle)
 
 | Rôle                    | Classes                                 | Où                                                 |

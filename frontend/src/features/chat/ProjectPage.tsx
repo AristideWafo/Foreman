@@ -19,9 +19,10 @@ import {
 import { Card } from "../cards/Card";
 import { RETRYABLE_STATES } from "../cards/RetryPlan";
 import { useProjectEvents } from "../events/useProjectEvents";
-import { foldExecutions, type TimelineItem } from "../events/timeline";
+import { foldExecutions, participants, type TimelineItem } from "../events/timeline";
 import { useProjects } from "../projects/useProjects";
 import { MessageInput } from "./MessageInput";
+import { Participants } from "./Participants";
 import { TurnTrace } from "./TurnTrace";
 import { useStaggered } from "./useStaggered";
 
@@ -57,20 +58,37 @@ export function findRetry(items: TimelineItem[]): { key: string; text: string } 
   return message?.kind === "message" ? { key: item.key, text: message.text } : null;
 }
 
-function TimelineEntry({
+/** Vrai si le message précédent est du même auteur : le nom n'est affiché qu'une fois par groupe. */
+export function sameAuthorAsPrevious(previous: TimelineItem | undefined, item: TimelineItem) {
+  return (
+    previous?.kind === "message" &&
+    item.kind === "message" &&
+    previous.author !== undefined &&
+    previous.author.id === item.author?.id
+  );
+}
+
+export function TimelineEntry({
   item,
   projectId,
   retryText,
+  showAuthor = true,
 }: {
   item: TimelineItem;
   projectId: string;
   retryText?: string;
+  showAuthor?: boolean;
 }) {
   switch (item.kind) {
     case "message":
       return item.role === "user" ? (
         <Message align="end">
           <MessageContent>
+            {showAuthor && item.author ? (
+              <span className="px-1 text-[0.6875rem] leading-none text-muted-foreground">
+                {item.author.name}
+              </span>
+            ) : null}
             <Bubble variant="secondary" align="end">
               <BubbleContent className="whitespace-pre-wrap">
                 <span className="sr-only">Vous : </span>
@@ -170,7 +188,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <PageHeader>{title}</PageHeader>
+      <PageHeader actions={<Participants authors={participants(visible)} />}>{title}</PageHeader>
       <div className="flex min-h-0 w-full flex-1 flex-col">
         {connection.status === "reconnecting" ? (
           <p role="status" className="mx-auto w-full max-w-3xl px-4 pt-3 text-sm">
@@ -192,7 +210,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
             <MessageScroller aria-label="Conversation" role="log">
               <MessageScrollerViewport>
                 <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 px-4 py-4">
-                  {visible.map((item) => (
+                  {visible.map((item, index) => (
                     <MessageScrollerItem
                       key={item.key}
                       messageId={item.key}
@@ -203,6 +221,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
                         item={item}
                         projectId={projectId}
                         retryText={retryTarget?.key === item.key ? retryTarget.text : undefined}
+                        showAuthor={!sameAuthorAsPrevious(visible[index - 1], item)}
                       />
                     </MessageScrollerItem>
                   ))}
