@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.17.0](https://github.com/AristideWafo/Foreman/compare/v0.16.0...v0.17.0) (2026-10-20)
+
+
+### Features
+
+* API d'administration des équipes, membres, rôles et invitations ([#224](https://github.com/AristideWafo/Foreman/issues/224)) ([d1f21a8](https://github.com/AristideWafo/Foreman/commit/d1f21a8be8c0ecf3a600360191e2720b3fc2c610))
+* cloisonnement des projets par équipe ([#223](https://github.com/AristideWafo/Foreman/issues/223)) ([c3c8cae](https://github.com/AristideWafo/Foreman/commit/c3c8cae3588b8a9cffa15ce419ff397a6b7ffb9a))
+* comptes, sessions, invitations et invariants admin ([#221](https://github.com/AristideWafo/Foreman/issues/221)) ([b64ce37](https://github.com/AristideWafo/Foreman/commit/b64ce37919ee662f9b825e818d5b835b4227a90f))
+* **deploy:** mode session derrière Traefik, retrait du basicAuth ([#228](https://github.com/AristideWafo/Foreman/issues/228)) ([07ba988](https://github.com/AristideWafo/Foreman/commit/07ba988556198529bc1272d42bf46c0373ddf1a1))
+* **deploy:** mode session derrière Traefik, retrait du basicAuth ([#228](https://github.com/AristideWafo/Foreman/issues/228)) ([639ab23](https://github.com/AristideWafo/Foreman/commit/639ab231a914093875f83bf3f6ff818d8e9e561f))
+* **front:** page d'administration et sélecteur d'équipe ([#227](https://github.com/AristideWafo/Foreman/issues/227)) ([17c896d](https://github.com/AristideWafo/Foreman/commit/17c896d16da5f98d160acf703763adec74e16d3d))
+* **front:** page d'administration et sélecteur d'équipe ([#227](https://github.com/AristideWafo/Foreman/issues/227)) ([da011c9](https://github.com/AristideWafo/Foreman/commit/da011c98cb1d224b0a9750a11bbd92816f829d67))
+* mot de passe, sessions, CSRF et CLI admin ([#222](https://github.com/AristideWafo/Foreman/issues/222)) ([f476c82](https://github.com/AristideWafo/Foreman/commit/f476c82c71cbdf7f0f8f8dfb7a83f2f4b457087c))
+
 ## [0.16.0](https://github.com/AristideWafo/Foreman/compare/v0.15.0...v0.16.0) (2026-10-19)
 
 
