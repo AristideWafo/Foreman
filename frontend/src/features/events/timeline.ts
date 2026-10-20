@@ -1,7 +1,19 @@
 import type { CardData, ExecutionCardData, ProjectEvent } from "../../api/events";
 
+export interface Author {
+  id: string;
+  name: string;
+}
+
 export type TimelineItem =
-  | { key: string; kind: "message"; role: "user" | "assistant"; text: string }
+  | {
+      key: string;
+      kind: "message";
+      role: "user" | "assistant";
+      text: string;
+      /** Auteur des messages utilisateur récents ; absent pour l'assistant et l'ancien historique. */
+      author?: Author;
+    }
   | {
       key: string;
       kind: "card";
@@ -52,6 +64,28 @@ export function parseEvent(raw: string): ProjectEvent | null {
     // JSON invalide : ignoré.
   }
   return null;
+}
+
+function isAuthor(value: unknown): value is Author {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "id" in value &&
+    typeof value.id === "string" &&
+    "name" in value &&
+    typeof value.name === "string"
+  );
+}
+
+/** Auteurs distincts des messages, dans l'ordre de première apparition. */
+export function participants(items: readonly TimelineItem[]): Author[] {
+  const seen = new Map<string, Author>();
+  for (const item of items) {
+    if (item.kind === "message" && item.author && !seen.has(item.author.id)) {
+      seen.set(item.author.id, item.author);
+    }
+  }
+  return [...seen.values()];
 }
 
 function lastRunningTrace(items: TimelineItem[]): number {
@@ -126,7 +160,13 @@ function applyContent(state: TimelineState, event: ProjectEvent): TimelineState 
         ...state,
         items: [
           ...state.items,
-          { key, kind: "message", role: event.data.role, text: event.data.text },
+          {
+            key,
+            kind: "message",
+            role: event.data.role,
+            text: event.data.text,
+            ...(isAuthor(event.data.author) ? { author: event.data.author } : {}),
+          },
         ],
       };
     case "card": {
