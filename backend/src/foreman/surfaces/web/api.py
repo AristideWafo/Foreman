@@ -1,23 +1,29 @@
 """Routes de l'API (contrat figé v1)."""
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from typing import Annotated, Any, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import JsonValue
 
-from foreman.bootstrap.configure import App
+from foreman.bootstrap.configure import App, AuthMode
 from foreman.core.events import AnyEvent
 from foreman.core.execution.cards import execution_card
 from foreman.core.identity import Principal
 from foreman.core.ports import CapacityExceeded
 from foreman.core.projects import Project
-from foreman.core.store import ApprovalRefused, AwaitingAdmin
+from foreman.core.store import DEV_TEAM_ID, ApprovalRefused, AwaitingAdmin
 from foreman.core.turn import QuestionRefused, TurnInProgress, TurnRequest
-from foreman.surfaces.web.auth import make_current_principal
+from foreman.surfaces.web.auth import (
+    ProjectAccess,
+    make_current_principal,
+    make_project_access,
+    resolve_access,
+)
 from foreman.surfaces.web.errors import ApiError
 from foreman.surfaces.web.schemas import (
     AdminApprovalRequest,
@@ -32,6 +38,7 @@ from foreman.surfaces.web.schemas import (
     Me,
     MessageAccepted,
     MessageRequest,
+    MeTeam,
     PlanView,
     QuestionAccepted,
     QuestionAnswerRequest,
@@ -74,6 +81,9 @@ def _parse_last_event_id(value: str | None) -> int:
 
 
 KEEPALIVE_SECONDS = 15.0  # commentaire de maintien (utile derrière Traefik)
+# Un flux ouvert revérifie l'accès à cette cadence et se ferme s'il est perdu (membre retiré,
+# compte désactivé). Module-level : les tests la raccourcissent.
+ACCESS_RECHECK_SECONDS = 60.0
 
 
 class EventStreamResponse(StreamingResponse):
@@ -90,35 +100,58 @@ def _frame(event: AnyEvent) -> bytes:
 _REFUSALS: dict[str, int] = {"not_found": 404, "forbidden": 403}  # le reste : 409
 
 
+def _members_only(access: ProjectAccess) -> None:
+    """L'approbateur désigné voit le projet et décide en admin, rien d'autre : 404 opaque."""
+    if access.designated:
+        raise ApiError(404, "not_found")
+
+
 def _refused(refusal: ApprovalRefused) -> ApiError:
     return ApiError(_REFUSALS.get(refusal.reason, 409), refusal.reason)
 
 
 def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
     current_principal = make_current_principal(app)
+    project_access = make_project_access(app, current_principal)
     # Toute route de l'API exige une identité (401 en `proxy_header`) ; en `none`, c'est `dev`.
     router = APIRouter(prefix="/api", dependencies=[Depends(current_principal)])
     Caller = Annotated[Principal, Depends(current_principal)]
+    Access = Annotated[ProjectAccess, Depends(project_access)]
 
     @router.post("/projects", status_code=201, response_model=Project, responses=_ERRORS)
-    async def create_project(body: CreateProjectRequest | None = None) -> Project:
-        """Crée un projet. Le corps est facultatif (`title` vaut alors une chaîne vide)."""
+    async def create_project(caller: Caller, body: CreateProjectRequest | None = None) -> Project:
+        """Crée un projet. Le corps est facultatif (`title` vaut alors une chaîne vide).
+
+        `team_id` : équipe du projet, dont l'appelant doit être membre (404 sinon). Par défaut,
+        son équipe personnelle (en mode `session`) ou l'équipe de développement.
+        """
+        team_id = body.team_id if body and body.team_id else None
+        if team_id is None:
+            if app.auth_mode is AuthMode.SESSION:
+                team_id = await app.members.personal_team_of(caller.user_id)
+            else:
+                team_id = DEV_TEAM_ID
+        if team_id is None:
+            raise ApiError(422, "invalid_request")
+        if (
+            not await app.members.team_exists(team_id)
+            or await app.members.role_in(caller.user_id, team_id) is None
+        ):
+            raise ApiError(404, "not_found")  # équipe inconnue ou étrangère : indiscernables
         try:
-            return await app.projects.create(body.title if body else "")
+            return await app.projects.create(body.title if body else "", team_id, caller.user_id)
         except CapacityExceeded:
             raise ApiError(503, "capacity_exceeded") from None
 
     @router.get("/projects", response_model=list[Project], responses=_ERRORS)
-    async def list_projects() -> list[Project]:
-        """Projets connus du serveur, du plus récent au plus ancien."""
-        return await app.projects.list()
+    async def list_projects(caller: Caller) -> list[Project]:
+        """Projets des équipes de l'appelant (tous pour un `org_admin`), du plus récent au plus
+        ancien."""
+        return await app.projects.list(await app.members.teams_of(caller.user_id))
 
     @router.get("/projects/{project_id}", response_model=Project, responses=_ERRORS)
-    async def get_project(project_id: UUID) -> Project:
-        project = await app.projects.get(project_id)
-        if project is None:
-            raise ApiError(404, "not_found")
-        return project
+    async def get_project(access: Access) -> Project:
+        return access.project
 
     @router.post(
         "/projects/{project_id}/messages",
@@ -132,12 +165,10 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             },
         },
     )
-    async def post_message(
-        project_id: UUID, body: MessageRequest, caller: Caller
-    ) -> MessageAccepted:
+    async def post_message(body: MessageRequest, access: Access) -> MessageAccepted:
         """Un seul tour à la fois par projet : un second message pendant un tour renvoie 409."""
-        if await app.projects.get(project_id) is None:
-            raise ApiError(404, "not_found")
+        _members_only(access)
+        project_id, caller = access.project.id, access.principal
         try:
             turn_id = app.turns.begin(project_id)
         except TurnInProgress:
@@ -150,7 +181,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             raise
         return MessageAccepted(turn_id=turn_id)
 
-    async def stream(project_id: UUID, cursor: int) -> AsyncIterator[bytes]:
+    async def stream(project_id: UUID, caller: Principal, cursor: int) -> AsyncIterator[bytes]:
         # Inscription AVANT la lecture de l'historique : aucun trou entre le rejeu et le direct.
         try:
             subscription = app.events.subscribe(project_id)
@@ -163,9 +194,15 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
                 cursor = event.seq
                 yield _frame(event)
             # Un événement déjà rejoué peut aussi se trouver dans la file : on l'ignore (seq).
+            next_check = time.monotonic() + ACCESS_RECHECK_SECONDS
             while True:
+                if time.monotonic() >= next_check:
+                    if await resolve_access(app, caller, project_id) is None:
+                        return  # accès perdu : le flux se ferme (le client rouvre et reçoit 404)
+                    next_check = time.monotonic() + ACCESS_RECHECK_SECONDS
                 try:
-                    live = await asyncio.wait_for(subscription.next(), KEEPALIVE_SECONDS)
+                    wait = min(KEEPALIVE_SECONDS, ACCESS_RECHECK_SECONDS)
+                    live = await asyncio.wait_for(subscription.next(), wait)
                 except TimeoutError:
                     yield b": ping\n\n"
                     continue
@@ -191,17 +228,16 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         },
     )
     async def stream_events(
-        project_id: UUID,
+        access: Access,
         after: Annotated[int, Query(ge=0)] = 0,
         last_event_id: Annotated[str | None, Header()] = None,
     ) -> EventStreamResponse:
-        if await app.projects.get(project_id) is None:
-            raise ApiError(404, "not_found")
+        project_id = access.project.id
         if not app.events.has_subscriber_capacity(project_id):
             raise ApiError(503, "capacity_exceeded")
         cursor = max(after, _parse_last_event_id(last_event_id))
         return EventStreamResponse(
-            stream(project_id, cursor),
+            stream(project_id, access.principal, cursor),
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
@@ -240,7 +276,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         },
     )
     async def approve_plan(
-        project_id: UUID, plan_id: UUID, body: ApprovalRequest, response: Response, caller: Caller
+        plan_id: UUID, body: ApprovalRequest, response: Response, access: Access
     ) -> ApprovalAccepted | JSONResponse:
         """Le développeur valide son plan : l'approbation porte sur le hash affiché.
 
@@ -248,7 +284,9 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         """
         if app.approvals is None or app.engine is None:
             raise ApiError(501, "not_implemented")
-        result = await app.approvals.approve(project_id, plan_id, body.plan_hash, caller)
+        _members_only(access)
+        project_id = access.project.id
+        result = await app.approvals.approve(project_id, plan_id, body.plan_hash, access.principal)
         if isinstance(result, ApprovalRefused):
             raise _refused(result)
         if isinstance(result, AwaitingAdmin):
@@ -288,11 +326,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         },
     )
     async def admin_approve_plan(
-        project_id: UUID,
-        plan_id: UUID,
-        body: AdminApprovalRequest,
-        response: Response,
-        caller: Caller,
+        plan_id: UUID, body: AdminApprovalRequest, response: Response, access: Access
     ) -> ApprovalAccepted | JSONResponse:
         """Un administrateur approuve (crée l'exécution et la démarre) ou refuse un plan.
 
@@ -300,6 +334,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         """
         if app.approvals is None or app.engine is None:
             raise ApiError(501, "not_implemented")
+        project_id, caller = access.project.id, access.principal
         if body.decision == "rejected":
             rejected = await app.approvals.reject_admin(project_id, plan_id, body.plan_hash, caller)
             if isinstance(rejected, ApprovalRefused):
@@ -317,10 +352,20 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             approval_id=approved.approval_id, execution_id=approved.execution_id
         )
 
-    @router.get("/me", response_model=Me, responses=_ERRORS)
-    async def get_me(caller: Caller) -> Me:
-        """Identité de l'appelant, lue côté serveur (rôle : `FOREMAN_DEV_MEMBERS`)."""
-        return Me(user_id=str(caller.user_id), name=caller.name, role=caller.role)
+    @router.get("/me", response_model=Me, response_model_exclude_none=True, responses=_ERRORS)
+    async def get_me(caller: Caller, request: Request) -> Me:
+        """Identité de l'appelant, lue côté serveur (rôle : `FOREMAN_DEV_MEMBERS` ou compte)."""
+        teams: list[MeTeam] | None = None
+        if app.auth_mode is AuthMode.SESSION and app.accounts is not None:
+            found = (await app.accounts.memberships([caller.user_id])).get(caller.user_id, [])
+            teams = [MeTeam(id=m.team_id, name=m.team_name, role=m.role) for m in found]
+        return Me(
+            user_id=str(caller.user_id),
+            name=caller.name,
+            role=caller.role,
+            csrf_token=getattr(request.state, "csrf_token", None),
+            teams=teams,
+        )
 
     @router.post(
         "/projects/{project_id}/questions/{question_id}",
@@ -343,19 +388,15 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         },
     )
     async def answer_question(
-        project_id: UUID,
-        question_id: str,
-        body: QuestionAnswerRequest,
-        response: Response,
-        caller: Caller,
+        question_id: str, body: QuestionAnswerRequest, response: Response, access: Access
     ) -> QuestionAccepted:
         """Répond à une question de clarification (202, relance un tour) ou la reporte (200).
 
         La réponse doit être l'une des options de la question ; le message du tour est produit
         par le serveur à partir de ce choix. Un refus ne lance aucun tour ni ne cite la saisie.
         """
-        if await app.projects.get(project_id) is None:
-            raise ApiError(404, "not_found")
+        _members_only(access)
+        project_id, caller = access.project.id, access.principal
         try:
             outcome = await app.turns.resolve_question(
                 caller.user_id, project_id, question_id, body.decision, body.value
@@ -380,9 +421,9 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
     @router.get(
         "/projects/{project_id}/plans/{plan_id}", response_model=PlanView, responses=_ERRORS
     )
-    async def get_plan(project_id: UUID, plan_id: UUID) -> PlanView:
+    async def get_plan(plan_id: UUID, access: Access) -> PlanView:
         # Un plan d'un autre projet est introuvable (404), jamais interdit.
-        record = await app.stores.plans.get(project_id, plan_id)
+        record = await app.stores.plans.get(access.project.id, plan_id)
         if record is None:
             raise ApiError(404, "not_found")
         return PlanView(
@@ -401,8 +442,9 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         response_model=ExecutionView,
         responses=_ERRORS,
     )
-    async def get_execution(project_id: UUID, execution_id: UUID) -> ExecutionView:
+    async def get_execution(execution_id: UUID, access: Access) -> ExecutionView:
         """Vue reconstruite de l'état persisté (`elapsed_s` : connu de la carte vive seulement)."""
+        project_id = access.project.id
         if app.engine is None or app.catalog is None:
             raise ApiError(501, "not_implemented")
         execution = await app.stores.executions.get(project_id, execution_id)

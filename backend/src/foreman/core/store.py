@@ -12,6 +12,8 @@ from datetime import datetime
 from typing import Final, Literal, Protocol
 from uuid import UUID
 
+from foreman.core.ports import ProjectStore
+
 # Identités de développement (utilisateur `dev` du mode `none`) : fixes, upsert sûr.
 DEV_USER_ID: Final = UUID("00000000-0000-4000-8000-00000000d001")
 DEV_TEAM_ID: Final = UUID("00000000-0000-4000-8000-00000000d002")
@@ -506,3 +508,4 @@ class Stores:
     executions: ExecutionStore
     registry: ResourceRegistry
     audit: AuditLog
+    projects: ProjectStore

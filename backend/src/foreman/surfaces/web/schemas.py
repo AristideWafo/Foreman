@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from foreman.core.accounts import PASSWORD_MAX, PASSWORD_MIN
 from foreman.core.events import (
     Budget,
     ExecutionResult,
@@ -22,6 +23,7 @@ class CreateProjectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: Annotated[str, Field(max_length=120)] = ""
+    team_id: UUID | None = None
 
 
 class MessageRequest(BaseModel):
@@ -49,6 +51,11 @@ ErrorCode = Literal[
     "unauthenticated",
     "forbidden",
     "policy_denied",
+    "too_many_requests",
+    "last_admin",
+    "last_team_admin",
+    "invalid_invitation",
+    "conflict",
 ]
 
 
@@ -114,10 +121,36 @@ class AdminApprovalRequest(BaseModel):
     decision: Literal["approved", "rejected"]
 
 
+class MeTeam(BaseModel):
+    id: UUID
+    name: Annotated[str, Field(max_length=100)]
+    role: Role
+
+
 class Me(BaseModel):
     user_id: Annotated[str, Field(max_length=100)]
     name: Annotated[str, Field(max_length=100)]
     role: Role
+    # Seulement en mode `session` : à renvoyer dans `X-Foreman-CSRF` sur toute méthode non sûre.
+    csrf_token: Annotated[str | None, Field(max_length=100)] = None
+    # Seulement en mode `session` : équipes partagées de l'appelant.
+    teams: Annotated[list[MeTeam], Field(max_length=500)] | None = None
+
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: Annotated[str, Field(min_length=3, max_length=254)]
+    password: Annotated[str, Field(min_length=1, max_length=PASSWORD_MAX)]
+
+
+class AcceptInviteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: Annotated[str, Field(min_length=1, max_length=100)]
+    email: Annotated[str, Field(min_length=3, max_length=254)]
+    name: Annotated[str, Field(min_length=1, max_length=100)]
+    password: Annotated[str, Field(min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)]
 
 
 class HealthResponse(BaseModel):
@@ -157,3 +190,75 @@ class ExecutionView(BaseModel):
     steps: Annotated[list[ExecutionStepView], Field(max_length=20)]
     resources: Annotated[list[ResourceRef], Field(max_length=50)]
     result: ExecutionResult | None = None
+
+
+MemberRole = Literal["developer", "team_admin"]
+InvitedRole = Literal["developer", "team_admin", "org_admin"]
+Name = Annotated[str, Field(min_length=1, max_length=100)]
+
+
+class TeamView(BaseModel):
+    id: UUID
+    name: Name
+
+
+class CreateTeamRequest(BaseModel):
+    """Une équipe naît avec son premier team_admin (compte actif existant)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Name
+    first_admin_id: UUID
+
+
+class MembershipView(BaseModel):
+    team_id: UUID
+    team_name: Name
+    role: Role
+
+
+class UserView(BaseModel):
+    id: UUID
+    email: Annotated[str, Field(max_length=254)]
+    name: Name
+    disabled: bool
+    memberships: Annotated[list[MembershipView], Field(max_length=500)]
+
+
+class SetRoleRequest(BaseModel):
+    """Ajoute le membre à l'équipe ou change son rôle. Jamais `org_admin` ici."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: MemberRole
+
+
+class MoveProjectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    team_id: UUID
+
+
+class CreateInvitationRequest(BaseModel):
+    """`team_id` absent : invitation sans équipe (org_admin seulement). `org_admin` exige l'absence
+    d'équipe."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: Annotated[str, Field(min_length=3, max_length=254)]
+    role: InvitedRole
+    team_id: UUID | None = None
+
+
+class InvitationView(BaseModel):
+    id: UUID
+    email: Annotated[str, Field(max_length=254)]
+    team_id: UUID | None
+    role: Role
+    expires_at: AwareDatetime
+
+
+class InvitationCreated(InvitationView):
+    """Le lien contient le jeton : montré une seule fois, seul son condensat est stocké."""
+
+    link: Annotated[str, Field(max_length=500)]

@@ -9,4 +9,6 @@ class Project(BaseModel):
 
     id: UUID
     title: Annotated[str, Field(max_length=120)]
+    team_id: UUID
+    team_name: str
     created_at: AwareDatetime

@@ -246,6 +246,16 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
         "/api/projects/{project_id}/plans/{plan_id}/approvals",
         "/api/projects/{project_id}/plans/{plan_id}/admin-approvals",
         "/api/me",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/accept-invite",
+        "/api/admin/teams",
+        "/api/admin/users",
+        "/api/admin/teams/{team_id}/members/{user_id}",
+        "/api/admin/users/{user_id}/disable",
+        "/api/admin/projects/{project_id}/team",
+        "/api/admin/invitations",
+        "/api/admin/invitations/{invitation_id}",
         "/api/projects/{project_id}/executions/{execution_id}",
         "/api/projects/{project_id}/questions/{question_id}",
     }
@@ -267,7 +277,7 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
 
 def test_validation_errors_are_opaque_and_never_echo_the_input(client: TestClient) -> None:
     secret = "mot-de-passe-" + "x" * 4000
-    response = client.post(f"/api/projects/{uuid4()}/messages", json={"text": secret})
+    response = client.post(f"/api/projects/{real_project(client)}/messages", json={"text": secret})
     assert response.status_code == 422
     assert response.json() == {"error": "invalid_request"}
     assert "mot-de-passe" not in response.text
@@ -298,8 +308,13 @@ def test_project_creation_accepts_an_empty_body(client: TestClient) -> None:
     assert response.json()["title"] == ""
 
 
+def real_project(client: TestClient) -> str:
+    """Un projet existant : l'accès (404) est vérifié avant la validation du corps."""
+    return client.post("/api/projects").json()["id"]
+
+
 def test_negative_after_is_rejected(client: TestClient) -> None:
-    response = client.get(f"/api/projects/{uuid4()}/events?after=-1")
+    response = client.get(f"/api/projects/{real_project(client)}/events?after=-1")
     assert response.status_code == 422
     assert response.json() == {"error": "invalid_request"}
 
@@ -358,7 +373,8 @@ def test_unknown_plans_and_executions_are_opaque_404s(client: TestClient) -> Non
 def test_approval_body_is_validated_and_the_422_is_opaque(
     client: TestClient, body: dict[str, Any]
 ) -> None:
-    response = client.post(f"/api/projects/{OTHER}/plans/{PLAN}/approvals", json=body)
+    project = real_project(client)
+    response = client.post(f"/api/projects/{project}/plans/{PLAN}/approvals", json=body)
     assert response.status_code == 422
     assert response.json() == {"error": "invalid_request"}
 

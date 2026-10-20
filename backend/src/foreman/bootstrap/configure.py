@@ -4,6 +4,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Final
 
 from foreman.bootstrap.adapters import build_gateway
 from foreman.bootstrap.database import DatabaseLifecycle, Lifecycle, NoLifecycle
@@ -11,13 +12,18 @@ from foreman.config.env import (
     DEFAULT_AUTH_MODE,
     DEFAULT_ENVIRONMENT,
     DEFAULT_LOG_LEVEL,
+    DEFAULT_PUBLIC_URL,
     ENV_AUTH_MODE,
+    ENV_COOKIE_SECURE,
     ENV_DATABASE_URL,
     ENV_DEV_MEMBERS,
     ENV_ENVIRONMENT,
     ENV_LOG_LEVEL,
+    ENV_PUBLIC_URL,
 )
+from foreman.core.accounts import AccountStore
 from foreman.core.approval import ApprovalService
+from foreman.core.auth import AuthStore, PasswordHasher
 from foreman.core.catalog import Catalog
 from foreman.core.execution.engine import ExecutionEngine
 from foreman.core.gateway.port import Gateway
@@ -26,10 +32,11 @@ from foreman.core.planning import Planner
 from foreman.core.ports import EventLog, MemberStore, ProjectStore
 from foreman.core.store import DEV_USER_ID, DEV_USER_NAME, Stores
 from foreman.core.turn import TurnService
+from foreman.infra.db.accounts import PostgresAccountStore
+from foreman.infra.db.auth import PostgresAuthStore
 from foreman.infra.db.engine import make_engine
 from foreman.infra.db.events import PostgresEventLog
 from foreman.infra.db.members import PostgresMemberStore
-from foreman.infra.db.projects import PostgresProjectStore
 from foreman.infra.db.stores import postgres_stores
 from foreman.infra.file_catalog import catalog_dir_from_env, load_catalog
 from foreman.infra.in_memory import (
@@ -38,6 +45,7 @@ from foreman.infra.in_memory import (
     InMemoryProjectStore,
     in_memory_stores,
 )
+from foreman.infra.passwords import Argon2Hasher
 from foreman.infra.replay_provider import ReplayProvider
 
 
@@ -46,10 +54,11 @@ class Profile(StrEnum):
     CLI = "cli"
     WORKER = "worker"
     EVAL = "eval"
+    ADMIN = "admin"  # CLI `foreman admin ...` : écrit dans la base
 
 
 # Profils persistés en PostgreSQL quand l'URL est définie ; CLI et évaluations restent en mémoire.
-_PERSISTENT_PROFILES = frozenset({Profile.WEB, Profile.WORKER})
+_PERSISTENT_PROFILES = frozenset({Profile.WEB, Profile.WORKER, Profile.ADMIN})
 
 
 def _memory_stores() -> Stores:
@@ -59,6 +68,9 @@ def _memory_stores() -> Stores:
 class AuthMode(StrEnum):
     NONE = "none"  # utilisateur `dev` unique ; l'en-tête X-Forwarded-User est ignoré
     PROXY_HEADER = "proxy_header"  # identité posée par Traefik (basicAuth)
+    SESSION = (
+        "session"  # mot de passe + cookie de session (coexiste avec les deux autres, cf. #225)
+    )
 
 
 def parse_dev_members(raw: str) -> tuple[Member, ...]:
@@ -75,6 +87,13 @@ def parse_dev_members(raw: str) -> tuple[Member, ...]:
     return tuple(members.values())
 
 
+_DEV: Final = Member(DEV_USER_NAME, "developer", DEV_USER_ID)  # mode `none` : l'utilisateur `dev`
+
+
+def _dev_member_store() -> MemberStore:
+    return InMemoryMemberStore([_DEV])
+
+
 @dataclass(frozen=True, slots=True)
 class App:
     profile: Profile
@@ -88,9 +107,20 @@ class App:
     approvals: ApprovalService | None = None
     engine: ExecutionEngine | None = None
     persistence: str = "memory"  # « postgres » quand le stockage durable est branché
-    members: MemberStore = field(default_factory=InMemoryMemberStore)
+    members: MemberStore = field(default_factory=_dev_member_store)
     auth_mode: AuthMode = AuthMode.NONE
-    dev_members: tuple[Member, ...] = ()  # synchronisés dans `members` au démarrage
+    dev_members: tuple[Member, ...] = (_DEV,)  # synchronisés dans `members` au démarrage
+    accounts: AccountStore | None = None  # PostgreSQL seulement
+    auth: AuthStore | None = None
+    hasher: PasswordHasher = field(default_factory=Argon2Hasher)
+    cookie_secure: bool = True
+
+
+def invitation_link(token: str) -> str:
+    """Lien d'invitation, format unique (CLI et API). Le jeton est en fragment : absent des
+    journaux d'accès."""
+    base = os.environ.get(ENV_PUBLIC_URL, DEFAULT_PUBLIC_URL).rstrip("/")
+    return f"{base}/accept-invite#token={token}"
 
 
 def configure(profile: Profile) -> App:
@@ -116,15 +146,19 @@ def configure(profile: Profile) -> App:
     projects: ProjectStore
     members: MemberStore
     lifecycle: Lifecycle
+    accounts: AccountStore | None = None
+    auth: AuthStore | None = None
     persistence = "memory"
     url = os.environ.get(ENV_DATABASE_URL)
     if url and profile in _PERSISTENT_PROFILES:
         engine = make_engine(url)  # ne se connecte pas : les migrations viennent au démarrage
-        projects = PostgresProjectStore(engine)
         events = PostgresEventLog(engine)  # le chat survit au redémarrage
         stores = postgres_stores(engine)
+        projects = stores.projects
         lifecycle = DatabaseLifecycle(url, engine)
         members = PostgresMemberStore(engine)
+        accounts = PostgresAccountStore(engine)
+        auth = PostgresAuthStore(engine)
         persistence = "postgres"
     else:
         memory_projects = InMemoryProjectStore()
@@ -133,6 +167,8 @@ def configure(profile: Profile) -> App:
         stores = in_memory_stores(projects=memory_projects)[1]
         members = InMemoryMemberStore(dev_members)  # pas de démarrage asynchrone : déjà synchronisé
         lifecycle = NoLifecycle()
+    if (auth_mode is AuthMode.SESSION or profile is Profile.ADMIN) and auth is None:
+        raise ValueError(f"{ENV_DATABASE_URL} est obligatoire en mode {AuthMode.SESSION}")
     # 4. Services du cœur
     gateway = build_gateway(catalog, stores, members, durable_registry=persistence == "postgres")
     return App(
@@ -148,6 +184,9 @@ def configure(profile: Profile) -> App:
         members=members,
         auth_mode=auth_mode,
         dev_members=dev_members,
+        accounts=accounts,
+        auth=auth,
+        cookie_secure=os.environ.get(ENV_COOKIE_SECURE, "1") != "0",
         catalog=catalog,
         gateway=gateway,
         approvals=ApprovalService(catalog, stores, events, members),

@@ -1,15 +1,18 @@
 import {
+  ArrowRightStartOnRectangleIcon,
   Cog6ToothIcon,
   FolderIcon,
   HomeIcon,
   InformationCircleIcon,
   PlusIcon,
+  ShieldCheckIcon,
   ServerStackIcon,
   UserCircleIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
 import type { ComponentType, SVGProps } from "react";
 import { Link } from "react-router-dom";
+import { NativeSelect } from "@/components/NativeSelect";
 import { LinkButton } from "@/components/LinkButton";
 import { MemoryModeBadge } from "@/components/MemoryModeBadge";
 import { ROLE_LABELS, UserRoleBadge, type UserRole } from "@/components/UserRoleBadge";
@@ -30,6 +33,7 @@ import {
 export interface SidebarProject {
   id: string;
   title: string;
+  teamId: string;
 }
 
 interface AppSidebarProps {
@@ -37,10 +41,21 @@ interface AppSidebarProps {
   /** Projet ouvert (surligné), `null` sur l'accueil. */
   activeProjectId: string | null;
   homeActive: boolean;
+  /** Page d'administration ouverte. */
+  adminActive?: boolean;
   /** Le serveur n'a pas de base : badge d'avertissement en pied de panneau. */
   memoryMode?: boolean;
   /** Utilisateur courant (`/api/me`), `undefined` tant qu'il n'est pas connu. */
   me?: { name: string; role: UserRole };
+  /** Absent hors session : pas de bouton de déconnexion. */
+  onLogout?: () => void;
+  /** Aide visuelle : le serveur décide de l'accès à l'administration. */
+  canAdmin?: boolean;
+  /** Équipes de l'utilisateur ; le filtre n'apparaît qu'à partir de deux équipes. */
+  teams?: { id: string; name: string }[];
+  /** Équipe filtrée, `""` pour toutes. */
+  teamFilter?: string;
+  onTeamFilter?: (teamId: string) => void;
 }
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -81,8 +96,14 @@ export function AppSidebar({
   projects,
   activeProjectId,
   homeActive,
+  adminActive = false,
   memoryMode = false,
   me,
+  onLogout,
+  canAdmin = false,
+  teams = [],
+  teamFilter = "",
+  onTeamFilter,
 }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" className="overflow-hidden *:data-[sidebar=sidebar]:flex-row">
@@ -99,6 +120,14 @@ export function AppSidebar({
                 <RailItem label="Accueil" icon={HomeIcon} to="/" active={homeActive} />
                 <RailItem label="Projets" icon={FolderIcon} to="/" active={!homeActive} />
                 <RailItem label="Équipes" icon={UsersIcon} />
+                {canAdmin ? (
+                  <RailItem
+                    label="Administration"
+                    icon={ShieldCheckIcon}
+                    to="/admin"
+                    active={adminActive}
+                  />
+                ) : null}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -111,6 +140,18 @@ export function AppSidebar({
               label={me ? `${me.name}, ${ROLE_LABELS[me.role]}` : "Compte"}
               icon={UserCircleIcon}
             />
+            {onLogout ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip={{ children: "Se déconnecter", hidden: false }}
+                  className={RAIL_BUTTON}
+                  onClick={onLogout}
+                >
+                  <ArrowRightStartOnRectangleIcon />
+                  <span className="sr-only">Se déconnecter</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
@@ -129,6 +170,22 @@ export function AppSidebar({
               <PlusIcon />
               <span className="sr-only">Nouveau projet</span>
             </SidebarGroupAction>
+            {teams.length > 1 ? (
+              <div className="px-2 pb-2">
+                <NativeSelect
+                  aria-label="Filtrer par équipe"
+                  value={teamFilter}
+                  onChange={(e) => onTeamFilter?.(e.target.value)}
+                >
+                  <option value="">Toutes les équipes</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </div>
+            ) : null}
             <SidebarGroupContent>
               {projects.length === 0 ? (
                 <p className="px-2 py-1.5 text-sm">Aucun projet pour l'instant.</p>

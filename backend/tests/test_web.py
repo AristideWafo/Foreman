@@ -98,8 +98,9 @@ def test_me_is_the_dev_identity_and_a_developer_cannot_give_the_admin_approval()
         "name": "dev",
         "role": "developer",
     }
+    project = client.post("/api/projects").json()["id"]
     response = client.post(
-        f"/api/projects/{uuid4()}/plans/{uuid4()}/admin-approvals",
+        f"/api/projects/{project}/plans/{uuid4()}/admin-approvals",
         json={"plan_hash": "sha256:" + "a" * 64, "decision": "approved"},
     )
     assert (response.status_code, response.json()) == (403, {"error": "forbidden"})

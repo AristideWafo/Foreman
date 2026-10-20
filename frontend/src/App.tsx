@@ -1,4 +1,9 @@
-import { Route, Routes, useParams } from "react-router-dom";
+import { useEffect } from "react";
+import { Route, Routes, useNavigate, useParams } from "react-router-dom";
+import { setUnauthorizedHandler } from "./api/client";
+import { InvitePage } from "./features/auth/InvitePage";
+import { LoginPage } from "./features/auth/LoginPage";
+import { AdminPage } from "./features/admin/AdminPage";
 import { AppShell } from "./features/layout/AppShell";
 import { HomePage } from "./features/chat/HomePage";
 import { ProjectPage } from "./features/chat/ProjectPage";
@@ -24,10 +29,20 @@ function NotFoundPage() {
 }
 
 export function App() {
+  const navigate = useNavigate();
+  // Tout 401 renvoie vers la connexion.
+  useEffect(() => {
+    setUnauthorizedHandler(() => void navigate("/login", { replace: true }));
+    return () => setUnauthorizedHandler(null);
+  }, [navigate]);
   return (
     <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/invite/:token" element={<InvitePage />} />
+      <Route path="/accept-invite" element={<InvitePage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="/projects/:projectId" element={<ProjectRoute />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

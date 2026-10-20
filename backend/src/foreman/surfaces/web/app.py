@@ -12,9 +12,11 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
-from foreman.bootstrap.configure import App, Profile, configure
+from foreman.bootstrap.configure import App, AuthMode, Profile, configure
 from foreman.config.env import DEFAULT_VERSION, ENV_STATIC_DIR, ENV_VERSION
+from foreman.surfaces.web.admin_api import create_admin_router
 from foreman.surfaces.web.api import create_router
+from foreman.surfaces.web.auth_routes import create_auth_router
 from foreman.surfaces.web.errors import install_error_handlers
 from foreman.surfaces.web.openapi import install_event_schema
 from foreman.surfaces.web.schemas import HealthResponse
@@ -83,7 +85,16 @@ def create_app(app_state: App | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await state.lifecycle.start()  # migrations puis amorçage (profil web avec base)
-        await state.members.sync(state.dev_members)  # remplace : un nom retiré perd son rôle
+        # Remplace les membres amorcés, sauf si un compte à mot de passe existe (non destructeur).
+        await state.members.sync(state.dev_members)
+        if (
+            state.auth_mode is AuthMode.SESSION
+            and state.auth is not None
+            and not await state.auth.has_admin()
+        ):
+            logging.getLogger(__name__).warning(
+                "aucun administrateur : lancer `foreman admin create`"
+            )
         await resume_executions(state, tasks)
         await sweep_expired_plans(state)
         tasks.spawn(sweep_loop(state))
@@ -98,6 +109,8 @@ def create_app(app_state: App | None = None) -> FastAPI:
     api = FastAPI(title="Foreman", lifespan=lifespan)
     install_error_handlers(api)
     api.include_router(create_router(state, tasks))
+    api.include_router(create_auth_router(state))
+    api.include_router(create_admin_router(state))
     install_event_schema(api)
 
     @api.get("/healthz", response_model=HealthResponse)

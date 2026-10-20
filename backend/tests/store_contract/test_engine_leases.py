@@ -167,6 +167,7 @@ async def test_two_engines_run_each_step_once_and_a_dead_one_is_replaced(harness
         executions=DyingExecutionStore(harness.stores, die_at=2),  # type: ignore[arg-type]
         registry=harness.stores.registry,
         audit=harness.stores.audit,
+        projects=harness.stores.projects,
     )
     bench = await approved_execution(harness, dying_stores)
     with pytest.raises(WorkerKilled):
@@ -236,6 +237,7 @@ async def test_a_crash_after_the_reservation_blocks_and_never_calls_twice(
         executions=DyingExecutionStore(harness.stores, die_at=2, after_reserve=True),  # type: ignore[arg-type]
         registry=harness.stores.registry,
         audit=harness.stores.audit,
+        projects=harness.stores.projects,
     )
     bench = await approved_execution(harness, dying)
     with pytest.raises(WorkerKilled):
