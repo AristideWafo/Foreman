@@ -36,6 +36,10 @@ users = sa.Table(
     sa.Column("email", sa.Text, nullable=False, unique=True),
     sa.Column("name", sa.Text, nullable=False),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
+    sa.Column("password_hash", sa.Text, nullable=True),
+    sa.Column("disabled_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("invited_by", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True),
+    sa.Index("uq_users_email_lower", sa.func.lower(sa.column("email")), unique=True),
 )
 
 # Rôle par équipe, synchronisé au démarrage depuis FOREMAN_DEV_MEMBERS (voir infra/db/members.py).
@@ -56,6 +60,33 @@ teams = sa.Table(
     sa.Column(
         "admin_approval_required", sa.Boolean, nullable=False, server_default=sa.text("true")
     ),
+    sa.Column("personal", sa.Boolean, nullable=False, server_default=sa.text("false")),
+)
+
+# Seuls les condensats entrent en base (jeton de session, CSRF, jeton d'invitation).
+sessions = sa.Table(
+    "sessions",
+    metadata,
+    sa.Column("id_hash", sa.Text, primary_key=True),
+    sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+    sa.Column("csrf_hash", sa.Text, nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
+    sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Index("ix_sessions_user_id", "user_id"),
+)
+
+invitations = sa.Table(
+    "invitations",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_UUID_DEFAULT),
+    sa.Column("token_hash", sa.Text, nullable=False, unique=True),
+    sa.Column("email", sa.Text, nullable=False),
+    sa.Column("team_id", UUID(as_uuid=True), sa.ForeignKey("teams.id"), nullable=True),
+    sa.Column("role", sa.Text, nullable=False),
+    sa.Column("invited_by", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+    sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
+    sa.CheckConstraint(_in("role", ROLES), name="invitations_role"),
 )
 
 projects = sa.Table(
