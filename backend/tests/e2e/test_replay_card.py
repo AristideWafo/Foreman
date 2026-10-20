@@ -5,9 +5,8 @@ from uuid import UUID
 
 import httpx
 import pytest
-from s01_run import USER_MESSAGE, _wait_for
+from s01_run import ADMIN_HEADERS, DEV_HEADERS, USER_MESSAGE, _wait_for, configure_web
 
-from foreman.bootstrap.configure import Profile, configure
 from foreman.surfaces.web.app import create_app
 
 
@@ -17,9 +16,11 @@ def in_memory(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def test_a_replayed_request_succeeds_and_its_card_lists_the_existing_resources() -> None:
-    state = configure(Profile.WEB)
+    state = configure_web()
     transport = httpx.ASGITransport(app=create_app(state))
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test", headers=DEV_HEADERS
+    ) as client:
         project_id = UUID(
             (await client.post("/api/projects", json={"title": "Safe Eat"})).json()["id"]
         )
@@ -42,6 +43,7 @@ async def test_a_replayed_request_succeeds_and_its_card_lists_the_existing_resou
             approval = await client.post(
                 f"/api/projects/{project_id}/plans/{card.plan_id}/approvals",  # type: ignore[union-attr]
                 json={"plan_hash": card.plan_hash, "decision": "approved"},  # type: ignore[union-attr]
+                headers=ADMIN_HEADERS,
             )
             assert approval.status_code == 201
             await done

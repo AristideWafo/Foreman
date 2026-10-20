@@ -15,6 +15,7 @@ import { ResourceList } from "./ResourceList";
 import { FactList } from "./FactList";
 import { RETRYABLE_STATES, RetryPlan } from "./RetryPlan";
 import { StepList } from "./StepList";
+import { useProject } from "./useProject";
 import { usePlanApproval } from "./usePlanApproval";
 import {
   changeKindLabel,
@@ -117,7 +118,13 @@ export function PlanCard({
   const done = steps.filter((s) => s.status === "succeeded").length;
   const { plan_id: planId, plan_hash: planHash } = card;
   const stale = !execution && (card.status === "invalidated" || card.status === "expired");
-  const canApprove = !execution && card.approvable === true && card.status === "proposed";
+  const project = useProject(projectId);
+  // Le serveur dit si l'appelant peut valider dans CE projet ; inconnu : pas de bouton (le serveur tranche).
+  const canApprove =
+    !execution &&
+    card.approvable === true &&
+    card.status === "proposed" &&
+    project?.can_approve === true;
   const stack = Object.entries(card.stack ?? {});
   const skills = card.skills ?? [];
   const resources = card.expected_resources ?? [];

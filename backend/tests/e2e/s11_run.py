@@ -11,9 +11,9 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-from s01_run import USER_MESSAGE, _wait_for
+from s01_run import ADMIN_HEADERS, DEV_HEADERS, USER_MESSAGE, _wait_for, configure_web
 
-from foreman.bootstrap.configure import App, Profile, configure
+from foreman.bootstrap.configure import App
 from foreman.core.events import AnyEvent
 from foreman.core.store import ResourceRecord
 from foreman.surfaces.web.app import create_app
@@ -43,6 +43,7 @@ async def play_round(client: httpx.AsyncClient, state: App, project_id: UUID) ->
     approval = await client.post(
         f"/api/projects/{project_id}/plans/{card.plan_id}/approvals",  # type: ignore[union-attr]
         json={"plan_hash": card.plan_hash, "decision": "approved"},  # type: ignore[union-attr]
+        headers=ADMIN_HEADERS,
     )
     assert approval.status_code == 201
     await done
@@ -74,9 +75,11 @@ def snapshot_fakes(state: App) -> dict[str, Any]:
 
 async def run_s11() -> S11Run:
     """Joue S11 : S1 deux fois, avec le même message, sur le même projet."""
-    state = configure(Profile.WEB)
+    state = configure_web()
     transport = httpx.ASGITransport(app=create_app(state))
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test", headers=DEV_HEADERS
+    ) as client:
         project_id = UUID(
             (await client.post("/api/projects", json={"title": "Safe Eat"})).json()["id"]
         )

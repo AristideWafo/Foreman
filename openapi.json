@@ -2085,6 +2085,49 @@
         "title": "Project",
         "type": "object"
       },
+      "ProjectView": {
+        "description": "Projet vu par l'appelant : `can_approve` dit s'il peut valider un plan de ce projet.",
+        "properties": {
+          "can_approve": {
+            "title": "Can Approve",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "team_id": {
+            "format": "uuid",
+            "title": "Team Id",
+            "type": "string"
+          },
+          "team_name": {
+            "title": "Team Name",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 120,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "team_id",
+          "team_name",
+          "created_at",
+          "can_approve"
+        ],
+        "title": "ProjectView",
+        "type": "object"
+      },
       "QuestionAccepted": {
         "properties": {
           "question_id": {
@@ -3825,6 +3868,7 @@
     },
     "/api/projects/{project_id}": {
       "get": {
+        "description": "`can_approve` : l'appelant peut valider un plan de CE projet (calcul\u00e9 c\u00f4t\u00e9 serveur).",
         "operationId": "get_project_api_projects__project_id__get",
         "parameters": [
           {
@@ -3843,7 +3887,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Project"
+                  "$ref": "#/components/schemas/ProjectView"
                 }
               }
             },

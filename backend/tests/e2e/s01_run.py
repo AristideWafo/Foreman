@@ -5,6 +5,7 @@ rejouent EXACTEMENT la même chose, par l'API HTTP, avec le modèle rejoué et l
 """
 
 import asyncio
+import os
 import re
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -24,6 +25,19 @@ _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 _HEX32 = re.compile(r"^(approval-)?[0-9a-f]{32}$")  # `card_id` : brut ou préfixé
 
 
+DEV_HEADERS, ADMIN_HEADERS = {"X-Forwarded-User": "dev"}, {"X-Forwarded-User": "admin"}
+
+
+def configure_web() -> App:
+    """Web avec `dev` (développeur) et `admin` (team_admin) : seul l'admin valide (#248)."""
+    os.environ["FOREMAN_AUTH_MODE"] = "proxy_header"
+    os.environ["FOREMAN_DEV_MEMBERS"] = "dev:developer,admin:team_admin"
+    try:
+        return configure(Profile.WEB)
+    finally:
+        del os.environ["FOREMAN_AUTH_MODE"], os.environ["FOREMAN_DEV_MEMBERS"]
+
+
 async def _wait_for(events: EventLog, project_id: UUID, kind: str, field: str, value: str) -> None:
     subscription = events.subscribe(project_id)
     try:
@@ -39,9 +53,11 @@ async def _wait_for(events: EventLog, project_id: UUID, kind: str, field: str, v
 
 async def run_s01() -> tuple[App, UUID, list[AnyEvent]]:
     """Joue S1 : message, plan, approbation, exécution. Rend l'application, le projet, le flux."""
-    state = configure(Profile.WEB)
+    state = configure_web()
     transport = httpx.ASGITransport(app=create_app(state))
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test", headers=DEV_HEADERS
+    ) as client:
         project_id = UUID(
             (await client.post("/api/projects", json={"title": "Safe Eat"})).json()["id"]
         )
@@ -61,6 +77,7 @@ async def run_s01() -> tuple[App, UUID, list[AnyEvent]]:
         approval = await client.post(
             f"/api/projects/{project_id}/plans/{card.plan_id}/approvals",  # type: ignore[union-attr]
             json={"plan_hash": card.plan_hash, "decision": "approved"},  # type: ignore[union-attr]
+            headers=ADMIN_HEADERS,
         )
         assert approval.status_code == 201
         await done

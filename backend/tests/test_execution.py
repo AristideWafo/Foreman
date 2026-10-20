@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -26,7 +27,7 @@ from foreman.integrations.dns.simulated import SimulatedDns
 from foreman.integrations.gitlab.simulated import SimulatedGitLab
 from foreman.integrations.server.simulated import SimulatedServer
 from foreman.surfaces.web.app import create_app
-from support import DEV_PRINCIPAL, dev_members
+from support import ADMIN_PRINCIPAL, DEV_PRINCIPAL, dev_members
 
 ADAPTER_SECRET = "secret-adapter token=glpat-XXXXXXXXXXXXXXXXXXXX"  # noqa: S105 - valeur factice
 
@@ -46,10 +47,18 @@ async def wait_for(log: InMemoryEventLog, project_id: UUID, kind: str, **expecte
 
 
 async def test_approval_route_creates_one_execution_and_stays_opaque() -> None:
-    state = configure(Profile.WEB)
+    os.environ["FOREMAN_AUTH_MODE"] = "proxy_header"
+    os.environ["FOREMAN_DEV_MEMBERS"] = "dev:developer,admin:team_admin"
+    try:
+        state = configure(Profile.WEB)
+    finally:
+        del os.environ["FOREMAN_AUTH_MODE"], os.environ["FOREMAN_DEV_MEMBERS"]
     app = create_app(state)
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    dev, admin = {"X-Forwarded-User": "dev"}, {"X-Forwarded-User": "admin"}
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test", headers=dev
+    ) as client:
         project = (await client.post("/api/projects", json={})).json()["id"]
         other = (await client.post("/api/projects", json={})).json()["id"]
         pid = UUID(project)
@@ -64,19 +73,23 @@ async def test_approval_route_creates_one_execution_and_stays_opaque() -> None:
         base = f"/api/projects/{project}/plans/{card.plan_id}/approvals"
         good = {"plan_hash": card.plan_hash, "decision": "approved"}
 
-        bad_hash = await client.post(base, json={**good, "plan_hash": "sha256:" + "0" * 64})
+        denied = await client.post(base, json=good)  # un développeur ne valide pas : rien d'écrit
+        assert (denied.status_code, denied.json()) == (403, {"error": "forbidden"})
+        bad_hash = await client.post(
+            base, json={**good, "plan_hash": "sha256:" + "0" * 64}, headers=admin
+        )
         assert (bad_hash.status_code, bad_hash.json()) == (409, {"error": "plan_hash_mismatch"})
         foreign = await client.post(
-            f"/api/projects/{other}/plans/{card.plan_id}/approvals", json=good
+            f"/api/projects/{other}/plans/{card.plan_id}/approvals", json=good, headers=admin
         )
         assert (foreign.status_code, foreign.json()) == (404, {"error": "not_found"})
-        invalid = await client.post(base, json={**good, "decision": "rejected"})
+        invalid = await client.post(base, json={**good, "decision": "rejected"}, headers=admin)
         assert (invalid.status_code, invalid.json()) == (422, {"error": "invalid_request"})
 
         finished = asyncio.create_task(wait_for(state.events, pid, "card", state="succeeded"))
         await asyncio.sleep(0)
         first, second = await asyncio.gather(
-            client.post(base, json=good), client.post(base, json=good)
+            client.post(base, json=good, headers=admin), client.post(base, json=good, headers=admin)
         )
         assert sorted([first.status_code, second.status_code]) == [200, 201]
         assert first.json() == second.json()  # mêmes approval_id et execution_id
@@ -164,7 +177,7 @@ async def test_an_adapter_defect_blocks_the_execution_without_leaking_details(
         project, draft, DEV_USER_ID
     )
     approved = await ApprovalService(catalog, stores, events, dev_members()).approve(
-        project, record.id, record.content_hash, DEV_PRINCIPAL
+        project, record.id, record.content_hash, ADMIN_PRINCIPAL
     )
     assert isinstance(approved, Approved)
 
@@ -259,7 +272,7 @@ async def test_the_lease_is_renewed_during_a_long_call() -> None:
         project, draft, DEV_USER_ID
     )
     approved = await ApprovalService(catalog, stores, events, dev_members()).approve(
-        project, record.id, record.content_hash, DEV_PRINCIPAL
+        project, record.id, record.content_hash, ADMIN_PRINCIPAL
     )
     assert isinstance(approved, Approved)
     gateway = SlowGateway()
@@ -304,7 +317,7 @@ async def test_a_refused_approval_reissues_the_plan_card_from_the_stored_state()
         project, draft, DEV_USER_ID
     )  # expiré
     refused = await ApprovalService(catalog, stores, events, dev_members()).approve(
-        project, record.id, record.content_hash, DEV_PRINCIPAL
+        project, record.id, record.content_hash, ADMIN_PRINCIPAL
     )
     assert refused == ApprovalRefused("plan_not_approvable")
     cards = [e.data for e in await events.read_after(project, 0) if e.type == "card"]
@@ -345,7 +358,7 @@ async def test_a_production_plan_waits_for_an_admin_who_then_starts_the_executio
         project, draft, DEV_USER_ID
     )
     service = ApprovalService(catalog, stores, events, members)
-    pending = await service.approve(project, record.id, record.content_hash, DEV_PRINCIPAL)
+    pending = await service.approve(project, record.id, record.content_hash, ADMIN_PRINCIPAL)
     assert isinstance(pending, AwaitingAdmin)
     assert await stores.executions.list_resumable() == []  # aucune exécution n'a été créée
 
@@ -393,7 +406,7 @@ async def test_the_expiry_sweep_expires_a_pending_plan_once_and_emits_both_cards
     )
     clock = [now]
     service = ApprovalService(catalog, stores, events, dev_members(), clock=lambda: clock[0])
-    pending = await service.approve(project, record.id, record.content_hash, DEV_PRINCIPAL)
+    pending = await service.approve(project, record.id, record.content_hash, ADMIN_PRINCIPAL)
     assert isinstance(pending, AwaitingAdmin)
     assert await service.expire_due() == 0  # pas encore échu
     clock[0] = record.expires_at + timedelta(seconds=1)

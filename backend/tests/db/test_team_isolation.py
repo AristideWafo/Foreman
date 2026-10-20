@@ -36,6 +36,12 @@ PRODUCTION_PLAN = Draft(
         )
     ],
 )
+STAGING_PLAN = Draft(
+    title="Groupe",
+    summary="Un groupe",
+    environment="staging",
+    steps=PRODUCTION_PLAN.steps,
+)
 
 
 @dataclass
@@ -82,10 +88,12 @@ class World:
         assert response.status_code == 201
         return UUID(response.json()["id"])
 
-    async def plan(self, project: UUID, requester: Account) -> tuple[UUID, str]:
+    async def plan(
+        self, project: UUID, requester: Account, draft: Draft = PRODUCTION_PLAN
+    ) -> tuple[UUID, str]:
         assert self.state.catalog is not None
         planner = Planner(self.state.catalog, self.state.stores.plans, self.state.stores.registry)
-        record, _ = await planner.propose(project, PRODUCTION_PLAN, requester.id)
+        record, _ = await planner.propose(project, draft, requester.id)
         return record.id, record.content_hash
 
 
@@ -199,13 +207,17 @@ async def test_a_personal_plan_is_validated_by_the_inviter_with_fallbacks(world:
     first_plan, first_hash = await world.plan(first, user)
     body = {"plan_hash": first_hash, "decision": "approved"}
     base = f"/api/projects/{first}"
-    assert (
-        await user_client.post(f"{base}/plans/{first_plan}/approvals", json=body)
-    ).status_code == 202
+    own = await user_client.post(f"{base}/plans/{first_plan}/approvals", json=body)
+    assert (own.status_code, own.json()) == (403, {"error": "forbidden"})  # pas le propriétaire
     assert (await ops_client.get(base)).status_code == 200
     assert (await stranger_client.get(base)).status_code == 404
+    assert (
+        await ops_client.post(f"{base}/plans/{first_plan}/approvals", json=body)
+    ).status_code == 202  # l'approbateur désigné valide les deux étapes
+    assert (
+        await stranger_client.post(f"{base}/plans/{first_plan}/approvals", json=body)
+    ).status_code == 404
     for path, payload in (
-        (f"{base}/plans/{first_plan}/approvals", body),
         (f"{base}/messages", {"text": "x"}),
         (f"{base}/questions/q1", {"decision": "answer", "value": "x"}),
     ):
@@ -231,15 +243,16 @@ async def test_a_personal_plan_is_validated_by_the_inviter_with_fallbacks(world:
     plan_id, plan_hash = await world.plan(project, user)
     body = {"plan_hash": plan_hash, "decision": "approved"}
     base = f"/api/projects/{project}/plans/{plan_id}"
-    assert (await user_client.post(f"{base}/approvals", json=body)).status_code == 202
+    root_client = await world.client(root)
+    refused_own = await user_client.post(f"{base}/approvals", json=body)
+    assert (refused_own.status_code, refused_own.json()) == (403, {"error": "forbidden"})
+    assert (await root_client.post(f"{base}/approvals", json=body)).status_code == 202
     own = await user_client.post(f"{base}/admin-approvals", json=body)
     assert (own.status_code, own.json()) == (403, {"error": "forbidden"})
     other = await (await world.client(stranger)).post(f"{base}/admin-approvals", json=body)
     assert (other.status_code, other.json()) == (404, NOT_FOUND)  # pas même d'accès au projet
     # Les deux premiers inviteurs sont désactivés : l'ancêtre org_admin valide.
-    assert (
-        await (await world.client(root)).post(f"{base}/admin-approvals", json=body)
-    ).status_code == 201
+    assert (await root_client.post(f"{base}/admin-approvals", json=body)).status_code == 201
 
 
 async def test_an_org_admin_may_validate_their_own_plan_but_it_is_audited(world: World) -> None:
@@ -253,3 +266,30 @@ async def test_an_org_admin_may_validate_their_own_plan_but_it_is_audited(world:
     assert (await client.post(f"{base}/admin-approvals", json=body)).status_code == 201
     entries = await world.state.stores.audit.list_for_project(project)
     assert [e.decision for e in entries if e.tool == "plan.approve_admin"] == ["auto-validation"]
+
+
+async def test_a_developer_cannot_validate_their_own_personal_plan_even_in_staging(
+    world: World,
+) -> None:
+    """Régression #248 : en session, tout compte est team_admin de son équipe personnelle ; un
+    `developer` d'une équipe partagée y validait son plan, et en staging l'exécution partait."""
+    ops = await world.account("ops")
+    shared = await world.team("Shared", ops)
+    dev = await world.account("dev", invited_by=ops.id)
+    assert world.state.accounts is not None
+    await world.state.accounts.add_member(shared, dev.id, "developer", ops.id)
+    dev_client, ops_client = await world.client(dev), await world.client(ops)
+    project = await world.project(dev_client)  # équipe personnelle par défaut
+    plan_id, plan_hash = await world.plan(project, dev, STAGING_PLAN)
+    body = {"plan_hash": plan_hash, "decision": "approved"}
+    url = f"/api/projects/{project}/plans/{plan_id}/approvals"
+
+    refused = await dev_client.post(url, json=body)
+    assert (refused.status_code, refused.json()) == (403, {"error": "forbidden"})
+    plan = await world.state.stores.plans.get(project, plan_id)
+    assert plan is not None and plan.status == "proposed"
+    assert await world.state.stores.executions.list_resumable() == []
+    assert (await dev_client.get(f"/api/projects/{project}")).json()["can_approve"] is False
+
+    assert (await ops_client.get(f"/api/projects/{project}")).json()["can_approve"] is True
+    assert (await ops_client.post(url, json=body)).status_code == 201  # l'inviteur admin valide

@@ -17,6 +17,7 @@ from foreman.core.events import (
     StepStatus,
 )
 from foreman.core.identity import Role
+from foreman.core.projects import Project
 
 
 class CreateProjectRequest(BaseModel):
@@ -92,6 +93,12 @@ class ApprovalRequest(BaseModel):
 
     plan_hash: Sha256
     decision: Literal["approved"]
+
+
+class ProjectView(Project):
+    """Projet vu par l'appelant : `can_approve` dit s'il peut valider un plan de ce projet."""
+
+    can_approve: bool
 
 
 class ApprovalAccepted(BaseModel):

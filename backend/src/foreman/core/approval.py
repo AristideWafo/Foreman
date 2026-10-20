@@ -72,7 +72,7 @@ class ApprovalService:
         self, project_id: UUID, plan_id: UUID, plan_hash: str, approver: Principal
     ) -> ApprovalResult:
         """Validation du développeur. Lève `StoreError` si le stockage est indisponible."""
-        if approver.role not in self._catalog.policy.approvers.developer:
+        if not await self.may_validate(approver, project_id):
             return ApprovalRefused("forbidden")  # rien n'est écrit
         plan = await self._stores.plans.get(project_id, plan_id)
         if plan is None:
@@ -107,6 +107,19 @@ class ApprovalService:
         elif isinstance(result, ApprovalRefused) and result.reason != "not_found":
             await self._after_refusal(project_id, plan, content)
         return result
+
+    async def may_validate(self, approver: Principal, project_id: UUID) -> bool:
+        """Validation « développeur » : rôle de `approvers.developer` et, pour une équipe
+        personnelle, approbateur désigné (jamais son propriétaire, sauf `org_admin`)."""
+        if approver.role not in self._catalog.policy.approvers.developer:
+            return False
+        if approver.role == "org_admin":
+            return True
+        project = await self._stores.projects.get(project_id)
+        if project is None:
+            return False
+        designated = await self._members.designated_admins(project.team_id)
+        return designated is None or approver.user_id in designated
 
     async def approve_admin(
         self, project_id: UUID, plan_id: UUID, plan_hash: str, approver: Principal

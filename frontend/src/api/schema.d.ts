@@ -241,7 +241,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Project */
+        /**
+         * Get Project
+         * @description `can_approve` : l'appelant peut valider un plan de CE projet (calculé côté serveur).
+         */
         get: operations["get_project_api_projects__project_id__get"];
         put?: never;
         post?: never;
@@ -1303,6 +1306,33 @@ export interface components {
         };
         /** Project */
         Project: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Team Id
+             * Format: uuid
+             */
+            team_id: string;
+            /** Team Name */
+            team_name: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * ProjectView
+         * @description Projet vu par l'appelant : `can_approve` dit s'il peut valider un plan de ce projet.
+         */
+        ProjectView: {
+            /** Can Approve */
+            can_approve: boolean;
             /**
              * Created At
              * Format: date-time
@@ -2679,7 +2709,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Project"];
+                    "application/json": components["schemas"]["ProjectView"];
                 };
             };
             /** @description Non authentifié (`unauthenticated`) */

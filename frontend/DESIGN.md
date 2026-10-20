@@ -64,9 +64,12 @@ d'événements (évolution additive du contrat), pas un changement d'interface.
 
 ## Auteurs et participants (#241)
 
-Au-dessus d'un message utilisateur qui a un `author` : son nom en `text-[0.6875rem]`, `text-muted-foreground`,
-aligné sur la bulle, une seule fois par suite de messages du même auteur. Rien pour l'assistant ni l'ancien
-historique (sans `author`). À droite de l'en-tête du projet (`PageHeader actions`) : pastilles rondes `size-6`
+Tous les messages utilisateur restent à droite. Au-dessus de la bulle d'un message qui a un `author` : son nom en
+`text-[0.6875rem]`, `text-muted-foreground`, aligné à droite comme la bulle, une seule fois par suite de messages
+du même auteur. À droite de la bulle : la même pastille `size-6` (`AuthorAvatar`, décorative, le nom étant déjà
+écrit), en bas de la ligne, sur le premier message de la suite seulement ; les suivants du même auteur gardent
+une place vide de même largeur pour que les bulles restent alignées (comme un chat de groupe). Rien pour
+l'assistant ni l'ancien historique (sans `author`) : ni nom, ni pastille, ni place réservée. À droite de l'en-tête du projet (`PageHeader actions`) : pastilles rondes `size-6`
 d'initiales, nuance stable tirée de l'id parmi les jetons `chart-2` à `chart-5` (thème neutre, pas de couleur
 codée), 4 au plus puis « +N ». Nom au survol et au focus (`Tooltip`) et en `aria-label`. Participants déduits
 des messages du flux ; aucune pastille sans auteur connu.
