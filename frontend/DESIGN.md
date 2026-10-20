@@ -120,8 +120,7 @@ Composants partagés (`components/`) : `CardHeading` (en-tête de carte), `Colla
 
 Existants : shadcn (`Button`, `Card`, `Badge`, `Alert`, `Textarea`, `InputGroup`, `Sidebar`, `Tooltip`,
 `Separator`, `Collapsible`, `Skeleton`, `Sheet`, `ScrollArea`, `MessageScroller`, `Message`, `Bubble`,
-`Marker`, `Trace`, `ToggleGroup`) et applicatifs : `LinkButton`, `PageHeader`, `AppSidebar`, `MemoryModeBadge`, `UserRoleBadge`. À créer au besoin :
-`BrandLogo` (logos svgl). Une carte = un composant par `kind` dans `features/cards/`, avec repli.
+`Marker`, `Trace`, `ToggleGroup`) et applicatifs : `LinkButton`, `PageHeader`, `AppSidebar`, `MemoryModeBadge`, `UserRoleBadge`. `BrandLogo` (logos svgl), `ResourcePanel` (barre des ressources). Une carte = un composant par `kind` dans `features/cards/`, avec repli.
 
 ## Cartes de plan et d'exécution (Semaine 2)
 
@@ -240,6 +239,35 @@ le rôle sont alors dans l'infobulle de l'entrée « Compte » du rail. Aucune d
 
 Le résumé de l'exécution (« N ressources déjà présentes, aucune créée ») est écrit par le serveur et affiché tel quel
 dans « Résultat » ; le front n'applique aucune règle de décompte ni de wording.
+
+## Barre des ressources et résumé d'état (#250)
+
+À droite de l'écran projet, une `<aside aria-label="Ressources et état">` **flottante** (`fixed top-14 right-3 bottom-3 w-80`,
+`rounded-lg shadow-sm ring-1`, jetons `sidebar`), **non modale** et repliable. Bouton d'ouverture dans `PageHeader actions`
+(`Squares2X2Icon`, `aria-expanded`, `aria-controls`). État mémorisé dans `localStorage` (`foreman.resourcePanel`, essai/erreur),
+replié par défaut sous `lg` ; sur mobile, même contenu dans un `Sheet` à droite. Pas de second `SidebarProvider`.
+
+Contenu : deux `CollapsibleSection` dans un `ScrollArea`. **Résumé** (`role="status"`, `aria-live="polite"`, la liste n'est pas
+annoncée) : titre du plan, `Badge` environnement / statut du plan / état de l'exécution, étape en cours, nombre de ressources par
+statut, dernière ligne de journal. **Ressources** : logo de marque, nom (`ExternalLink` si l'API donne une URL), `fournisseur · type`,
+icône de statut. Tout est dérivé des événements déjà reçus (`projectStatus` dans `features/events/status.ts`), sans nouvelle route :
+dernier plan du projet et son exécution, jointure par `step`.
+
+| Statut     | Rendu                                                 | Libellé `sr-only` |
+| ---------- | ----------------------------------------------------- | ----------------- |
+| ciblée     | ligne grisée (`opacity-50 grayscale`), icône `…`      | Ciblée            |
+| en cours   | texte `font-medium`, `ArrowPathIcon` qui tourne       | En cours          |
+| créée      | couleur, `CheckCircleIcon` (`text-primary`)           | Créée             |
+| réutilisée | couleur, `CheckBadgeIcon` (`text-primary`)            | Déjà présente     |
+| en échec   | couleur, `ExclamationCircleIcon` (`text-destructive`) | En échec          |
+| annulée    | grisée et barrée, `ArrowUturnLeftIcon`                | Annulée           |
+
+Aucun texte de statut visible : l'icône, l'opacité et la couleur portent le sens, jamais la couleur seule. États vides : « Aucun plan
+pour l'instant. Les ressources apparaîtront ici. », « Ce plan ne crée aucune ressource. », `Skeleton` pendant la connexion.
+
+**Logos de marque** (`BrandLogo`, `components/brandLogos.ts`) : SVG svgl copiés dans `src/assets/logos/` (jamais de requête réseau),
+table type de ressource puis fournisseur -> logo ; repli Heroicons (`GlobeAltIcon`, `ServerIcon`, `CubeIcon`). Marques : GitLab
+(`gitlab_group`, `gitlab_project`), Docker (`server_project`, déploiement Compose). Le logo est décoratif (`alt=""`).
 
 ## Plan invalidé ou expiré (Semaine 6)
 

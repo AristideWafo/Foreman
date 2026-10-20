@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { describeError, postMessage } from "../../api/client";
+import { cn } from "cn";
 import { PageHeader } from "@/components/PageHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
@@ -19,10 +20,12 @@ import {
 import { Card } from "../cards/Card";
 import { RETRYABLE_STATES } from "../cards/RetryPlan";
 import { useProjectEvents } from "../events/useProjectEvents";
+import { projectStatus } from "../events/status";
 import { foldExecutions, participants, type TimelineItem } from "../events/timeline";
 import { useProjects } from "../projects/useProjects";
 import { MessageInput } from "./MessageInput";
 import { Participants } from "./Participants";
+import { useResourceAside } from "./ResourceAside";
 import { TurnTrace } from "./TurnTrace";
 import { useStaggered } from "./useStaggered";
 
@@ -137,6 +140,11 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   const { items: events, turnRunning, connection, retry } = useProjectEvents(projectId);
   const items = useMemo(() => foldExecutions(events), [events]);
   const retryTarget = useMemo(() => findRetry(items), [items]);
+  const status = useMemo(() => projectStatus(items), [items]);
+  const resources = useResourceAside(
+    status,
+    connection.status === "connecting" && items.length === 0,
+  );
   const visible = useStaggered(items, (previous) => (previous.kind === "trace" ? TRACE_MS : 450));
   const [draft, setDraft] = useState("");
   const firstMessage = useRef(readFirstMessage(location.state));
@@ -188,8 +196,18 @@ export function ProjectPage({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <PageHeader actions={<Participants authors={participants(visible)} />}>{title}</PageHeader>
-      <div className="flex min-h-0 w-full flex-1 flex-col">
+      <PageHeader
+        actions={
+          <>
+            <Participants authors={participants(visible)} />
+            {resources.button}
+          </>
+        }
+      >
+        {title}
+      </PageHeader>
+      {resources.aside}
+      <div className={cn("flex min-h-0 w-full flex-1 flex-col", resources.padded && "lg:pr-83")}>
         {connection.status === "reconnecting" ? (
           <p role="status" className="mx-auto w-full max-w-3xl px-4 pt-3 text-sm">
             Connexion interrompue, reconnexion en cours…
