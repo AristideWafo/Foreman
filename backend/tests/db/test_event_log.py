@@ -9,7 +9,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.engine import make_url
 
-from foreman.core.events import MessageData
+from foreman.core.events import MessageAuthor, MessageData
 from foreman.infra.db import tables as t
 from foreman.infra.db.engine import make_engine
 from foreman.infra.db.events import PostgresEventLog
@@ -108,3 +108,16 @@ async def test_event_time_does_not_depend_on_the_database_time_zone(
         await eng.dispose()
     assert read.at == event.at  # même instant (UTC+14 en session)
     assert read.at.utcoffset() is not None
+
+
+async def test_message_author_survives_the_journal_and_old_events_have_none(engine: Any) -> None:
+    project, turn, user = await new_project(engine), uuid4(), uuid4()
+    log = PostgresEventLog(engine)
+    authored = MessageData(role="user", text="a", author=MessageAuthor(id=user, name="alice"))
+    await log.append(project, turn, authored)
+    await log.append(project, turn, message("sans auteur"))  # historique d'avant #241
+    read = [e for e in await log.read_after(project, 0) if e.type == "message"]
+    assert [e.data.author and (e.data.author.id, e.data.author.name) for e in read] == [
+        (user, "alice"),
+        None,
+    ]

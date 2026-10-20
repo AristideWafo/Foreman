@@ -30,6 +30,7 @@ from foreman.core.events import (
     ClarificationQuestion,
     ErrorData,
     EventData,
+    MessageAuthor,
     MessageData,
     TurnStatusData,
 )
@@ -60,6 +61,7 @@ class TurnRequest:
     project_id: UUID
     message: str
     answer: QuestionAnswer | None = None
+    user_name: str | None = None  # nom affiché de l'auteur du message
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +186,7 @@ class TurnService:
         question_id: str,
         decision: Literal["answer", "defer"],
         value: str | None,
+        user_name: str | None = None,
     ) -> QuestionOutcome:
         """Répond à une question ou la reporte. Lève `QuestionRefused`, sans rien écrire.
 
@@ -216,6 +219,7 @@ class TurnService:
                 project_id=project_id,
                 message=answer_text(question.field, value),
                 answer=QuestionAnswer(question_id, value),
+                user_name=user_name,
             )
             handed_over = True  # la surface joue le tour ; `run` libère la réservation
             return QuestionOutcome(question_id, "answered", (request, turn_id))
@@ -247,7 +251,12 @@ class TurnService:
 
     async def _run(self, request: TurnRequest, turn_id: UUID) -> None:
         project_id = request.project_id
-        await self._emit(project_id, turn_id, MessageData(role="user", text=request.message))
+        author = (
+            MessageAuthor(id=request.user_id, name=request.user_name) if request.user_name else None
+        )
+        await self._emit(
+            project_id, turn_id, MessageData(role="user", text=request.message, author=author)
+        )
         await self._emit(project_id, turn_id, TurnStatusData(status="running"))
         if request.answer is not None:
             questions = await self._projects.get_open_questions(project_id)

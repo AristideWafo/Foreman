@@ -82,7 +82,8 @@ def normalize(events: list[AnyEvent]) -> list[dict[str, Any]]:
 
     def walk(value: Any, key: str = "") -> Any:
         if isinstance(value, dict):
-            return {k: walk(v, k) for k, v in value.items()}
+            # `author` : id du compte de dev, déjà constant ; ne décale pas la numérotation.
+            return {k: v if k == "author" else walk(v, k) for k, v in value.items()}
         if isinstance(value, list):
             return [walk(v, key) for v in value]
         if isinstance(value, str):

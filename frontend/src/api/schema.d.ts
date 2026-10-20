@@ -1105,8 +1105,20 @@ export interface components {
              */
             turn_id: string;
         };
+        /** MessageAuthor */
+        MessageAuthor: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** MessageData */
         MessageData: {
+            /** @default null */
+            author: components["schemas"]["MessageAuthor"] | null;
             /**
              * Role
              * @enum {string}

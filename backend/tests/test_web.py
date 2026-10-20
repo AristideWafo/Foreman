@@ -13,7 +13,7 @@ from foreman.core.clarification import answer_text
 from foreman.core.events import ClarificationQuestion
 from foreman.core.planning import Draft, DraftStep, Planner
 from foreman.core.ports import ConversationMessage, ModelReply, Provider
-from foreman.core.store import ADMIN_ROLES, DEV_USER_ID
+from foreman.core.store import ADMIN_ROLES, DEV_USER_ID, DEV_USER_NAME
 from foreman.core.turn import TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env, load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
@@ -131,13 +131,17 @@ async def test_project_lifecycle_and_a_turn_through_the_api() -> None:
         assert accepted.status_code == 202
         turn_id = accepted.json()["turn_id"]
         seen: list[str] = []
+        authors: list[object] = []
         async with asyncio.timeout(5):
             while event := await subscription.next():
                 seen.append(event.type)
+                if event.type == "message":
+                    authors.append(event.data.author and event.data.author.name)
                 assert str(event.turn_id) == turn_id
                 if event.type == "turn_status" and event.data.status == "completed":
                     break
     assert seen == ["message", "turn_status", "message", "card", "turn_status"]
+    assert authors == [DEV_USER_NAME, None]  # auteur sur le message utilisateur, pas l'assistant
 
 
 async def test_unknown_project_is_an_opaque_404() -> None:

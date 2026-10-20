@@ -1596,9 +1596,41 @@
         "title": "MessageAccepted",
         "type": "object"
       },
+      "MessageAuthor": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "MessageAuthor",
+        "type": "object"
+      },
       "MessageData": {
         "additionalProperties": false,
         "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageAuthor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "role": {
             "enum": [
               "user",

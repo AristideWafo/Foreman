@@ -8,7 +8,11 @@
     "type": "message",
     "data": {
       "role": "user",
-      "text": "Crée le projet Safe Eat : GitLab, puis déploiement en staging."
+      "text": "Crée le projet Safe Eat : GitLab, puis déploiement en staging.",
+      "author": {
+        "id": "00000000-0000-4000-8000-00000000d001",
+        "name": "dev"
+      }
     }
   },
   {
@@ -1874,7 +1878,11 @@
     "type": "message",
     "data": {
       "role": "user",
-      "text": "Crée le projet Safe Eat : GitLab, puis déploiement en staging."
+      "text": "Crée le projet Safe Eat : GitLab, puis déploiement en staging.",
+      "author": {
+        "id": "00000000-0000-4000-8000-00000000d001",
+        "name": "dev"
+      }
     }
   },
   {
