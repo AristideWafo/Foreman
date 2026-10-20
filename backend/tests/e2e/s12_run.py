@@ -16,11 +16,11 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-from s01_run import BASE_TIME, USER_MESSAGE, _wait_for
+from s01_run import BASE_TIME, USER_MESSAGE, _wait_for, configure_web
 from s10_run import USER_MESSAGE as PROD_MESSAGE
 
 from foreman.bootstrap.adapters import build_gateway
-from foreman.bootstrap.configure import App, Profile, configure
+from foreman.bootstrap.configure import App
 from foreman.core.approval import ApprovalService
 from foreman.core.catalog import Catalog
 from foreman.core.events import AnyEvent
@@ -66,7 +66,9 @@ def redeploy(state: App, catalog: Catalog, clock: Callable[[], datetime]) -> App
 
 def client_for(state: App) -> httpx.AsyncClient:
     return httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=create_app(state)), base_url="http://test"
+        transport=httpx.ASGITransport(app=create_app(state)),
+        base_url="http://test",
+        headers=HEADERS_DEV,
     )
 
 
@@ -100,7 +102,7 @@ async def approve_and_wait(
 ) -> httpx.Response:
     done = asyncio.create_task(_wait_for(state.events, project_id, "card", "state", "succeeded"))
     await asyncio.sleep(0)
-    response = await decide(client, project_id, card, {}, admin=False)
+    response = await decide(client, project_id, card, HEADERS_ADMIN, admin=False)
     if response.status_code == 201:
         await done
     else:
@@ -123,7 +125,7 @@ class ProjectChanged:
 
 
 async def run_project_changed() -> ProjectChanged:
-    initial = configure(Profile.WEB)
+    initial = configure_web()
     state = redeploy(initial, initial.catalog, Clock())  # type: ignore[arg-type]
     async with client_for(state) as client:
         project_id = UUID(
@@ -133,7 +135,7 @@ async def run_project_changed() -> ProjectChanged:
         v2 = await propose(client, state, project_id, USER_MESSAGE, {})
         v2_response = await approve_and_wait(client, state, project_id, v2)
         before = await state.events.read_after(project_id, 0)
-        v1_response = await decide(client, project_id, v1, {}, admin=False)
+        v1_response = await decide(client, project_id, v1, HEADERS_ADMIN, admin=False)
         v3 = await propose(client, state, project_id, USER_MESSAGE, {})
         v3_response = await approve_and_wait(client, state, project_id, v3)
     events = await state.events.read_after(project_id, 0)
@@ -162,12 +164,7 @@ def _changed_catalog(tmp_path: Path) -> Catalog:
 
 
 async def run_catalog_changed(tmp_path: Path) -> CatalogChanged:
-    os.environ["FOREMAN_AUTH_MODE"] = "proxy_header"
-    os.environ["FOREMAN_DEV_MEMBERS"] = "dev:developer,admin:team_admin"
-    try:
-        initial = configure(Profile.WEB)
-    finally:
-        del os.environ["FOREMAN_AUTH_MODE"], os.environ["FOREMAN_DEV_MEMBERS"]
+    initial = configure_web()
     clock = Clock()
     state = redeploy(initial, initial.catalog, clock)  # type: ignore[arg-type]
     async with client_for(state) as client:
@@ -177,7 +174,7 @@ async def run_catalog_changed(tmp_path: Path) -> CatalogChanged:
             ).json()["id"]
         )
         plan = await propose(client, state, project_id, PROD_MESSAGE, HEADERS_DEV)
-        dev_response = await decide(client, project_id, plan, HEADERS_DEV, admin=False)
+        dev_response = await decide(client, project_id, plan, HEADERS_ADMIN, admin=False)
     state = redeploy(state, _changed_catalog(tmp_path), clock)  # le référentiel a changé
     async with client_for(state) as client:
         admin_response = await decide(client, project_id, plan, HEADERS_ADMIN, admin=True)
@@ -197,7 +194,7 @@ class Expired:
 
 
 async def run_expired() -> Expired:
-    initial = configure(Profile.WEB)
+    initial = configure_web()
     clock = Clock()
     state = redeploy(initial, initial.catalog, clock)  # type: ignore[arg-type]
     async with client_for(state) as client:
@@ -208,7 +205,9 @@ async def run_expired() -> Expired:
         clock.advance(timedelta(hours=24, seconds=1))
         swept = await state.stores.plans.expire_due(clock())
         record = await state.stores.plans.get(project_id, plan.plan_id)
-        response = await decide(client, project_id, plan, {}, admin=False)
-        await decide(client, project_id, plan, {}, admin=False)  # rejeu : aucune carte de plus
+        response = await decide(client, project_id, plan, HEADERS_ADMIN, admin=False)
+        await decide(
+            client, project_id, plan, HEADERS_ADMIN, admin=False
+        )  # rejeu : aucune carte de plus
     events = await state.events.read_after(project_id, 0)
     return Expired(state, project_id, plan, swept, record.status, response, events)  # type: ignore[union-attr]

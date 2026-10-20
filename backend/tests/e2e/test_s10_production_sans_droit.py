@@ -37,6 +37,10 @@ async def test_s10_production_needs_an_admin_and_runs_at_level_2_in_the_requeste
     assert plan.skills in (None, [])
 
     # 2. Validation du développeur : 202, aucune exécution, plan validé, approbation pending R7.
+    assert (
+        run.dev_validation_attempt.status_code == 403
+    )  # le développeur ne valide pas : rien d'écrit
+    assert run.after_dev_validation_attempt == run.after_plan
     assert run.dev_approval.status_code == 202
     assert run.dev_approval.json()["status"] == "approval_required"
     assert run.executions_after_dev_approval == []

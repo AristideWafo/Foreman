@@ -1,5 +1,7 @@
 """Aides communes aux tests : un planificateur réel sur le catalogue du dépôt et la mémoire."""
 
+from uuid import UUID
+
 from foreman.core.identity import Member, Principal
 from foreman.core.planning import Planner
 from foreman.core.ports import ConversationMessage
@@ -20,6 +22,9 @@ def user(*texts: str) -> list[ConversationMessage]:
 
 
 DEV_PRINCIPAL = Principal(user_id=DEV_USER_ID, name="dev", role="developer")
+
+# Seuls team_admin et org_admin valident un plan (#248) : les tests valident avec cet admin.
+ADMIN_PRINCIPAL = Principal(user_id=UUID(int=0xAD), name="admin", role="team_admin")
 
 
 def dev_members() -> InMemoryMemberStore:

@@ -10,7 +10,7 @@
       "role": "user",
       "text": "Crée le projet Safe Eat : GitLab, puis déploiement en staging.",
       "author": {
-        "id": "00000000-0000-4000-8000-00000000d001",
+        "id": "abdc4c56-a3a4-5431-930f-df1c5d075686",
         "name": "dev"
       }
     }
@@ -206,7 +206,7 @@
       "role": "user",
       "text": "Crée le projet Safe Eat : GitLab, puis déploiement en staging.",
       "author": {
-        "id": "00000000-0000-4000-8000-00000000d001",
+        "id": "abdc4c56-a3a4-5431-930f-df1c5d075686",
         "name": "dev"
       }
     }
@@ -2238,7 +2238,7 @@
       "role": "user",
       "text": "Crée le projet Safe Eat : GitLab, puis déploiement en staging.",
       "author": {
-        "id": "00000000-0000-4000-8000-00000000d001",
+        "id": "abdc4c56-a3a4-5431-930f-df1c5d075686",
         "name": "dev"
       }
     }

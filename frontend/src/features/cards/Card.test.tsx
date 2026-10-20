@@ -136,9 +136,10 @@ test.each([201, 200])("« Valider le plan » : le statut %i est un succès", asy
   fireEvent.click(screen.getByRole("button", { name: "Valider le plan" }));
   expect(await screen.findByRole("status")).toHaveTextContent("Plan validé");
   expect(screen.queryByRole("button", { name: "Valider le plan" })).toBeNull();
-  expect(fake.calls).toHaveLength(1);
-  expect(fake.calls[0]?.url).toBe(`/api/projects/${PROJECT_ID}/plans/${PLAN_ID}/approvals`);
-  expect(JSON.parse(String(fake.calls[0]?.init?.body))).toEqual({
+  const posts = fake.calls.filter((call) => call.init?.method === "POST"); // hors /api/me
+  expect(posts).toHaveLength(1);
+  expect(posts[0]?.url).toBe(`/api/projects/${PROJECT_ID}/plans/${PLAN_ID}/approvals`);
+  expect(JSON.parse(String(posts[0]?.init?.body))).toEqual({
     plan_hash: PLAN_HASH,
     decision: "approved",
   });

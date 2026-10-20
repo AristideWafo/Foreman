@@ -390,7 +390,7 @@ def test_admin_approval_over_http_approves_then_replays_and_a_rejection_invalida
             pending = client.post(
                 f"{base}/{record.id}/approvals",
                 json={"plan_hash": record.content_hash, "decision": "approved"},
-                headers=dev,
+                headers=admin,
             )
             assert pending.status_code == 202
 

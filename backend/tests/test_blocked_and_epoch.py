@@ -18,7 +18,7 @@ from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_m
 from foreman.integrations.dns.simulated import SimulatedDns
 from foreman.integrations.gitlab.simulated import SimulatedGitLab
 from foreman.integrations.server.simulated import SimulatedServer
-from support import DEV_PRINCIPAL, dev_members
+from support import ADMIN_PRINCIPAL, dev_members
 
 REF = {"$from": {"step": 1, "field": "group_id"}}
 
@@ -86,7 +86,7 @@ async def run_plan(
         project, draft, DEV_USER_ID
     )
     approved = await ApprovalService(catalog(), stores, events, dev_members()).approve(
-        project, record.id, record.content_hash, DEV_PRINCIPAL
+        project, record.id, record.content_hash, ADMIN_PRINCIPAL
     )
     assert isinstance(approved, Approved)
     await engine.run(project, approved.execution_id)

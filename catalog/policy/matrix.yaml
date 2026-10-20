@@ -15,8 +15,9 @@ default: deny
 roles: [developer, team_admin, org_admin]
 
 # Qui peut donner chaque approbation (le front lit cette liste, il ne la code pas en dur).
+# Un développeur ne valide aucun plan, pas même le sien : seuls team_admin et org_admin (#248).
 approvers:
-  developer: [developer, team_admin, org_admin]
+  developer: [team_admin, org_admin]
   admin: [team_admin, org_admin]
 
 autonomy:
