@@ -83,7 +83,9 @@ def test_dry_run_with_project_and_db() -> None:
 )
 class TestRenderedCompose:
     @staticmethod
-    def render(tmp_path: Path, *, profile: str = "") -> dict[str, dict[str, object]]:
+    def render(
+        tmp_path: Path, *, profile: str = "", basic_auth: bool = True
+    ) -> dict[str, dict[str, object]]:
         (tmp_path / "compose.yaml").write_text(COMPOSE.read_text())
         (tmp_path / ".env").write_text("")
         env = {
@@ -91,9 +93,10 @@ class TestRenderedCompose:
             "PROJECT": "mon-app",
             "FOREMAN_IMAGE": IMAGE,
             "FOREMAN_DOMAIN": "mon-app.example.com",
-            "FOREMAN_BASIC_AUTH_USERS": AUTH,
             "COMPOSE_PROFILES": profile,
         }
+        if basic_auth:  # retour arrière ; absent en mode session
+            env["FOREMAN_BASIC_AUTH_USERS"] = AUTH
         if profile == "db":  # sans profil, POSTGRES_PASSWORD ne doit pas être exigé
             env.update({"POSTGRES_PASSWORD": "test"})
         out = subprocess.run(
@@ -132,6 +135,12 @@ class TestRenderedCompose:
         assert app["read_only"] is True
         assert app["cap_drop"] == ["ALL"]
         assert "ports" not in app
+
+    def test_session_mode_attaches_no_basic_auth(self, tmp_path: Path) -> None:
+        labels = self.render(tmp_path, basic_auth=False)["services"]["app"]["labels"]
+        main = labels["traefik.http.routers.mon-app.middlewares"].split(",")
+        assert main == ["mon-app-headers", "mon-app-compress"]
+        assert labels["traefik.http.routers.mon-app-http.middlewares"] == "mon-app-redirect"
 
     def test_the_whole_site_is_behind_basic_auth_except_healthz(self, tmp_path: Path) -> None:
         labels = self.render(tmp_path)["services"]["app"]["labels"]
@@ -225,6 +234,42 @@ def test_script_accepts_hashed_credentials(tmp_path: Path, auth_line: str) -> No
     result = run_deploy(tmp_path, BASE_ENV + auth_line)
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "opt" / "mon-app" / ".current-image").read_text().strip() == IMAGE
+
+
+SESSION_ENV = (
+    BASE_ENV
+    + "FOREMAN_AUTH_MODE=session\nFOREMAN_PUBLIC_URL=https://mon-app.example.com\n"
+    + "FORWARDED_ALLOW_IPS=172.18.0.0/16\n"
+)
+
+
+def test_session_mode_needs_no_basic_auth(tmp_path: Path) -> None:
+    result = run_deploy(tmp_path, SESSION_ENV)
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "opt" / "mon-app" / ".current-image").exists()
+
+
+@pytest.mark.parametrize(
+    "replace",
+    [
+        ("FOREMAN_PUBLIC_URL=https://mon-app.example.com\n", ""),
+        ("https://mon-app", "http://mon-app"),
+        ("FORWARDED_ALLOW_IPS=172.18.0.0/16\n", ""),
+        ("FORWARDED_ALLOW_IPS=172.18.0.0/16\n", "FORWARDED_ALLOW_IPS=*\n"),
+        (
+            "FORWARDED_ALLOW_IPS=172.18.0.0/16\n",
+            "FORWARDED_ALLOW_IPS=172.18.0.0/16\nFOREMAN_COOKIE_SECURE=0\n",
+        ),
+        (
+            "FORWARDED_ALLOW_IPS=172.18.0.0/16\n",
+            "FORWARDED_ALLOW_IPS=172.18.0.0/16\nFOREMAN_BASIC_AUTH_USERS='a:$apr1$s$h'\n",
+        ),
+    ],
+)
+def test_session_mode_refuses_unsafe_config(tmp_path: Path, replace: tuple[str, str]) -> None:
+    result = run_deploy(tmp_path, SESSION_ENV.replace(*replace))
+    assert result.returncode == 66
+    assert not (tmp_path / "opt" / "mon-app" / ".current-image").exists()
 
 
 SECRET = "secretdetest"  # noqa: S105

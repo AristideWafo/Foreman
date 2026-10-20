@@ -51,15 +51,80 @@ Un verrou empêche deux déploiements simultanés d'un même projet.
   journaux (10 Mo × 3). Valeurs modifiables dans `.env` (voir `.env.deploy.example`) ; cAdvisor et Grafana les voient
   sans configuration supplémentaire.
 
-**Protéger l'accès (obligatoire).** Tout le site, flux SSE compris, est derrière une authentification HTTP
-(`basicAuth` Traefik) ; seul `/healthz` reste public (supervision et vérification du déploiement). Sans
-`FOREMAN_BASIC_AUTH_USERS` dans `/opt/<projet>/.env`, `deploy-custom.sh` et `docker compose` refusent de
-déployer : le site ne peut pas être publié ouvert par oubli. Un mot de passe en clair est refusé aussi.
+**Authentification : mode session (#228).** L'application authentifie elle-même (mot de passe, cookie
+`HttpOnly; Secure; SameSite=Lax`, CSRF par en-tête `X-Foreman-CSRF`). Traefik ne pose plus de basicAuth ; il garde
+HTTPS, la redirection, les en-têtes de sécurité et la compression. `/healthz` reste public. Dans `/opt/<projet>/.env` :
 
-**Ouvrir le site (déconseillé, choix explicite).** Pour retirer l'authentification de façon durable (elle
-revient sinon à chaque déploiement), ajouter dans `/opt/<projet>/.env` la ligne `FOREMAN_AUTH_PREFIX=`
-(définie et vide). L'application est alors joignable par tout internet : à réserver à un essai, avec
-`FOREMAN_AUTH_MODE=none`. Pour remettre la protection, supprimer cette ligne et redéployer.
+```
+FOREMAN_AUTH_MODE=session
+FOREMAN_PUBLIC_URL=https://<domaine>          # base des liens d'invitation (…/accept-invite#token=…)
+FORWARDED_ALLOW_IPS=<sous-réseau du réseau Traefik>   # ex. 172.18.0.0/16
+```
+
+et **aucune** ligne `FOREMAN_BASIC_AUTH_USERS`. `FOREMAN_COOKIE_SECURE` reste à sa valeur par défaut (actif).
+`FOREMAN_DATABASE_URL` est obligatoire (`--with-db`). `deploy-custom.sh` refuse le déploiement si, en mode session,
+`FOREMAN_PUBLIC_URL` n'est pas en `https://`, si `FORWARDED_ALLOW_IPS` est absent, `*` ou `127.0.0.1`, si
+`FOREMAN_COOKIE_SECURE=0`, ou si `FOREMAN_BASIC_AUTH_USERS` est encore défini (double authentification). Hors mode
+session (`proxy_header`, `none`), le basicAuth reste **obligatoire** : le site ne peut pas être publié ouvert par oubli.
+
+- **IP réelle et rate-limit.** Uvicorn n'accorde sa confiance qu'à `127.0.0.1` pour `X-Forwarded-For`
+  (`FORWARDED_ALLOW_IPS`, lu nativement par uvicorn, aucun changement d'image). Sans le sous-réseau de Traefik, tous
+  les clients partageraient l'IP de Traefik et donc une seule clé de limitation. Trouver le sous-réseau :
+  `docker network inspect <TRAEFIK_NETWORK> --format '{{(index .IPAM.Config 0).Subnet}}'`. Ne jamais mettre `*`.
+- **CSRF et Origin.** Traefik transmet le `Host` d'origine ; l'`Origin` du navigateur est comparé à ce `Host`
+  (le schéma peut être terminé en amont). Aucun réglage supplémentaire tant que Traefik reste le seul point d'entrée.
+- **SSE.** Le flux (GET) n'est plus authentifié par Traefik mais par le cookie de session. Aucun middleware de
+  buffering n'est ajouté. **#105 (flux SSE derrière Traefik) reste à vérifier** sur le serveur.
+- **`FOREMAN_DEV_MEMBERS`** n'est plus qu'un **amorçage** (migration `0003`, mode `proxy_header`) : en mode session, les
+  équipes, membres, rôles et invitations se gèrent depuis `/admin` et la CLI. Plus aucune variable d'environnement à
+  modifier pour gérer les membres.
+
+### Procédure pas à pas (propriétaire)
+
+1. **Sauvegarde AVANT la migration `0006`** (comptes, sessions, invitations) :
+
+   ```bash
+   cd /opt/<projet>
+   docker compose -p <projet> exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > ~/avant-0006-$(date +%F).dump
+   ```
+
+   Copier ce dump hors du serveur. Le dump automatique de `deploy-custom.sh` existe aussi, mais celui-ci est nommé et conservé.
+2. **Recopier** `deploy-custom.sh` et `compose.custom.yaml` sur le serveur (non synchronisés, voir « Limite connue »).
+3. **Éditer `/opt/<projet>/.env`** : ajouter les trois variables ci-dessus et **supprimer** `FOREMAN_BASIC_AUTH_USERS`
+   (garder l'ancienne ligne dans un coffre pour le retour arrière, jamais dans le dépôt).
+4. **Déployer** (merge sur `prod`, ou **Deploy** manuel avec un SHA). La migration `0006` s'applique au démarrage.
+5. **Créer le premier administrateur** (sur le serveur ; le lien s'affiche sur la sortie standard, jamais dans les journaux) :
+
+   ```bash
+   cd /opt/<projet>
+   docker compose -p <projet> exec app foreman admin create --email wafoaristide@gmail.com
+   ```
+
+6. **Ouvrir le lien** (valable 1 h) dans le navigateur, **définir le mot de passe**, se connecter.
+7. Depuis **/admin** : créer les équipes, inviter les membres (lien d'invitation à transmettre hors bande), régler les rôles.
+
+### Retour arrière (tant que le mode `proxy_header` existe, jusqu'à #225)
+
+Le retour d'image seul ne suffit pas : l'ancienne image ne démarre plus après `0006` (révision inconnue). Dans l'ordre :
+arrêter `app`, restaurer le dump d'avant `0006` (procédure « Retour arrière après une migration » plus bas), puis dans `.env`
+remplacer les trois variables par `FOREMAN_AUTH_MODE=proxy_header`, `FOREMAN_DEV_MEMBERS=…` et la ligne
+`FOREMAN_BASIC_AUTH_USERS='utilisateur:empreinte'` (génération : `read -rs -p "Mot de passe : " PW; echo` puis
+`printf "FOREMAN_BASIC_AUTH_USERS='admin:%s'\n" "$(openssl passwd -apr1 "$PW")" >> /opt/<projet>/.env; unset PW`),
+et redéployer l'ancienne image. Le middleware basicAuth se rattache seul au routeur dès que `FOREMAN_BASIC_AUTH_USERS`
+est défini (et `headerfield` écrase `X-Forwarded-User`, voir plus bas). Les comptes créés depuis `/admin` sont perdus avec le dump.
+
+### Vérifications après déploiement (à noter dans le ticket #228)
+
+1. `https://<domaine>/` charge en HTTPS ; `http://` redirige vers HTTPS ; connexion réussie avec le compte administrateur.
+2. Cookie `foreman_session` présent avec `Secure`, `HttpOnly` et `SameSite=Lax` (outils du navigateur, onglet Stockage).
+3. Sans cookie, `curl -s -o /dev/null -w '%{http_code}' https://<domaine>/api/projects` répond `401` ; un `POST` avec le cookie
+   mais sans `X-Foreman-CSRF` (ou avec un `Origin` étranger) répond `403`.
+4. Flux SSE : un message du chat affiche les événements au fil de l'eau (pas par paquets) ; clôt #105 si c'est le cas.
+5. Rate-limit par IP réelle : après dépassement du seuil de tentatives de connexion depuis une IP, une **autre** IP n'est pas
+   bloquée (sinon `FORWARDED_ALLOW_IPS` est mal réglé : `request.client` vaut l'IP de Traefik).
+6. `https://<domaine>/healthz` répond sans authentification (`persistence: postgres`).
+
+### Mode proxy_header (retour arrière, obsolète)
 
 1. Sur le serveur, générer l'empreinte (le mot de passe ne s'affiche pas et n'entre pas dans l'historique) :
 
@@ -117,14 +182,14 @@ revient sinon à chaque déploiement), ajouter dans `/opt/<projet>/.env` la lign
 Le navigateur renvoie lui-même les identifiants au flux d'événements (même domaine). L'en-tête
 `Authorization` est retiré par Traefik avant d'atteindre l'application. L'empreinte (pas le mot de passe) se
 retrouve dans l'environnement du conteneur, puisque le `.env` entier est transmis ; elle ne doit pas être
-commitée. Ce mécanisme est provisoire : il sera remplacé par l'authentification de la semaine 4 (S10).
+commitée. Ce mode est conservé uniquement pour le retour arrière ; il disparaît avec #225.
 
 **Installation (une fois par projet)** :
 
 1. Copier `deploy/deploy-custom.sh` et `deploy/compose.custom.yaml` côte à côte sur le serveur
    (par exemple `/opt/deploy/`), script exécutable.
-2. Créer `/opt/<projet>/.env` à partir de `.env.deploy.example` (au minimum `FOREMAN_DOMAIN` et
-   `FOREMAN_BASIC_AUTH_USERS` ; avec `--with-db`, aussi `POSTGRES_PASSWORD` et `FOREMAN_DATABASE_URL`,
+2. Créer `/opt/<projet>/.env` à partir de `.env.deploy.example` (au minimum `FOREMAN_DOMAIN`, `FOREMAN_AUTH_MODE=session`,
+   `FOREMAN_PUBLIC_URL` et `FORWARDED_ALLOW_IPS` ; avec `--with-db`, aussi `POSTGRES_PASSWORD` et `FOREMAN_DATABASE_URL`,
    voir « Base de données » ci-dessous).
 3. Si le registre est privé : `docker login ghcr.io` une fois avec un jeton en lecture seule.
 4. Essai à blanc : `deploy-custom.sh --dry-run <projet> ghcr.io/<owner>/<repo>@sha256:<digest>`.
@@ -208,6 +273,7 @@ Si le mot de passe contient des caractères spéciaux, les encoder dans l'URL (`
   commande `deploy …` envoyée ; celles passées en argument au script sont ignorées.
 - `0005` (`plans.invalidation`, CHECK avec le statut) : `pg_dump` avant ; déployer migration et code ensemble (l'ancien
   `reject_admin` violerait le CHECK). Retour arrière : `alembic downgrade 0004` AVANT de remettre l'ancien code.
+- **Migration `0006`** (comptes, mots de passe, sessions, invitations) : `pg_dump` avant (étape 1 de la procédure du mode session) ; pas de retour arrière d'image sans restaurer ce dump.
 - Retour arrière d'une migration : jamais automatique. `downgrade()` supprime les tables (audit compris) ou le journal
   du chat (`0002`) ; il est refusé quand elles contiennent des données, sauf `FOREMAN_ALLOW_DESTRUCTIVE_DOWNGRADE=1`.
   Ne le lancer que sur une base de test.
