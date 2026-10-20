@@ -9,7 +9,7 @@ export function PageHeader({ children, actions }: { children: ReactNode; actions
       <SidebarTrigger />
       <Separator orientation="vertical" className="data-vertical:h-4 data-vertical:self-auto" />
       <h1 className="text-sm font-semibold">{children}</h1>
-      {actions ? <div className="ml-auto flex items-center">{actions}</div> : null}
+      {actions ? <div className="ml-auto flex items-center gap-2">{actions}</div> : null}
     </header>
   );
 }
