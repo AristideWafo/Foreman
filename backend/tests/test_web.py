@@ -122,7 +122,10 @@ async def test_project_lifecycle_and_a_turn_through_the_api() -> None:
         assert created.status_code == 201
         project = created.json()
         assert project["title"] == "Safe Eat"
-        assert (await client.get(f"/api/projects/{project['id']}")).json() == project
+        assert (await client.get(f"/api/projects/{project['id']}")).json() == {
+            **project,
+            "can_approve": False,  # `dev` est développeur
+        }
 
         subscription = log.subscribe(UUID(project["id"]))
         accepted = await client.post(

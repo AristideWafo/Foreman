@@ -56,9 +56,16 @@ class FakeFetch {
   constructor(
     private readonly status: number,
     private readonly body: unknown,
+    private readonly canApprove = true,
   ) {}
   readonly fetch = (url: string, init?: RequestInit): Promise<Response> => {
     this.calls.push({ url, init });
+    if (url === `/api/projects/${PROJECT_ID}`) {
+      // Projet vu par l'appelant : `can_approve` est calculé par le serveur.
+      return Promise.resolve(
+        new Response(JSON.stringify({ id: PROJECT_ID, can_approve: this.canApprove })),
+      );
+    }
     return Promise.resolve(new Response(JSON.stringify(this.body), { status: this.status }));
   };
 }
@@ -73,7 +80,8 @@ afterEach(() => {
 
 // --- Critère de fin : S1 rendu depuis les événements ---------------------------------------------
 
-test("S1, carte plan : étapes, Skills, empreinte et bouton « Valider le plan »", () => {
+test("S1, carte plan : étapes, Skills, empreinte et bouton « Valider le plan »", async () => {
+  stubFetch(new FakeFetch(200, {}));
   renderCards(replay(PLAN_SEQ));
   const plan = screen.getByRole("group", {
     name: "Plan : Safe Eat : GitLab et déploiement en staging",
@@ -95,7 +103,17 @@ test("S1, carte plan : étapes, Skills, empreinte et bouton « Valider le plan �
   ).toBeVisible();
   // Empreinte tronquée, valeur complète en infobulle.
   expect(within(plan).getByText("sha256:000000000000…")).toHaveAttribute("title", PLAN_HASH);
-  expect(within(plan).getByRole("button", { name: "Valider le plan" })).toBeEnabled();
+  expect(await within(plan).findByRole("button", { name: "Valider le plan" })).toBeEnabled();
+});
+
+test("un développeur (can_approve faux) ou un rôle inconnu ne voit pas « Valider le plan »", async () => {
+  const fake = new FakeFetch(200, {}, false);
+  stubFetch(fake);
+  renderCards(replay(PLAN_SEQ));
+  expect(screen.queryByRole("button", { name: "Valider le plan" })).toBeNull(); // chargement
+  await waitFor(() => expect(fake.calls).toHaveLength(1));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(screen.queryByRole("button", { name: "Valider le plan" })).toBeNull();
 });
 
 test("S1, carte exécution réussie : étapes, journal, budget, ressources et résultat", () => {
@@ -133,10 +151,10 @@ test.each([201, 200])("« Valider le plan » : le statut %i est un succès", asy
   const fake = new FakeFetch(status, { approval_id: "a", execution_id: "e" });
   stubFetch(fake);
   renderCards(replay(PLAN_SEQ));
-  fireEvent.click(screen.getByRole("button", { name: "Valider le plan" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Valider le plan" }));
   expect(await screen.findByRole("status")).toHaveTextContent("Plan validé");
   expect(screen.queryByRole("button", { name: "Valider le plan" })).toBeNull();
-  const posts = fake.calls.filter((call) => call.init?.method === "POST"); // hors /api/me
+  const posts = fake.calls.filter((call) => call.init?.method === "POST"); // hors lecture du projet
   expect(posts).toHaveLength(1);
   expect(posts[0]?.url).toBe(`/api/projects/${PROJECT_ID}/plans/${PLAN_ID}/approvals`);
   expect(JSON.parse(String(posts[0]?.init?.body))).toEqual({
@@ -148,7 +166,7 @@ test.each([201, 200])("« Valider le plan » : le statut %i est un succès", asy
 test("erreur serveur : message générique sans détail, et on peut réessayer", async () => {
   stubFetch(new FakeFetch(500, { error: "internal_error" }));
   renderCards(replay(PLAN_SEQ));
-  fireEvent.click(screen.getByRole("button", { name: "Valider le plan" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Valider le plan" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "La validation a échoué. Réessayez dans un instant.",
   );
@@ -158,7 +176,7 @@ test("erreur serveur : message générique sans détail, et on peut réessayer",
 test("409 : message clair, bouton bloqué jusqu'à la carte plan réémise", async () => {
   stubFetch(new FakeFetch(409, { error: "plan_hash_mismatch" }));
   renderCards(replay(PLAN_SEQ));
-  fireEvent.click(screen.getByRole("button", { name: "Valider le plan" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Valider le plan" }));
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("a changé"));
   expect(screen.getByRole("button", { name: "Valider le plan" })).toBeDisabled();
 });
@@ -257,7 +275,7 @@ test("S10, développeur : carte d'approbation sans bouton « Approuver », en at
   const card = screen.getByRole("group", { name: "Approbation administrateur" });
   expect(within(card).getByText("production")).toBeVisible();
   expect(within(card).getByText("R7-ecriture-production")).toBeVisible();
-  await waitFor(() => expect(fake.calls).toHaveLength(1)); // /api/me a répondu : toujours aucun bouton
+  await waitFor(() => expect(fake.calls.some((c) => c.url === "/api/me")).toBe(true)); // /api/me a répondu : toujours aucun bouton
   expect(within(card).getByRole("status")).toHaveTextContent("En attente d'un administrateur");
   expect(within(card).queryByRole("button")).toBeNull();
 });

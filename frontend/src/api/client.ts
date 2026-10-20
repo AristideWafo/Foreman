@@ -1,6 +1,7 @@
 import type { components, paths } from "./schema";
 
 export type Project = components["schemas"]["Project"];
+export type ProjectView = components["schemas"]["ProjectView"];
 export type ErrorCode = components["schemas"]["ErrorResponse"]["error"];
 
 type CreateProjectBody = NonNullable<
@@ -178,8 +179,8 @@ export function listProjects(): Promise<Project[]> {
   return request<Project[]>("/api/projects");
 }
 
-export function getProject(projectId: string): Promise<Project> {
-  return request<Project>(`/api/projects/${encodeURIComponent(projectId)}`);
+export function getProject(projectId: string): Promise<ProjectView> {
+  return request<ProjectView>(`/api/projects/${encodeURIComponent(projectId)}`);
 }
 
 export function postMessage(projectId: string, text: string): Promise<MessageAccepted> {
@@ -286,7 +287,7 @@ export function describeApprovalError(error: unknown): ApprovalFailure {
     return { message: "La validation n'est pas encore disponible.", waitForCard: false };
   }
   if (status === 403 || code === "forbidden") {
-    return { message: "Votre rôle ne permet pas cette décision.", waitForCard: false };
+    return { message: "Seul un administrateur peut valider ce plan.", waitForCard: false };
   }
   if (code === "execution_in_progress") {
     return { message: "Une exécution est déjà en cours pour ce plan.", waitForCard: true };

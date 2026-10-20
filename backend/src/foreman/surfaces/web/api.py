@@ -40,6 +40,7 @@ from foreman.surfaces.web.schemas import (
     MessageRequest,
     MeTeam,
     PlanView,
+    ProjectView,
     QuestionAccepted,
     QuestionAnswerRequest,
 )
@@ -149,9 +150,13 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         ancien."""
         return await app.projects.list(await app.members.teams_of(caller.user_id))
 
-    @router.get("/projects/{project_id}", response_model=Project, responses=_ERRORS)
-    async def get_project(access: Access) -> Project:
-        return access.project
+    @router.get("/projects/{project_id}", response_model=ProjectView, responses=_ERRORS)
+    async def get_project(access: Access) -> ProjectView:
+        """`can_approve` : l'appelant peut valider un plan de CE projet (calculé côté serveur)."""
+        can = app.approvals is not None and await app.approvals.may_validate(
+            access.principal, access.project.id
+        )
+        return ProjectView(**access.project.model_dump(), can_approve=can)
 
     @router.post(
         "/projects/{project_id}/messages",
@@ -289,8 +294,7 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         """
         if app.approvals is None or app.engine is None:
             raise ApiError(501, "not_implemented")
-        _members_only(access)
-        project_id = access.project.id
+        project_id = access.project.id  # l'approbateur désigné valide aussi (étape 1)
         result = await app.approvals.approve(project_id, plan_id, body.plan_hash, access.principal)
         if isinstance(result, ApprovalRefused):
             raise _refused(result)

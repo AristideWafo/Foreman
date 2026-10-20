@@ -15,7 +15,7 @@ import { ResourceList } from "./ResourceList";
 import { FactList } from "./FactList";
 import { RETRYABLE_STATES, RetryPlan } from "./RetryPlan";
 import { StepList } from "./StepList";
-import { useMe } from "./useMe";
+import { useProject } from "./useProject";
 import { usePlanApproval } from "./usePlanApproval";
 import {
   changeKindLabel,
@@ -118,13 +118,13 @@ export function PlanCard({
   const done = steps.filter((s) => s.status === "succeeded").length;
   const { plan_id: planId, plan_hash: planHash } = card;
   const stale = !execution && (card.status === "invalidated" || card.status === "expired");
-  const me = useMe();
-  // Seuls team_admin et org_admin valident (#248) ; rôle inconnu : le bouton reste, le serveur tranche (403).
+  const project = useProject(projectId);
+  // Le serveur dit si l'appelant peut valider dans CE projet ; inconnu : pas de bouton (le serveur tranche).
   const canApprove =
     !execution &&
     card.approvable === true &&
     card.status === "proposed" &&
-    me?.role !== "developer";
+    project?.can_approve === true;
   const stack = Object.entries(card.stack ?? {});
   const skills = card.skills ?? [];
   const resources = card.expected_resources ?? [];

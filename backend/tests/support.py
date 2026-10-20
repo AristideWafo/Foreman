@@ -22,7 +22,8 @@ def user(*texts: str) -> list[ConversationMessage]:
 DEV_PRINCIPAL = Principal(user_id=DEV_USER_ID, name="dev", role="developer")
 
 # Seuls team_admin et org_admin valident un plan (#248) : les tests valident avec cet admin.
-ADMIN_PRINCIPAL = Principal(user_id=DEV_USER_ID, name="dev", role="team_admin")  # id déjà en base
+# Limite : `dev_members()` garde `dev` développeur ; ce principal ne sert qu'aux appels de service.
+ADMIN_PRINCIPAL = Principal(user_id=DEV_USER_ID, name="dev", role="team_admin")
 
 
 def dev_members() -> InMemoryMemberStore:

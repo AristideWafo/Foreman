@@ -28,6 +28,8 @@ class S10Run:
     after_plan: list[AnyEvent]  # flux après le tour de l'agent
     dev_validation_attempt: httpx.Response  # le développeur tente de valider : 403
     after_dev_validation_attempt: list[AnyEvent]
+    status_before_validation: str  # statut du plan après le refus du développeur
+    executions_before_validation: list[UUID]
     dev_approval: httpx.Response  # l'administrateur donne la validation « développeur » : 202
     after_dev_approval: list[AnyEvent]
     executions_after_dev_approval: list[UUID]  # exécutions en base à ce moment
@@ -68,6 +70,11 @@ async def run_s10() -> S10Run:
 
         dev_validation_attempt = await client.post(f"{plan_url}/approvals", json=body, headers=dev)
         after_dev_validation_attempt = await state.events.read_after(project_id, 0)
+        refused_plan = await state.stores.plans.get(project_id, card.plan_id)  # type: ignore[union-attr]
+        status_refused = refused_plan.status if refused_plan else ""
+        executions_refused = [
+            r.execution_id for r in await state.stores.executions.list_resumable()
+        ]
         dev_approval = await client.post(f"{plan_url}/approvals", json=body, headers=admin)
         after_dev_approval = await state.events.read_after(project_id, 0)
         executions = [r.execution_id for r in await state.stores.executions.list_resumable()]
@@ -87,6 +94,8 @@ async def run_s10() -> S10Run:
         after_plan,
         dev_validation_attempt,
         after_dev_validation_attempt,
+        status_refused,
+        executions_refused,
         dev_approval,
         after_dev_approval,
         executions,
