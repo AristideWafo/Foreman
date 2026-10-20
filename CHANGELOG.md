@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.18.0](https://github.com/AristideWafo/Foreman/compare/v0.17.0...v0.18.0) (2026-10-20)
+
+
+### Features
+
+* auteur (id, nom) sur les messages utilisateur du flux d'événements ([#241](https://github.com/AristideWafo/Foreman/issues/241)) ([2e8eaae](https://github.com/AristideWafo/Foreman/commit/2e8eaaef0a575686da78c0d1c6baf325797ebe80))
+* auteur des messages utilisateur dans le flux d'événements ([#241](https://github.com/AristideWafo/Foreman/issues/241), back) ([824ac69](https://github.com/AristideWafo/Foreman/commit/824ac69e73c346818c5487bc34caaa135b2b006b))
+* **front:** auteur des messages et avatars des participants ([#241](https://github.com/AristideWafo/Foreman/issues/241)) ([eaf4d0d](https://github.com/AristideWafo/Foreman/commit/eaf4d0d48937be00c089165e93bb23b80bc1c036))
+* **front:** auteur des messages et avatars des participants ([#241](https://github.com/AristideWafo/Foreman/issues/241)) ([c9082f8](https://github.com/AristideWafo/Foreman/commit/c9082f8b38314c444119dfcc80e2de9c943a0a64))
+* **front:** projets par équipe, sélection des équipes actives ([#242](https://github.com/AristideWafo/Foreman/issues/242)) ([cf12b61](https://github.com/AristideWafo/Foreman/commit/cf12b61975768dee067c23138a26fabb92764002))
+* **front:** projets par équipe, sélection des équipes actives ([#242](https://github.com/AristideWafo/Foreman/issues/242)) ([8b671a9](https://github.com/AristideWafo/Foreman/commit/8b671a981ff8590ba7b8685f798d5325d6c498aa))
+
+
+### Bug Fixes
+
+* le rôle affiché et appliqué est celui de l'équipe, pas le maximum ([#240](https://github.com/AristideWafo/Foreman/issues/240)) ([afd1ac9](https://github.com/AristideWafo/Foreman/commit/afd1ac9cf4a4a9b28f0a7b0fcccf1d8f8ae33eef))
+* le rôle affiché et appliqué est celui de l'équipe, pas le maximum ([#240](https://github.com/AristideWafo/Foreman/issues/240)) ([520d613](https://github.com/AristideWafo/Foreman/commit/520d613ea70f3dc294b5c5c34ccea17682012c0b))
+
 ## [0.17.0](https://github.com/AristideWafo/Foreman/compare/v0.16.0...v0.17.0) (2026-10-20)
 
 
