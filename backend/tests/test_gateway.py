@@ -11,7 +11,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import JsonValue
@@ -29,6 +29,7 @@ from foreman.core.gateway.redact import (
     redact_value,
 )
 from foreman.core.gateway.scope import in_scope
+from foreman.core.identity import Role
 from foreman.core.policy.matrix import (
     Allow,
     AllowIf,
@@ -38,7 +39,7 @@ from foreman.core.policy.matrix import (
     evaluate,
     requirements,
 )
-from foreman.core.ports import AdapterResult, ForeignResource, ToolAdapter
+from foreman.core.ports import AdapterResult, ForeignResource, MemberStore, ToolAdapter
 from foreman.core.references import resolve_params
 from foreman.core.store import (
     DEV_USER_ID,
@@ -280,6 +281,7 @@ def make_world(
     registry: object | None = None,
     clock: Callable[[], float] | None = None,
     audit: Callable[[Any], Any] | None = None,
+    members: MemberStore | None = None,
 ) -> World:
     catalog = catalog or load_catalog(CATALOG_ROOT, environment="staging")
     projects = InMemoryProjectStore()
@@ -298,7 +300,7 @@ def make_world(
         catalog=catalog,
         stores=stores,
         adapters={"gitlab": gitlab_counter, "server": server_counter, "dns": dns},
-        members=dev_members(),
+        members=members or dev_members(),
         **options,
     )
     return World(catalog, stores, state, projects, gitlab_counter, server_counter, gateway)
@@ -716,6 +718,34 @@ async def test_a_production_write_waits_for_the_admin_then_runs_as_the_requester
         "R7-ecriture-production",
         str(DEV_USER_ID),
     )
+
+
+class TeamRoles:
+    """Membres à rôle PAR équipe (le gateway ne lit que `role_in`)."""
+
+    def __init__(self, roles: dict[tuple[UUID, UUID], Role]) -> None:
+        self._roles = roles
+
+    async def role_in(self, user_id: UUID, team_id: UUID) -> Role | None:
+        return self._roles.get((user_id, team_id))
+
+
+async def test_the_requesters_role_is_the_one_of_the_projects_team() -> None:
+    """team_admin de A mais développeur dans B : l'irréversible (R8, team_admin) passe la règle
+    dans A (il attend alors l'admin) et est refusé dans B, pour le même demandeur."""
+    team_a, team_b = uuid4(), uuid4()
+    members = TeamRoles({(DEV_USER_ID, team_a): "team_admin", (DEV_USER_ID, team_b): "developer"})
+    catalog = with_tool(base_catalog(), "gitlab.create_group", reversibility="irreversible")
+    world = make_world(catalog, members=members)  # type: ignore[arg-type]
+    outcomes = {}
+    for team in (team_a, team_b):
+        project = (await world.projects.create("p", team)).id
+        started = await start(world, ONE_GROUP, project_id=project)
+        with pytest.raises(CallDenied) as denied:
+            await world.gateway.call(call_for(started))
+        outcomes[team] = denied.value.code
+    assert outcomes == {team_a: "approval_required", team_b: "policy_denied"}
+    assert world.gitlab.calls == 0
 
 
 # --- 2. Exécution réelle : chaîne de bout en bout avec le « moteur » --------------------------

@@ -1,7 +1,7 @@
 """Stockage en mémoire borné (un seul worker ; l'état est perdu au redémarrage)."""
 
 from collections import deque
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -14,6 +14,9 @@ from foreman.core.projects import Project
 from foreman.core.store import (
     ADMIN_REJECTED,
     ADMIN_ROLES,
+    DEV_TEAM_ID,
+    DEV_TEAM_NAME,
+    DEV_USER_ID,
     LEASE_TTL_S,
     MAX_AUDIT_DURATION_MS,
     MAX_RESUMABLE,
@@ -70,18 +73,30 @@ class InMemoryProjectStore:
         self._projects: dict[UUID, Project] = {}
         self._questions: dict[UUID, list[ClarificationQuestion]] = {}
 
-    async def create(self, title: str) -> Project:
+    async def create(
+        self, title: str, team_id: UUID = DEV_TEAM_ID, created_by: UUID = DEV_USER_ID
+    ) -> Project:
         if len(self._projects) >= self._max:
             raise CapacityExceeded
-        project = Project(id=uuid4(), title=title, created_at=datetime.now(UTC))
+        project = Project(
+            id=uuid4(),
+            title=title,
+            created_at=datetime.now(UTC),
+            team_id=team_id,
+            team_name=DEV_TEAM_NAME if team_id == DEV_TEAM_ID else str(team_id),
+        )
         self._projects[project.id] = project
         return project
 
     async def get(self, project_id: UUID) -> Project | None:
         return self._projects.get(project_id)
 
-    async def list(self) -> list[Project]:
-        return list(reversed(self._projects.values()))
+    async def list(self, team_ids: Collection[UUID] | None = None) -> list[Project]:
+        return [
+            p
+            for p in reversed(self._projects.values())
+            if team_ids is None or p.team_id in team_ids
+        ]
 
     async def get_open_questions(self, project_id: UUID) -> Sequence[ClarificationQuestion]:
         return list(self._questions.get(project_id, ()))
@@ -95,12 +110,30 @@ class InMemoryProjectStore:
 
 
 class InMemoryMemberStore:
+    """Une seule équipe (`DEV_TEAM_ID`) ; `org_admin` est global comme en PostgreSQL."""
+
     def __init__(self, members: Sequence[Member] = ()) -> None:
         self._roles = {m.user_id: m.role for m in members}
         self._names = {m.user_id: m.name for m in members}
 
-    async def role_of(self, user_id: UUID) -> Role | None:
-        return self._roles.get(user_id)
+    async def role_in(self, user_id: UUID, team_id: UUID) -> Role | None:
+        role = self._roles.get(user_id)
+        return role if role == "org_admin" or team_id == DEV_TEAM_ID else None
+
+    async def team_exists(self, team_id: UUID) -> bool:
+        return team_id == DEV_TEAM_ID
+
+    async def teams_of(self, user_id: UUID) -> frozenset[UUID] | None:
+        role = self._roles.get(user_id)
+        if role == "org_admin":
+            return None
+        return frozenset() if role is None else frozenset({DEV_TEAM_ID})
+
+    async def personal_team_of(self, user_id: UUID) -> UUID | None:
+        return None
+
+    async def designated_admins(self, team_id: UUID) -> frozenset[UUID] | None:
+        return None
 
     async def name_of(self, user_id: UUID) -> str | None:
         return self._names.get(user_id)
@@ -601,9 +634,11 @@ def in_memory_stores(
 ) -> tuple[MemoryState, Stores]:
     """Avec `projects`, un plan d'un projet inconnu est refusé comme en PostgreSQL."""
     state = MemoryState(clock=clock)
+    known = projects or InMemoryProjectStore()
     return state, Stores(
         plans=InMemoryPlanStore(state, projects),
         executions=InMemoryExecutionStore(state),
         registry=InMemoryResourceRegistry(state),
         audit=InMemoryAuditLog(state),
+        projects=known,
     )

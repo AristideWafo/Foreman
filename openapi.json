@@ -557,6 +557,18 @@
       "CreateProjectRequest": {
         "additionalProperties": false,
         "properties": {
+          "team_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Id"
+          },
           "title": {
             "default": "",
             "maxLength": 120,
@@ -1741,6 +1753,15 @@
             "title": "Id",
             "type": "string"
           },
+          "team_id": {
+            "format": "uuid",
+            "title": "Team Id",
+            "type": "string"
+          },
+          "team_name": {
+            "title": "Team Name",
+            "type": "string"
+          },
           "title": {
             "maxLength": 120,
             "title": "Title",
@@ -1750,6 +1771,8 @@
         "required": [
           "id",
           "title",
+          "team_id",
+          "team_name",
           "created_at"
         ],
         "title": "Project",
@@ -2278,7 +2301,7 @@
     },
     "/api/projects": {
       "get": {
-        "description": "Projets connus du serveur, du plus r\u00e9cent au plus ancien.",
+        "description": "Projets des \u00e9quipes de l'appelant (tous pour un `org_admin`), du plus r\u00e9cent au plus\nancien.",
         "operationId": "list_projects_api_projects_get",
         "responses": {
           "200": {
@@ -2359,7 +2382,7 @@
         "summary": "List Projects"
       },
       "post": {
-        "description": "Cr\u00e9e un projet. Le corps est facultatif (`title` vaut alors une cha\u00eene vide).",
+        "description": "Cr\u00e9e un projet. Le corps est facultatif (`title` vaut alors une cha\u00eene vide).\n\n`team_id` : \u00e9quipe du projet, dont l'appelant doit \u00eatre membre (404 sinon). Par d\u00e9faut,\nson \u00e9quipe personnelle (en mode `session`) ou l'\u00e9quipe de d\u00e9veloppement.",
         "operationId": "create_project_api_projects_post",
         "requestBody": {
           "content": {
@@ -2668,21 +2691,21 @@
         "parameters": [
           {
             "in": "path",
-            "name": "project_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Project Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
             "name": "execution_id",
             "required": true,
             "schema": {
               "format": "uuid",
               "title": "Execution Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
               "type": "string"
             }
           }
@@ -2879,21 +2902,21 @@
         "parameters": [
           {
             "in": "path",
-            "name": "project_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Project Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
               "format": "uuid",
               "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
               "type": "string"
             }
           }
@@ -2980,21 +3003,21 @@
         "parameters": [
           {
             "in": "path",
-            "name": "project_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Project Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
               "format": "uuid",
               "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
               "type": "string"
             }
           }
@@ -3119,21 +3142,21 @@
         "parameters": [
           {
             "in": "path",
-            "name": "project_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Project Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
               "format": "uuid",
               "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
               "type": "string"
             }
           }
@@ -3260,20 +3283,20 @@
         "parameters": [
           {
             "in": "path",
-            "name": "project_id",
+            "name": "question_id",
             "required": true,
             "schema": {
-              "format": "uuid",
-              "title": "Project Id",
+              "title": "Question Id",
               "type": "string"
             }
           },
           {
             "in": "path",
-            "name": "question_id",
+            "name": "project_id",
             "required": true,
             "schema": {
-              "title": "Question Id",
+              "format": "uuid",
+              "title": "Project Id",
               "type": "string"
             }
           }

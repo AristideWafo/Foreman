@@ -1,6 +1,7 @@
 """Projets en PostgreSQL et identités de développement."""
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
+from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -47,73 +48,88 @@ async def seed_dev_identity(engine: AsyncEngine) -> None:
         raise StoreError("stockage indisponible") from None
 
 
+_SELECT = sa.select(
+    t.projects.c.id,
+    t.projects.c.name,
+    t.projects.c.created_at,
+    t.projects.c.team_id,
+    t.teams.c.name.label("team_name"),
+).select_from(t.projects.join(t.teams, t.teams.c.id == t.projects.c.team_id))
+
+
+def _project(row: Any) -> Project:
+    return Project(
+        id=row.id,
+        title=row.name,
+        created_at=row.created_at,
+        team_id=row.team_id,
+        team_name=row.team_name,
+    )
+
+
 class PostgresProjectStore:
     def __init__(
         self,
         engine: AsyncEngine,
-        team_id: UUID = DEV_TEAM_ID,
-        created_by: UUID = DEV_USER_ID,
         max_projects: int = MAX_PROJECTS,
     ) -> None:
         self._engine = engine
-        self._team_id = team_id
-        self._created_by = created_by
         self._max = max_projects
 
-    async def create(self, title: str) -> Project:
+    async def create(
+        self, title: str, team_id: UUID = DEV_TEAM_ID, created_by: UUID = DEV_USER_ID
+    ) -> Project:
         """La borne est atomique : un verrou transactionnel sérialise les créations, de sorte que
         le comptage de l'insertion voit toujours les projets déjà validés."""
         under_cap = sa.select(sa.func.count()).select_from(t.projects).scalar_subquery() < self._max
         source = sa.select(
-            sa.literal(self._team_id, PG_UUID(as_uuid=True)),
+            sa.literal(team_id, PG_UUID(as_uuid=True)),
             sa.literal(title, sa.Text),
-            sa.literal(self._created_by, PG_UUID(as_uuid=True)),
+            sa.literal(created_by, PG_UUID(as_uuid=True)),
         ).where(under_cap)
         statement = (
             sa.insert(t.projects)
             .from_select(["team_id", "name", "created_by"], source)
-            .returning(t.projects.c.id, t.projects.c.name, t.projects.c.created_at)
+            .returning(t.projects.c.id)
         )
         try:
             async with self._engine.begin() as conn:
                 await conn.execute(
                     sa.select(sa.func.pg_advisory_xact_lock(PROJECT_CREATE_LOCK_KEY))
                 )
-                row = (await conn.execute(statement)).one_or_none()
+                created = (await conn.execute(statement)).scalar_one_or_none()
         except SQLAlchemyError as exc:
             log_failure("project.create", exc)
             raise StoreError("stockage indisponible") from None
-        if row is None:
+        if created is None:
             raise CapacityExceeded
-        return Project(id=row.id, title=row.name, created_at=row.created_at)
+        project = await self.get(created)
+        if project is None:  # supprimé entre l'insertion et la lecture : traité comme une panne
+            raise StoreError("stockage indisponible")
+        return project
 
     async def get(self, project_id: UUID) -> Project | None:
-        statement = sa.select(t.projects.c.id, t.projects.c.name, t.projects.c.created_at).where(
-            t.projects.c.id == project_id
-        )
         try:
             async with self._engine.connect() as conn:
-                row = (await conn.execute(statement)).one_or_none()
+                row = (await conn.execute(_SELECT.where(t.projects.c.id == project_id))).first()
         except SQLAlchemyError as exc:
             log_failure("project.get", exc)
             raise StoreError("stockage indisponible") from None
-        return (
-            None if row is None else Project(id=row.id, title=row.name, created_at=row.created_at)
-        )
+        return None if row is None else _project(row)
 
-    async def list(self) -> list[Project]:
-        statement = (
-            sa.select(t.projects.c.id, t.projects.c.name, t.projects.c.created_at)
-            .order_by(t.projects.c.created_at.desc(), t.projects.c.id)
-            .limit(self._max)
+    async def list(self, team_ids: Collection[UUID] | None = None) -> list[Project]:
+        statement = _SELECT.order_by(t.projects.c.created_at.desc(), t.projects.c.id).limit(
+            self._max
         )
+        if team_ids is not None:
+            statement = statement.where(t.projects.c.team_id.in_(list(team_ids)))
         try:
             async with self._engine.connect() as conn:
                 rows = (await conn.execute(statement)).all()
         except SQLAlchemyError as exc:
             log_failure("project.list", exc)
             raise StoreError("stockage indisponible") from None
-        return [Project(id=r.id, title=r.name, created_at=r.created_at) for r in rows]
+        return [_project(r) for r in rows]
 
     async def get_open_questions(self, project_id: UUID) -> Sequence[ClarificationQuestion]:
         statement = sa.select(t.projects.c.open_questions).where(t.projects.c.id == project_id)

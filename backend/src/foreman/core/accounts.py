@@ -50,6 +50,10 @@ class InvalidPassword(AccountError):
     """Longueur hors des bornes."""
 
 
+class PersonalTeam(AccountError):
+    """Une équipe personnelle n'a qu'un membre : pas d'ajout ni d'invitation (409)."""
+
+
 class InvalidInviterChain(AccountError):
     """Chaîne `invited_by` cyclique ou trop profonde."""
 

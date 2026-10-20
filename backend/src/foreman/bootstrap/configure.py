@@ -4,6 +4,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Final
 
 from foreman.bootstrap.adapters import build_gateway
 from foreman.bootstrap.database import DatabaseLifecycle, Lifecycle, NoLifecycle
@@ -34,7 +35,6 @@ from foreman.infra.db.auth import PostgresAuthStore
 from foreman.infra.db.engine import make_engine
 from foreman.infra.db.events import PostgresEventLog
 from foreman.infra.db.members import PostgresMemberStore
-from foreman.infra.db.projects import PostgresProjectStore
 from foreman.infra.db.stores import postgres_stores
 from foreman.infra.file_catalog import catalog_dir_from_env, load_catalog
 from foreman.infra.in_memory import (
@@ -85,6 +85,13 @@ def parse_dev_members(raw: str) -> tuple[Member, ...]:
     return tuple(members.values())
 
 
+_DEV: Final = Member(DEV_USER_NAME, "developer", DEV_USER_ID)  # mode `none` : l'utilisateur `dev`
+
+
+def _dev_member_store() -> MemberStore:
+    return InMemoryMemberStore([_DEV])
+
+
 @dataclass(frozen=True, slots=True)
 class App:
     profile: Profile
@@ -98,9 +105,9 @@ class App:
     approvals: ApprovalService | None = None
     engine: ExecutionEngine | None = None
     persistence: str = "memory"  # « postgres » quand le stockage durable est branché
-    members: MemberStore = field(default_factory=InMemoryMemberStore)
+    members: MemberStore = field(default_factory=_dev_member_store)
     auth_mode: AuthMode = AuthMode.NONE
-    dev_members: tuple[Member, ...] = ()  # synchronisés dans `members` au démarrage
+    dev_members: tuple[Member, ...] = (_DEV,)  # synchronisés dans `members` au démarrage
     accounts: AccountStore | None = None  # PostgreSQL seulement
     auth: AuthStore | None = None
     hasher: PasswordHasher = field(default_factory=Argon2Hasher)
@@ -136,9 +143,9 @@ def configure(profile: Profile) -> App:
     url = os.environ.get(ENV_DATABASE_URL)
     if url and profile in _PERSISTENT_PROFILES:
         engine = make_engine(url)  # ne se connecte pas : les migrations viennent au démarrage
-        projects = PostgresProjectStore(engine)
         events = PostgresEventLog(engine)  # le chat survit au redémarrage
         stores = postgres_stores(engine)
+        projects = stores.projects
         lifecycle = DatabaseLifecycle(url, engine)
         members = PostgresMemberStore(engine)
         accounts = PostgresAccountStore(engine)

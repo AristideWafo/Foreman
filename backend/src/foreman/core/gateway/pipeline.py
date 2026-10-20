@@ -56,6 +56,7 @@ from foreman.core.ports import (
     MemberStore,
     PermissionMissing,
     ToolAdapter,
+    requester_role,
 )
 from foreman.core.references import UnresolvedReference, resolve_params
 from foreman.core.store import (
@@ -252,9 +253,12 @@ class ToolGateway:
         environment = plan.content.get("environment")  # 4
         if not isinstance(environment, str):
             raise _Refusal("unknown_context")
-        # Le rôle est celui du DEMANDEUR du plan, relu à chaque appel : l'agent n'a jamais plus de
-        # droits que lui, et un membre retiré perd son accès. Inconnu : refus (fermé par défaut).
-        role = None if plan.requested_by is None else await self._members.role_of(plan.requested_by)
+        # Le rôle est celui du DEMANDEUR du plan dans l'ÉQUIPE DU PROJET, relu à chaque appel :
+        # l'agent n'a jamais plus de droits que lui, et un membre retiré perd son accès. Inconnu :
+        # refus (fermé par défaut).
+        role = await requester_role(
+            self._stores.projects, self._members, plan.requested_by, call.project_id
+        )
         if role is None:
             raise _Refusal("policy_denied")
         matrix = self._catalog.policy

@@ -3,7 +3,7 @@
 `none` (défaut, poste et CI) : utilisateur `dev` unique, l'en-tête est IGNORÉ (un client ne peut
 pas se faire passer pour un autre). `proxy_header` : Traefik pose `X-Forwarded-User` après
 basicAuth (et écrase celui du client) ; sans en-tête ou pour un nom inconnu : 401 opaque, sans
-écho du nom. Le rôle vient toujours de `MemberStore`, jamais de la requête.
+écho du nom. Le rôle vient toujours de `MemberStore` (par équipe), jamais de la requête.
 
 `session` : cookie de session (condensat en base). Session absente, expirée ou compte désactivé :
 401 opaque. Toute méthode non sûre exige en plus `X-Foreman-CSRF` (jeton rendu par `GET /me`) et
@@ -12,15 +12,19 @@ un `Origin` de même hôte : sinon 403. Le rôle est relu en base à chaque requ
 
 import hmac
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Annotated
 from urllib.parse import urlsplit
+from uuid import UUID
 
-from fastapi import Request, Response
+from fastapi import Depends, Request, Response
 
 from foreman.bootstrap.configure import App, AuthMode
 from foreman.core.auth import SESSION_TTL, csrf_for, token_hash
 from foreman.core.identity import Principal, member_id
-from foreman.core.store import DEV_USER_ID, DEV_USER_NAME
+from foreman.core.projects import Project
+from foreman.core.store import DEV_TEAM_ID, DEV_USER_ID, DEV_USER_NAME
 from foreman.surfaces.web.errors import ApiError
 
 FORWARDED_USER = "X-Forwarded-User"
@@ -77,9 +81,51 @@ def make_current_principal(app: App) -> Callable[[Request, Response], Awaitable[
         if not name or len(name) > MAX_NAME_LENGTH:
             raise ApiError(401, "unauthenticated")
         user_id = member_id(name)
-        role = await app.members.role_of(user_id)
+        role = await app.members.role_in(user_id, DEV_TEAM_ID)
         if role is None:
             raise ApiError(401, "unauthenticated")
         return Principal(user_id=user_id, name=name, role=role)
 
     return current_principal
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectAccess:
+    """Projet accessible et appelant dont `role` est son rôle DANS L'ÉQUIPE de ce projet."""
+
+    project: Project
+    principal: Principal
+    designated: bool = False  # approbateur désigné d'une équipe personnelle, non membre
+
+
+async def resolve_access(app: App, caller: Principal, project_id: UUID) -> ProjectAccess | None:
+    """`None` si le projet n'existe pas OU si l'appelant n'y a pas accès (indiscernables)."""
+    project = await app.projects.get(project_id)
+    if project is None:
+        return None
+    role = await app.members.role_in(caller.user_id, project.team_id)
+    designated = False
+    if role is None:
+        # Équipe personnelle : l'approbateur admin désigné doit pouvoir voir le plan à valider.
+        admins = await app.members.designated_admins(project.team_id)
+        if admins and caller.user_id in admins:
+            role, designated = "team_admin", True
+    if role is None:
+        return None
+    return ProjectAccess(project, caller.model_copy(update={"role": role}), designated)
+
+
+def make_project_access(
+    app: App, current_principal: Callable[..., Awaitable[Principal]]
+) -> Callable[..., Awaitable[ProjectAccess]]:
+    """Seule porte d'accès aux routes `/projects/{project_id}/...` : accès refusé = 404 opaque."""
+
+    async def project_access(
+        project_id: UUID, caller: Annotated[Principal, Depends(current_principal)]
+    ) -> ProjectAccess:
+        access = await resolve_access(app, caller, project_id)
+        if access is None:
+            raise ApiError(404, "not_found")
+        return access
+
+    return project_access

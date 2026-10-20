@@ -8,12 +8,12 @@ from foreman.bootstrap.configure import App, Profile, configure
 from foreman.config.env import DEFAULT_PUBLIC_URL, ENV_PUBLIC_URL
 from foreman.core.accounts import AccountError
 from foreman.core.auth import create_admin_invitation
-from foreman.core.store import DEV_USER_ID
+from foreman.core.store import DEV_TEAM_ID, DEV_USER_ID
 from foreman.core.turn import TurnRequest
 
 
 async def _run(app: App, message: str) -> list[str]:
-    project = await app.projects.create("")
+    project = await app.projects.create("", DEV_TEAM_ID, DEV_USER_ID)
     turn_id = app.turns.begin(project.id)
     request = TurnRequest(user_id=DEV_USER_ID, project_id=project.id, message=message)
     await app.turns.run(request, turn_id)

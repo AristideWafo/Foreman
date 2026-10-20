@@ -11,7 +11,7 @@ from foreman.core.identity import Principal
 from foreman.core.planning import Draft, DraftStep, Planner
 from foreman.core.store import DEV_USER_ID, ApprovalRefused, Approved, AwaitingAdmin, ResourceRecord
 from foreman.infra.file_catalog import load_catalog
-from foreman.infra.in_memory import InMemoryEventLog, in_memory_stores
+from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
 from support import DEV_PRINCIPAL, dev_members
 
 ADMIN = Principal(user_id=uuid4(), name="admin", role="team_admin")
@@ -29,8 +29,9 @@ DRAFT = Draft(
 
 async def setup(catalog_changed: bool = False):
     catalog = load_catalog(environment="staging")
-    state, stores = in_memory_stores()
-    events, project = InMemoryEventLog(), uuid4()
+    projects = InMemoryProjectStore()
+    state, stores = in_memory_stores(projects=projects)
+    events, project = InMemoryEventLog(), (await projects.create("p")).id
     record, _ = await Planner(catalog, stores.plans, stores.registry).propose(
         project, DRAFT, DEV_USER_ID
     )

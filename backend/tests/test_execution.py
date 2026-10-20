@@ -5,7 +5,7 @@ import json
 import logging
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -361,7 +361,7 @@ async def test_a_production_plan_waits_for_an_admin_who_then_starts_the_executio
     assert refused == ApprovalRefused("forbidden")
     assert not await stores.plans.has_admin_approval(record.id, record.content_hash)
 
-    boss = Principal(user_id=DEV_USER_ID, name="boss", role="team_admin")
+    boss = Principal(user_id=uuid4(), name="boss", role="team_admin")
     approved = await service.approve_admin(project, record.id, record.content_hash, boss)
     assert isinstance(approved, Approved) and approved.created
     last = [e.data for e in await events.read_after(project, 0) if e.data.kind == "approval"][-1]

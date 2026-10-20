@@ -1,6 +1,6 @@
 """Ports : interfaces définies par le cœur, implémentées par `infra` et `integrations`."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 from uuid import UUID
@@ -102,14 +102,15 @@ class ToolAdapter(Protocol):
 
 
 class ProjectStore(Protocol):
-    async def create(self, title: str) -> Project:
+    async def create(self, title: str, team_id: UUID, created_by: UUID) -> Project:
         """Lève `CapacityExceeded` si la borne de projets est atteinte."""
         ...
 
     async def get(self, project_id: UUID) -> Project | None: ...
 
-    async def list(self) -> list[Project]:
-        """Les projets, du plus récent au plus ancien (bornés par la capacité du magasin)."""
+    async def list(self, team_ids: Collection[UUID] | None = None) -> list[Project]:
+        """Les projets des équipes données (`None` : tous), du plus récent au plus ancien
+        (bornés par la capacité du magasin)."""
         ...
 
     async def get_open_questions(self, project_id: UUID) -> Sequence[ClarificationQuestion]:
@@ -154,10 +155,27 @@ class EventLog(Protocol):
 
 
 class MemberStore(Protocol):
-    """Rôles des membres de l'équipe de développement (une seule équipe au PoC)."""
+    """Rôles des membres, PAR équipe. `org_admin` est global."""
 
-    async def role_of(self, user_id: UUID) -> Role | None:
-        """Rôle du membre, ou `None` s'il est inconnu."""
+    async def role_in(self, user_id: UUID, team_id: UUID) -> Role | None:
+        """`org_admin` si le compte l'est (partout), sinon son rôle dans l'équipe, sinon `None`.
+        Un compte désactivé n'a aucun rôle."""
+        ...
+
+    async def team_exists(self, team_id: UUID) -> bool: ...
+
+    async def teams_of(self, user_id: UUID) -> frozenset[UUID] | None:
+        """Équipes du compte ; `None` pour un `org_admin` (toutes)."""
+        ...
+
+    async def personal_team_of(self, user_id: UUID) -> UUID | None:
+        """Équipe personnelle du compte, si elle existe."""
+        ...
+
+    async def designated_admins(self, team_id: UUID) -> frozenset[UUID] | None:
+        """Équipe personnelle : comptes (hors org_admin) qui valident les plans de son
+        propriétaire, soit l'inviteur actif et admin le plus proche (vide : repli org_admin).
+        `None` pour une équipe non personnelle (les rôles de l'équipe décident)."""
         ...
 
     async def name_of(self, user_id: UUID) -> str | None:
@@ -167,3 +185,13 @@ class MemberStore(Protocol):
     async def sync(self, members: Sequence[Member]) -> None:
         """REMPLACE l'ensemble des membres : un nom retiré perd son rôle."""
         ...
+
+
+async def requester_role(
+    projects: ProjectStore, members: MemberStore, user_id: UUID | None, project_id: UUID
+) -> Role | None:
+    """Rôle du DEMANDEUR d'un plan dans l'équipe du projet (fermé par défaut : `None`)."""
+    if user_id is None:
+        return None
+    project = await projects.get(project_id)
+    return None if project is None else await members.role_in(user_id, project.team_id)

@@ -23,6 +23,7 @@ class CreateProjectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: Annotated[str, Field(max_length=120)] = ""
+    team_id: UUID | None = None
 
 
 class MessageRequest(BaseModel):

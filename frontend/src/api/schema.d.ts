@@ -84,13 +84,17 @@ export interface paths {
         };
         /**
          * List Projects
-         * @description Projets connus du serveur, du plus récent au plus ancien.
+         * @description Projets des équipes de l'appelant (tous pour un `org_admin`), du plus récent au plus
+         *     ancien.
          */
         get: operations["list_projects_api_projects_get"];
         put?: never;
         /**
          * Create Project
          * @description Crée un projet. Le corps est facultatif (`title` vaut alors une chaîne vide).
+         *
+         *     `team_id` : équipe du projet, dont l'appelant doit être membre (404 sinon). Par défaut,
+         *     son équipe personnelle (en mode `session`) ou l'équipe de développement.
          */
         post: operations["create_project_api_projects_post"];
         delete?: never;
@@ -520,6 +524,8 @@ export interface components {
         };
         /** CreateProjectRequest */
         CreateProjectRequest: {
+            /** Team Id */
+            team_id?: string | null;
             /**
              * Title
              * @default
@@ -1041,6 +1047,13 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Team Id
+             * Format: uuid
+             */
+            team_id: string;
+            /** Team Name */
+            team_name: string;
             /** Title */
             title: string;
         };
@@ -1738,8 +1751,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                project_id: string;
                 execution_id: string;
+                project_id: string;
             };
             cookie?: never;
         };
@@ -1904,8 +1917,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                project_id: string;
                 plan_id: string;
+                project_id: string;
             };
             cookie?: never;
         };
@@ -1981,8 +1994,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                project_id: string;
                 plan_id: string;
+                project_id: string;
             };
             cookie?: never;
         };
@@ -2080,8 +2093,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                project_id: string;
                 plan_id: string;
+                project_id: string;
             };
             cookie?: never;
         };
@@ -2188,8 +2201,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                project_id: string;
                 question_id: string;
+                project_id: string;
             };
             cookie?: never;
         };
