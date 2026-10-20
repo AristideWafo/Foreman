@@ -3,6 +3,7 @@ import { Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { setUnauthorizedHandler } from "./api/client";
 import { InvitePage } from "./features/auth/InvitePage";
 import { LoginPage } from "./features/auth/LoginPage";
+import { AdminPage } from "./features/admin/AdminPage";
 import { AppShell } from "./features/layout/AppShell";
 import { HomePage } from "./features/chat/HomePage";
 import { ProjectPage } from "./features/chat/ProjectPage";
@@ -41,6 +42,7 @@ export function App() {
       <Route path="/accept-invite" element={<InvitePage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="/projects/:projectId" element={<ProjectRoute />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
