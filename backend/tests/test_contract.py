@@ -479,3 +479,13 @@ def test_plan_view_roundtrips_invalidation_and_bounds_it() -> None:
     too_many = {**inv, "changes": [{"kind": "tool", "name": "t"}] * 21}
     with pytest.raises(ValidationError):
         PlanView.model_validate({**view, "invalidation": too_many})
+
+
+def test_resource_step_is_optional_and_omitted_when_absent() -> None:
+    """Additif en v1 : historique et plans d'avant n'ont pas `step` (clé omise, jamais null)."""
+    data = NEW_EXAMPLES["card (exécution)"][1]
+    old = ADAPTER.validate_python(envelope("card", data))
+    assert "step" not in old.model_dump(mode="json")["data"]["resources"][0]
+    new = {**data, "resources": [{**data["resources"][0], "step": 2}]}
+    event = ADAPTER.validate_python(envelope("card", new))
+    assert event.model_dump(mode="json")["data"]["resources"][0]["step"] == 2

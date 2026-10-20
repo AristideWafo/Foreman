@@ -57,3 +57,8 @@ async def test_a_replayed_request_succeeds_and_its_card_lists_the_existing_resou
     assert final.state == "succeeded" and len(final.resources) == 6  # type: ignore[union-attr]
     assert all(r.reused for r in final.resources)  # type: ignore[union-attr]
     assert "6 ressources déjà présentes, aucune créée" in final.result.summary  # type: ignore[union-attr]
+    # Chaque ressource désigne une étape réussie, ciblée par une ressource attendue du plan.
+    plan = card  # type: ignore[possibly-undefined]
+    succeeded = {s.step for s in final.steps if s.status == "succeeded"}  # type: ignore[union-attr]
+    expected = {r.step for r in plan.expected_resources}  # type: ignore[union-attr]
+    assert all(r.step in succeeded & expected for r in final.resources)  # type: ignore[union-attr]

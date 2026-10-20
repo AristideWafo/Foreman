@@ -202,6 +202,7 @@ test("texte de l'API affiché comme texte ; liens non http(s) jamais cliquables"
         provider: "p",
         resource_type: "t",
         reused: null,
+        step: null,
         url: "javascript:alert(1)",
       },
       {
@@ -209,6 +210,7 @@ test("texte de l'API affiché comme texte ; liens non http(s) jamais cliquables"
         provider: "p",
         resource_type: "t",
         reused: null,
+        step: null,
         url: "data:text/html,<b>x</b>",
       },
     ],

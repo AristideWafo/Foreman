@@ -87,11 +87,13 @@
       "skills": [],
       "expected_resources": [
         {
+          "step": 1,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
         },
         {
+          "step": 2,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
@@ -162,11 +164,13 @@
       "skills": [],
       "expected_resources": [
         {
+          "step": 1,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
         },
         {
+          "step": 2,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
@@ -276,11 +280,13 @@
       "skills": [],
       "expected_resources": [
         {
+          "step": 1,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
         },
         {
+          "step": 2,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
@@ -433,6 +439,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "server",
           "resource_type": "server_project",
           "name": "production/safe-eat",
@@ -535,6 +542,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "server",
           "resource_type": "server_project",
           "name": "production/safe-eat",
@@ -632,6 +640,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "server",
           "resource_type": "server_project",
           "name": "production/safe-eat",
@@ -690,6 +699,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "server",
           "resource_type": "server_project",
           "name": "production/safe-eat",

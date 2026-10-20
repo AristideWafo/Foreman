@@ -334,6 +334,7 @@ def build_content(
                     provider=tool.connector,
                     resource_type=tool.registry.resource_type,
                     name=_expected_name(proposed.params, proposed.title),
+                    step=seq,
                 )
             )
     skills = _skills(draft.skills or (), catalog, environment)

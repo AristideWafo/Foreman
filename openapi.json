@@ -1233,6 +1233,19 @@
             "maxLength": 50,
             "title": "Resource Type",
             "type": "string"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Step"
           }
         },
         "required": [
@@ -2200,6 +2213,19 @@
             "default": null,
             "description": "Vrai si la ressource existait d\u00e9j\u00e0 (rejeu), non cr\u00e9\u00e9e",
             "title": "Reused"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Step"
           },
           "url": {
             "anyOf": [

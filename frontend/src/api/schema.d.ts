@@ -956,6 +956,11 @@ export interface components {
             provider: string;
             /** Resource Type */
             resource_type: string;
+            /**
+             * Step
+             * @default null
+             */
+            step: number | null;
         };
         /** HealthResponse */
         HealthResponse: {
@@ -1385,6 +1390,11 @@ export interface components {
              * @default null
              */
             reused: boolean | null;
+            /**
+             * Step
+             * @default null
+             */
+            step: number | null;
             /**
              * Url
              * @default null

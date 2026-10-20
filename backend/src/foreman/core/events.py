@@ -119,7 +119,19 @@ class SkillRef(_Model):
     sha256: Sha256
 
 
-class ExpectedResource(_Model):
+class _OptionalStep(_Model):
+    # Indice de l'étape d'origine ; absent pour l'historique antérieur (clé omise, jamais null).
+    step: Annotated[int, Field(ge=1)] | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_step(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        out: dict[str, object] = handler(self)
+        if out.get("step") is None:
+            out.pop("step", None)
+        return out
+
+
+class ExpectedResource(_OptionalStep):
     provider: Annotated[str, Field(max_length=50)]
     resource_type: Annotated[str, Field(max_length=50)]
     name: Annotated[str, Field(max_length=200)]
@@ -176,7 +188,7 @@ class Budget(_Model):
     max_minutes: Annotated[int, Field(ge=0)]
 
 
-class ResourceRef(_Model):
+class ResourceRef(_OptionalStep):
     provider: Annotated[str, Field(max_length=50)]
     resource_type: Annotated[str, Field(max_length=50)]
     name: Annotated[str, Field(max_length=200)]

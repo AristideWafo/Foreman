@@ -144,36 +144,43 @@
       ],
       "expected_resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "safe-eat"
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "backend"
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "frontend"
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-api"
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-web"
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
         },
         {
+          "step": 7,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
@@ -340,36 +347,43 @@
       ],
       "expected_resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "safe-eat"
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "backend"
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "frontend"
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-api"
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-web"
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
         },
         {
+          "step": 7,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
@@ -497,36 +511,43 @@
       ],
       "expected_resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "safe-eat"
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "backend"
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "frontend"
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-api"
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-web"
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
         },
         {
+          "step": 7,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
@@ -754,6 +775,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -891,6 +913,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -898,6 +921,7 @@
           "reused": null
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -1035,6 +1059,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -1042,6 +1067,7 @@
           "reused": null
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -1049,6 +1075,7 @@
           "reused": null
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -1186,6 +1213,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -1193,6 +1221,7 @@
           "reused": null
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -1200,6 +1229,7 @@
           "reused": null
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -1207,6 +1237,7 @@
           "reused": null
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -1344,6 +1375,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -1351,6 +1383,7 @@
           "reused": null
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -1358,6 +1391,7 @@
           "reused": null
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -1365,6 +1399,7 @@
           "reused": null
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -1372,6 +1407,7 @@
           "reused": null
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
@@ -1514,6 +1550,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -1521,6 +1558,7 @@
           "reused": null
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -1528,6 +1566,7 @@
           "reused": null
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -1535,6 +1574,7 @@
           "reused": null
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -1542,6 +1582,7 @@
           "reused": null
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
@@ -1549,6 +1590,7 @@
           "reused": null
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "staging/safe-eat",
@@ -1691,6 +1733,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -1698,6 +1741,7 @@
           "reused": null
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -1705,6 +1749,7 @@
           "reused": null
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -1712,6 +1757,7 @@
           "reused": null
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -1719,6 +1765,7 @@
           "reused": null
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
@@ -1726,6 +1773,7 @@
           "reused": null
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "staging/safe-eat",
@@ -1863,6 +1911,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -1870,6 +1919,7 @@
           "reused": null
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -1877,6 +1927,7 @@
           "reused": null
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -1884,6 +1935,7 @@
           "reused": null
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -1891,6 +1943,7 @@
           "reused": null
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
@@ -1898,6 +1951,7 @@
           "reused": null
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "staging/safe-eat",
@@ -1996,6 +2050,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -2003,6 +2058,7 @@
           "reused": null
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -2010,6 +2066,7 @@
           "reused": null
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -2017,6 +2074,7 @@
           "reused": null
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -2024,6 +2082,7 @@
           "reused": null
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
@@ -2031,6 +2090,7 @@
           "reused": null
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "staging/safe-eat",
@@ -2171,36 +2231,43 @@
       ],
       "expected_resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "safe-eat"
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "backend"
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "frontend"
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-api"
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-web"
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
         },
         {
+          "step": 7,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
@@ -2372,36 +2439,43 @@
       ],
       "expected_resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "safe-eat"
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "backend"
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "frontend"
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-api"
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-web"
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
         },
         {
+          "step": 7,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
@@ -2529,36 +2603,43 @@
       ],
       "expected_resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "safe-eat"
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "backend"
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "frontend"
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-api"
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-web"
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
         },
         {
+          "step": 7,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
@@ -2760,6 +2841,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -2897,6 +2979,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -2904,6 +2987,7 @@
           "reused": true
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -3041,6 +3125,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -3048,6 +3133,7 @@
           "reused": true
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -3055,6 +3141,7 @@
           "reused": true
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -3192,6 +3279,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -3199,6 +3287,7 @@
           "reused": true
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -3206,6 +3295,7 @@
           "reused": true
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -3213,6 +3303,7 @@
           "reused": true
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -3350,6 +3441,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -3357,6 +3449,7 @@
           "reused": true
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -3364,6 +3457,7 @@
           "reused": true
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -3371,6 +3465,7 @@
           "reused": true
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -3378,6 +3473,7 @@
           "reused": true
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
@@ -3520,6 +3616,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -3527,6 +3624,7 @@
           "reused": true
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -3534,6 +3632,7 @@
           "reused": true
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -3541,6 +3640,7 @@
           "reused": true
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -3548,6 +3648,7 @@
           "reused": true
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
@@ -3555,6 +3656,7 @@
           "reused": true
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "staging/safe-eat",
@@ -3697,6 +3799,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -3704,6 +3807,7 @@
           "reused": true
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -3711,6 +3815,7 @@
           "reused": true
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -3718,6 +3823,7 @@
           "reused": true
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -3725,6 +3831,7 @@
           "reused": true
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
@@ -3732,6 +3839,7 @@
           "reused": true
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "staging/safe-eat",
@@ -3869,6 +3977,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -3876,6 +3985,7 @@
           "reused": true
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -3883,6 +3993,7 @@
           "reused": true
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -3890,6 +4001,7 @@
           "reused": true
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -3897,6 +4009,7 @@
           "reused": true
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
@@ -3904,6 +4017,7 @@
           "reused": true
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "staging/safe-eat",
@@ -4002,6 +4116,7 @@
       },
       "resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2000",
@@ -4009,6 +4124,7 @@
           "reused": true
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2001",
@@ -4016,6 +4132,7 @@
           "reused": true
         },
         {
+          "step": 3,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "2002",
@@ -4023,6 +4140,7 @@
           "reused": true
         },
         {
+          "step": 4,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5000",
@@ -4030,6 +4148,7 @@
           "reused": true
         },
         {
+          "step": 5,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "5001",
@@ -4037,6 +4156,7 @@
           "reused": true
         },
         {
+          "step": 6,
           "provider": "server",
           "resource_type": "server_project",
           "name": "staging/safe-eat",
