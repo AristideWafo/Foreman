@@ -12,7 +12,7 @@ from foreman.core.planning import Draft, DraftStep, Planner
 from foreman.core.store import DEV_USER_ID, ApprovalRefused, Approved, AwaitingAdmin, ResourceRecord
 from foreman.infra.file_catalog import load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
-from support import DEV_PRINCIPAL, dev_members
+from support import ADMIN_PRINCIPAL, dev_members
 
 ADMIN = Principal(user_id=uuid4(), name="admin", role="team_admin")
 DRAFT = Draft(
@@ -56,7 +56,7 @@ async def no_execution(stores) -> bool:
 
 async def test_unchanged_plan_stays_approvable() -> None:
     _, _, _, project, record, service = await setup()
-    first = await service.approve(project, record.id, record.content_hash, DEV_PRINCIPAL)
+    first = await service.approve(project, record.id, record.content_hash, ADMIN_PRINCIPAL)
     assert isinstance(first, AwaitingAdmin)
     second = await service.approve_admin(project, record.id, record.content_hash, ADMIN)
     assert isinstance(second, Approved)
@@ -74,7 +74,8 @@ async def test_changed_basis_is_never_approved_by_dev_nor_admin(
     refusal = ApprovalRefused("plan_not_approvable")
     for _ in range(2):  # le rejeu donne toujours 409
         assert (
-            await service.approve(project, record.id, record.content_hash, DEV_PRINCIPAL) == refusal
+            await service.approve(project, record.id, record.content_hash, ADMIN_PRINCIPAL)
+            == refusal
         )
         assert (
             await service.approve_admin(project, record.id, record.content_hash, ADMIN) == refusal
@@ -90,7 +91,8 @@ async def test_changed_basis_is_never_approved_by_dev_nor_admin(
 async def test_registry_change_after_dev_approval_invalidates_both_cards() -> None:
     state, stores, events, project, record, service = await setup()
     assert isinstance(
-        await service.approve(project, record.id, record.content_hash, DEV_PRINCIPAL), AwaitingAdmin
+        await service.approve(project, record.id, record.content_hash, ADMIN_PRINCIPAL),
+        AwaitingAdmin,
     )
     add_resource(state, project)
     for _ in range(2):
@@ -104,7 +106,7 @@ async def test_registry_change_after_dev_approval_invalidates_both_cards() -> No
 
 async def test_admin_replay_stays_idempotent_after_registry_changes() -> None:
     state, stores, events, project, record, service = await setup()
-    await service.approve(project, record.id, record.content_hash, DEV_PRINCIPAL)
+    await service.approve(project, record.id, record.content_hash, ADMIN_PRINCIPAL)
     first = await service.approve_admin(project, record.id, record.content_hash, ADMIN)
     assert isinstance(first, Approved) and first.created
     cards = len(await events.read_after(project, 0))
