@@ -21,6 +21,15 @@ function initials(name: string): string {
 const PILL =
   "flex size-6 items-center justify-center rounded-full text-[0.625rem] font-medium ring-2 ring-background outline-none focus-visible:ring-ring";
 
+/** Pastille décorative d'un auteur à côté de son message : le nom est déjà écrit au-dessus de la bulle. */
+export function AuthorAvatar({ author }: { author: Author }) {
+  return (
+    <span aria-hidden className={`${PILL} ${shadeOf(author.id)} text-white`}>
+      {initials(author.name)}
+    </span>
+  );
+}
+
 /** Pastilles des personnes intervenues dans le chat ; le nom apparaît au survol et au focus. */
 export function Participants({ authors }: { authors: readonly Author[] }) {
   if (authors.length === 0) return null;

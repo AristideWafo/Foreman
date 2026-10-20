@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
-import { Message, MessageContent } from "@/components/ui/message";
+import { Message, MessageAvatar, MessageContent } from "@/components/ui/message";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -22,7 +22,7 @@ import { useProjectEvents } from "../events/useProjectEvents";
 import { foldExecutions, participants, type TimelineItem } from "../events/timeline";
 import { useProjects } from "../projects/useProjects";
 import { MessageInput } from "./MessageInput";
-import { Participants } from "./Participants";
+import { AuthorAvatar, Participants } from "./Participants";
 import { TurnTrace } from "./TurnTrace";
 import { useStaggered } from "./useStaggered";
 
@@ -83,9 +83,15 @@ export function TimelineEntry({
     case "message":
       return item.role === "user" ? (
         <Message align="end">
+          {item.author ? (
+            // Avatar sur le premier message de la suite ; les suivants gardent la place pour l'alignement.
+            <MessageAvatar className="size-6 bg-transparent">
+              {showAuthor ? <AuthorAvatar author={item.author} /> : null}
+            </MessageAvatar>
+          ) : null}
           <MessageContent>
             {showAuthor && item.author ? (
-              <span className="px-1 text-[0.6875rem] leading-none text-muted-foreground">
+              <span className="self-end px-1text-[0.6875rem] leading-none text-muted-foreground">
                 {item.author.name}
               </span>
             ) : null}
