@@ -205,16 +205,19 @@
       ],
       "expected_resources": [
         {
+          "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
           "name": "safe-eat"
         },
         {
+          "step": 2,
           "provider": "gitlab",
           "resource_type": "gitlab_project",
           "name": "safe-eat-api"
         },
         {
+          "step": 3,
           "provider": "server",
           "resource_type": "server_project",
           "name": "safe-eat"
