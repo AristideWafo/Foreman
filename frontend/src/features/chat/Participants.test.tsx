@@ -48,4 +48,8 @@ test("deux auteurs : un nom par groupe au-dessus des messages, deux avatars dans
   expect(screen.getAllByText("Bob")).toHaveLength(1);
   const avatars = screen.getAllByRole("img");
   expect(avatars.map((a) => a.getAttribute("aria-label"))).toEqual(["Alice Martin", "Bob"]);
+  // Pastille décorative à droite de la bulle : une par suite (AM, B), la 2e d'Alice garde la place.
+  const slots = document.querySelectorAll('[data-slot="message-avatar"]');
+  expect([...slots].map((s) => s.textContent)).toEqual(["AM", "", "B"]);
+  expect(document.querySelector('[data-slot="message"] > :first-child')).toBe(slots[0]);
 });
