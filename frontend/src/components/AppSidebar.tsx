@@ -10,9 +10,9 @@ import {
   UserCircleIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
-import type { ComponentType, SVGProps } from "react";
+import { Fragment, type ComponentType, type SVGProps } from "react";
 import { Link } from "react-router-dom";
-import { NativeSelect } from "@/components/NativeSelect";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { LinkButton } from "@/components/LinkButton";
 import { MemoryModeBadge } from "@/components/MemoryModeBadge";
 import { ROLE_LABELS, UserRoleBadge, type UserRole } from "@/components/UserRoleBadge";
@@ -51,12 +51,18 @@ interface AppSidebarProps {
   onLogout?: () => void;
   /** Aide visuelle : le serveur décide de l'accès à l'administration. */
   canAdmin?: boolean;
-  /** Équipes de l'utilisateur ; le filtre n'apparaît qu'à partir de deux équipes. */
+  /** Équipes partagées de l'utilisateur ; le sélecteur n'apparaît qu'à partir de deux choix. */
   teams?: { id: string; name: string }[];
-  /** Équipe filtrée, `""` pour toutes. */
-  teamFilter?: string;
-  onTeamFilter?: (teamId: string) => void;
+  /** Des projets appartiennent à l'équipe personnelle (hors `teams`). */
+  hasPersonal?: boolean;
+  /** Équipes actives (identifiants de `teams` ou `PERSONAL`), vide pour toutes. */
+  selectedTeams?: string[];
+  onSelectTeams?: (ids: string[]) => void;
 }
+
+/** Identifiant de choix pour l'équipe personnelle (non partagée, absente de `/api/me`). */
+export const PERSONAL = "personal";
+const ALL = "all";
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -102,9 +108,21 @@ export function AppSidebar({
   onLogout,
   canAdmin = false,
   teams = [],
-  teamFilter = "",
-  onTeamFilter,
+  hasPersonal = false,
+  selectedTeams = [],
+  onSelectTeams,
 }: AppSidebarProps) {
+  const choices = hasPersonal ? [...teams, { id: PERSONAL, name: "Personnel" }] : teams;
+  // Groupes par équipe dans l'ordre des choix ; un seul groupe : liste à plat.
+  const groups = choices
+    .map((c) => ({
+      ...c,
+      items: projects.filter(
+        (p) => (teams.some((t) => t.id === p.teamId) ? p.teamId : PERSONAL) === c.id,
+      ),
+    }))
+    .filter((g) => g.items.length > 0);
+  const grouped = groups.length > 1;
   return (
     <Sidebar collapsible="icon" className="overflow-hidden *:data-[sidebar=sidebar]:flex-row">
       <Sidebar collapsible="none" className="w-[calc(var(--sidebar-width-icon)+1px)]! border-r">
@@ -170,37 +188,56 @@ export function AppSidebar({
               <PlusIcon />
               <span className="sr-only">Nouveau projet</span>
             </SidebarGroupAction>
-            {teams.length > 1 ? (
-              <div className="px-2 pb-2">
-                <NativeSelect
-                  aria-label="Filtrer par équipe"
-                  value={teamFilter}
-                  onChange={(e) => onTeamFilter?.(e.target.value)}
-                >
-                  <option value="">Toutes les équipes</option>
-                  {teams.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
+            {choices.length > 1 ? (
+              <ToggleGroup
+                multiple
+                variant="outline"
+                size="sm"
+                spacing={1}
+                aria-label="Équipes actives"
+                className="flex-wrap px-2 pb-2"
+                value={selectedTeams.length ? selectedTeams : [ALL]}
+                onValueChange={(next: string[]) =>
+                  // « Toutes » vide la sélection ; cocher une équipe décoche « Toutes ».
+                  onSelectTeams?.(
+                    next.includes(ALL) && selectedTeams.length > 0
+                      ? []
+                      : next.filter((id) => id !== ALL),
+                  )
+                }
+              >
+                <ToggleGroupItem value={ALL}>Toutes</ToggleGroupItem>
+                {choices.map((t) => (
+                  <ToggleGroupItem key={t.id} value={t.id}>
+                    {t.name}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
             ) : null}
             <SidebarGroupContent>
               {projects.length === 0 ? (
                 <p className="px-2 py-1.5 text-sm">Aucun projet pour l'instant.</p>
               ) : (
                 <SidebarMenu>
-                  {projects.map((project) => (
-                    <SidebarMenuItem key={project.id}>
-                      <SidebarMenuButton
-                        isActive={project.id === activeProjectId}
-                        render={<Link to={`/projects/${project.id}`} />}
-                      >
-                        <FolderIcon />
-                        <span className="truncate">{project.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
+                  {(grouped ? groups : [{ id: "", name: "", items: projects }]).map((g) => (
+                    <Fragment key={g.id}>
+                      {grouped ? (
+                        <li className="px-2 pt-2 text-xs font-medium text-sidebar-foreground/70">
+                          {g.name}
+                        </li>
+                      ) : null}
+                      {g.items.map((project) => (
+                        <SidebarMenuItem key={project.id}>
+                          <SidebarMenuButton
+                            isActive={project.id === activeProjectId}
+                            render={<Link to={`/projects/${project.id}`} />}
+                          >
+                            <FolderIcon />
+                            <span className="truncate">{project.title}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </Fragment>
                   ))}
                 </SidebarMenu>
               )}
