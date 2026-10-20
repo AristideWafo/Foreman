@@ -21,7 +21,13 @@ ENV_ENVIRONMENT: Final = "FOREMAN_ENVIRONMENT"
 DEFAULT_ENVIRONMENT: Final = "staging"
 
 # "none" (défaut) : utilisateur `dev`, en-tête ignoré. "proxy_header" : identité posée par Traefik.
+# "session" : mot de passe et cookie de session (PostgreSQL requis).
 ENV_AUTH_MODE: Final = "FOREMAN_AUTH_MODE"
 DEFAULT_AUTH_MODE: Final = "none"
 # `nom:role,nom:role` : rôles des membres, lus du `.env` du serveur (jamais du dépôt).
 ENV_DEV_MEMBERS: Final = "FOREMAN_DEV_MEMBERS"
+# "0" retire l'attribut Secure du cookie de session (développement local en HTTP uniquement).
+ENV_COOKIE_SECURE: Final = "FOREMAN_COOKIE_SECURE"
+# Base des liens d'invitation affichés par `foreman admin create`.
+ENV_PUBLIC_URL: Final = "FOREMAN_PUBLIC_URL"
+DEFAULT_PUBLIC_URL: Final = "http://localhost:8000"
