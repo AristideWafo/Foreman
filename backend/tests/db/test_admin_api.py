@@ -132,6 +132,22 @@ async def test_authorization_and_anti_elevation(world: World) -> None:
     assert await world.audit() and True
 
 
+async def test_shared_team_developer_is_not_elevated_by_personal_team(world: World) -> None:
+    # #240 : developer d'une équipe partagée, mais team_admin (propriétaire) de son équipe perso.
+    root = await world.account("root", "org_admin")
+    alice, dev = await world.account("alice"), await world.account("dev")
+    root_c = await world.client(root.email)
+    team = await make_team(root_c, "A", alice)
+    path = f"/api/admin/teams/{team}/members/{dev.id}"
+    assert (await root_c.put(path, json={"role": "developer"})).status_code == 204
+
+    dev_c = await world.client(dev.email)
+    assert (await dev_c.get("/api/me")).json()["role"] == "developer"
+    assert await world.state.members.role_in(dev.id, team) == "developer"
+    assert (await dev_c.get("/api/admin/users")).status_code == 403
+    assert (await dev_c.put(path, json={"role": "team_admin"})).status_code == 403
+
+
 async def test_invite_accept_change_role_and_audit_without_secrets(world: World) -> None:
     root = await world.account("root", "org_admin")
     alice = await world.account("alice")

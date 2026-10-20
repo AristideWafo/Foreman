@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from foreman.core.accounts import rank
 from foreman.core.auth import SESSION_TTL, Credentials, SessionInfo
+from foreman.core.identity import Role
 from foreman.core.store import StoreError
 from foreman.infra.db import tables as t
 from foreman.infra.db.engine import log_failure
@@ -70,10 +71,21 @@ class PostgresAuthStore:
                 ).one_or_none()
                 if row is None:
                     return None
-                roles = (
-                    await conn.execute(sa.select(_M.c.role).where(_M.c.user_id == row.user_id))
-                ).scalars()
-                role = max(roles, key=rank, default=None)
+                # Affichage : org_admin, sinon le plus haut rôle des équipes PARTAGÉES ; l'équipe
+                # personnelle (où chacun est team_admin) ne compte pas. Les droits réels viennent
+                # de `role_in(équipe du projet)`, jamais de ce rôle.
+                found = (
+                    await conn.execute(
+                        sa.select(_M.c.role, t.teams.c.personal)
+                        .select_from(_M.join(t.teams, t.teams.c.id == _M.c.team_id))
+                        .where(_M.c.user_id == row.user_id)
+                    )
+                ).all()
+                shown: list[Role] = [
+                    r.role for r in found if r.role == "org_admin" or not r.personal
+                ]
+                best: Role = max(shown, key=rank, default="developer")
+                role: Role | None = best if found else None
         except SQLAlchemyError as exc:
             log_failure("auth.session", exc)
             raise StoreError("stockage indisponible") from None
