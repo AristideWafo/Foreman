@@ -12,11 +12,11 @@ import httpx
 import pytest
 
 from foreman.bootstrap import adapters
-from foreman.bootstrap.configure import Profile, configure
 from foreman.config.env import ENV_DATABASE_URL
 from foreman.surfaces.web.app import create_app
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "e2e"))
+from s01_run import DEV_HEADERS, configure_web
 from s11_run import play_round, snapshot_fakes
 
 
@@ -34,11 +34,13 @@ async def test_the_same_request_after_a_restart_reuses_the_six_resources(
 
     monkeypatch.setattr(adapters, "build_adapters", same_adapters)
 
-    first = configure(Profile.WEB)
+    first = configure_web()
     app = create_app(first)
     async with (
         app.router.lifespan_context(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as client,
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://t", headers=DEV_HEADERS
+        ) as client,
     ):
         project_id = (await client.post("/api/projects", json={"title": "Safe Eat"})).json()["id"]
         project = UUID(project_id)
@@ -47,11 +49,13 @@ async def test_the_same_request_after_a_restart_reuses_the_six_resources(
         fakes = snapshot_fakes(first)
     assert len(registry) == 6
 
-    second = configure(Profile.WEB)  # redémarrage : nouvelle App, même base, mêmes adaptateurs
+    second = configure_web()  # redémarrage : nouvelle App, même base, mêmes adaptateurs
     app = create_app(second)
     async with (
         app.router.lifespan_context(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as client,
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://t", headers=DEV_HEADERS
+        ) as client,
     ):
         two = await play_round(client, second, project)
         again = await second.stores.registry.list_for_project(project)
