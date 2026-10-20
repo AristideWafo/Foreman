@@ -25,7 +25,15 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 from foreman.core.identity import Role
 
@@ -77,9 +85,23 @@ class _EventBase(_Model):
     at: Annotated[AwareDatetime, Field(description="Horodatage avec fuseau (UTC)")]
 
 
+class MessageAuthor(_Model):
+    id: UUID
+    name: Annotated[str, Field(max_length=100)]
+
+
 class MessageData(_Model):
     role: Literal["user", "assistant"]
     text: Annotated[str, Field(max_length=8000)]
+    # Auteur d'un message utilisateur ; absent pour l'assistant et l'historique antérieur.
+    author: MessageAuthor | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_author(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        out: dict[str, object] = handler(self)
+        if out.get("author") is None:
+            out.pop("author", None)  # forme d'avant : pas de clé plutôt que null
+        return out
 
 
 class CardStep(_Model):

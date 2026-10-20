@@ -8,7 +8,11 @@
     "type": "message",
     "data": {
       "role": "user",
-      "text": "Déploie Safe Eat en production"
+      "text": "Déploie Safe Eat en production",
+      "author": {
+        "id": "abdc4c56-a3a4-5431-930f-df1c5d075686",
+        "name": "dev"
+      }
     }
   },
   {

@@ -8,7 +8,11 @@
     "type": "message",
     "data": {
       "role": "user",
-      "text": "Prépare le projet Safe Eat : GitLab puis déploiement."
+      "text": "Prépare le projet Safe Eat : GitLab puis déploiement.",
+      "author": {
+        "id": "00000000-0000-4000-8000-00000000d001",
+        "name": "dev"
+      }
     }
   },
   {
@@ -76,7 +80,11 @@
     "type": "message",
     "data": {
       "role": "user",
-      "text": "Réponse à la clarification : environment = staging"
+      "text": "Réponse à la clarification : environment = staging",
+      "author": {
+        "id": "00000000-0000-4000-8000-00000000d001",
+        "name": "dev"
+      }
     }
   },
   {

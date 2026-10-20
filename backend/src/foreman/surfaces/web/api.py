@@ -173,7 +173,12 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             turn_id = app.turns.begin(project_id)
         except TurnInProgress:
             raise ApiError(409, "turn_in_progress") from None
-        request = TurnRequest(user_id=caller.user_id, project_id=project_id, message=body.text)
+        request = TurnRequest(
+            user_id=caller.user_id,
+            project_id=project_id,
+            message=body.text,
+            user_name=caller.name[:100],
+        )
         try:
             tasks.spawn(app.turns.run(request, turn_id))
         except BaseException:
@@ -399,7 +404,12 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
         project_id, caller = access.project.id, access.principal
         try:
             outcome = await app.turns.resolve_question(
-                caller.user_id, project_id, question_id, body.decision, body.value
+                caller.user_id,
+                project_id,
+                question_id,
+                body.decision,
+                body.value,
+                caller.name[:100],
             )
         except QuestionRefused as refused:
             if refused.reason == "not_found":
