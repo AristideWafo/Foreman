@@ -121,7 +121,7 @@ async def test_a_project_is_invisible_to_other_teams_on_every_route(world: World
     routes = [
         (method, path)
         for path, item in spec["paths"].items()
-        if "{project_id}" in path
+        if path.startswith("/api/projects/{project_id}")  # /admin/ a sa propre autorisation
         for method in item
     ]
     assert len(routes) >= 8

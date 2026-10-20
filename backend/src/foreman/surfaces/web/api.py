@@ -38,6 +38,7 @@ from foreman.surfaces.web.schemas import (
     Me,
     MessageAccepted,
     MessageRequest,
+    MeTeam,
     PlanView,
     QuestionAccepted,
     QuestionAnswerRequest,
@@ -354,11 +355,16 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
     @router.get("/me", response_model=Me, response_model_exclude_none=True, responses=_ERRORS)
     async def get_me(caller: Caller, request: Request) -> Me:
         """Identité de l'appelant, lue côté serveur (rôle : `FOREMAN_DEV_MEMBERS` ou compte)."""
+        teams: list[MeTeam] | None = None
+        if app.auth_mode is AuthMode.SESSION and app.accounts is not None:
+            found = (await app.accounts.memberships([caller.user_id])).get(caller.user_id, [])
+            teams = [MeTeam(id=m.team_id, name=m.team_name, role=m.role) for m in found]
         return Me(
             user_id=str(caller.user_id),
             name=caller.name,
             role=caller.role,
             csrf_token=getattr(request.state, "csrf_token", None),
+            teams=teams,
         )
 
     @router.post(

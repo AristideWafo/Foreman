@@ -36,6 +36,7 @@ const ERROR_CODES: readonly ErrorCode[] = [
   "unauthenticated",
   "forbidden",
   "policy_denied",
+  "too_many_requests",
 ];
 
 /** Erreur d'API : seuls le statut et le code opaque du contrat sont conservés. */
@@ -62,14 +63,35 @@ async function readErrorCode(res: Response): Promise<ErrorCode | null> {
   return null;
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+let csrfToken: string | null = null;
+let onUnauthorized: (() => void) | null = null;
+
+/** Enregistre la redirection vers `/login` appelée sur tout 401 (hors connexion et invitation). */
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
+}
+
+const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];
+
+async function request<T>(
+  url: string,
+  init: RequestInit = {},
+  { redirectOn401 = true }: { redirectOn401?: boolean } = {},
+): Promise<T> {
+  const headers = new Headers(init.headers);
+  // Sans session (modes `none`/`proxy_header`), `/api/me` ne rend pas de jeton : aucun en-tête.
+  if (csrfToken && !SAFE_METHODS.includes((init.method ?? "GET").toUpperCase())) {
+    headers.set("X-Foreman-CSRF", csrfToken);
+  }
   let res: Response;
   try {
-    res = await fetch(url, init);
+    res = await fetch(url, { ...init, headers, credentials: "include" });
   } catch {
     throw new ApiError(0, null);
   }
+  if (res.status === 401 && redirectOn401) onUnauthorized?.();
   if (!res.ok) throw new ApiError(res.status, await readErrorCode(res));
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
@@ -106,9 +128,23 @@ export function postMessage(projectId: string, text: string): Promise<MessageAcc
   );
 }
 
-/** Identité de l'appelant, lue côté serveur (le rôle ne vient jamais du front). */
-export function getMe(): Promise<Me> {
-  return request<Me>("/api/me");
+/** Identité de l'appelant, lue côté serveur (le rôle ne vient jamais du front). Retient le jeton CSRF. */
+export async function getMe(): Promise<Me> {
+  const me = await request<Me>("/api/me");
+  csrfToken = me.csrf_token ?? null;
+  return me;
+}
+
+export function login(body: components["schemas"]["LoginRequest"]): Promise<void> {
+  return request<void>("/api/auth/login", jsonPost(body), { redirectOn401: false });
+}
+
+export function acceptInvite(body: components["schemas"]["AcceptInviteRequest"]): Promise<void> {
+  return request<void>("/api/auth/accept-invite", jsonPost(body), { redirectOn401: false });
+}
+
+export function logout(): Promise<void> {
+  return request<void>("/api/auth/logout", { method: "POST" });
 }
 
 /**

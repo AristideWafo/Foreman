@@ -6,7 +6,7 @@ les lignes `memberships` des org_admin et de l'équipe visée (`SELECT ... FOR U
 l'état avec une requête neuve. Deux opérations concurrentes se sérialisent donc, sans interblocage.
 """
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -18,11 +18,15 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from foreman.core.accounts import (
     ADMIN_ROLES,
     Account,
+    AdminScope,
+    AdminUser,
     Conflict,
+    ElevationDenied,
     InvalidInvitation,
     Invitation,
     LastAdmin,
     LastTeamAdmin,
+    Membership,
     NotFound,
     PersonalTeam,
     Team,
@@ -71,14 +75,17 @@ class PostgresAccountStore:
         async with self._tx("account.create") as conn:
             return await self._insert_account(conn, email, name, password_hash, invited_by, role)
 
-    async def create_team(self, name: str, first_admin: UUID) -> Team:
+    async def create_team(self, name: str, first_admin: UUID, actor: UUID | None = None) -> Team:
         async with self._tx("team.create") as conn:
+            if actor is not None and await self._actor_role(conn, actor, None) != "org_admin":
+                raise ElevationDenied("droits insuffisants")
             await self._cap(conn, t.teams, self._max_teams)
             await self._require_active(conn, first_admin)
             team = await self._insert_team(conn, name, personal=False)
             await conn.execute(
                 sa.insert(_M).values(user_id=first_admin, team_id=team.id, role="team_admin")
             )
+            await self._audit(conn, actor, "team.create", team.id, None, str(first_admin))
             return team
 
     async def add_member(self, team_id: UUID, user_id: UUID, role: Role, actor: UUID) -> None:
@@ -87,6 +94,7 @@ class PostgresAccountStore:
             await self._require_active(conn, user_id)
             await self._require_shared_team(conn, team_id)
             await conn.execute(sa.insert(_M).values(user_id=user_id, team_id=team_id, role=role))
+            await self._audit(conn, actor, "member.add", f"{team_id}/{user_id}", None, role)
 
     async def change_role(self, team_id: UUID, user_id: UUID, role: Role, actor: UUID) -> None:
         async with self._tx("member.change_role") as conn:
@@ -103,6 +111,7 @@ class PostgresAccountStore:
                 .where(_M.c.team_id == team_id, _M.c.user_id == user_id)
                 .values(role=role)
             )
+            await self._audit(conn, actor, "member.change_role", f"{team_id}/{user_id}", old, role)
 
     async def remove_member(self, team_id: UUID, user_id: UUID, actor: UUID) -> None:
         async with self._tx("member.remove") as conn:
@@ -115,6 +124,7 @@ class PostgresAccountStore:
             await conn.execute(
                 sa.delete(_M).where(_M.c.team_id == team_id, _M.c.user_id == user_id)
             )
+            await self._audit(conn, actor, "member.remove", f"{team_id}/{user_id}", old, None)
 
     async def disable_account(self, user_id: UUID, actor: UUID) -> None:
         async with self._tx("account.disable") as conn:
@@ -138,6 +148,7 @@ class PostgresAccountStore:
                 sa.update(_U).where(_U.c.id == user_id).values(disabled_at=sa.func.now())
             )
             await conn.execute(sa.delete(t.sessions).where(t.sessions.c.user_id == user_id))
+            await self._audit(conn, actor, "account.disable", user_id, "active", "disabled")
 
     async def create_invitation(
         self,
@@ -169,6 +180,7 @@ class PostgresAccountStore:
                     .returning(t.invitations.c.id)
                 )
             ).scalar_one()
+            await self._audit(conn, invited_by, "invitation.create", row, None, role)
             return Invitation(row, email.lower(), team_id, role, invited_by, expires_at)
 
     async def accept_invitation(
@@ -226,10 +238,145 @@ class PostgresAccountStore:
                 )
             return account
 
+    async def admin_scope(self, user_id: UUID) -> AdminScope:
+        async with self._tx("account.admin_scope") as conn:
+            rows = (
+                await conn.execute(
+                    sa.select(_M.c.team_id, _M.c.role, t.teams.c.personal)
+                    .select_from(
+                        _M.join(_U, _U.c.id == _M.c.user_id).join(
+                            t.teams, t.teams.c.id == _M.c.team_id
+                        )
+                    )
+                    .where(_M.c.user_id == user_id, _U.c.disabled_at.is_(None))
+                )
+            ).all()
+        return AdminScope(
+            org=any(r.role == "org_admin" for r in rows),
+            teams=frozenset(r.team_id for r in rows if r.role == "team_admin" and not r.personal),
+        )
+
+    async def memberships(
+        self, user_ids: Sequence[UUID], team_ids: Collection[UUID] | None = None
+    ) -> dict[UUID, list[Membership]]:
+        query = (
+            sa.select(_M.c.user_id, _M.c.team_id, t.teams.c.name, _M.c.role)
+            .select_from(_M.join(t.teams, t.teams.c.id == _M.c.team_id))
+            .where(_M.c.user_id.in_(list(user_ids)), t.teams.c.personal.is_(False))
+            .order_by(t.teams.c.name)
+        )
+        if team_ids is not None:
+            query = query.where(_M.c.team_id.in_(list(team_ids)))
+        async with self._tx("account.memberships") as conn:
+            rows = (await conn.execute(query)).all()
+        found: dict[UUID, list[Membership]] = {}
+        for r in rows:
+            found.setdefault(r.user_id, []).append(Membership(r.team_id, r.name, r.role))
+        return found
+
+    async def list_teams(self, team_ids: Collection[UUID] | None, limit: int) -> list[Team]:
+        query = (
+            sa.select(t.teams.c.id, t.teams.c.name)
+            .where(t.teams.c.personal.is_(False))
+            .order_by(t.teams.c.name)
+            .limit(limit)
+        )
+        if team_ids is not None:
+            query = query.where(t.teams.c.id.in_(list(team_ids)))
+        async with self._tx("team.list") as conn:
+            return [Team(r.id, r.name) for r in (await conn.execute(query)).all()]
+
+    async def list_users(self, team_ids: Collection[UUID] | None, limit: int) -> list[AdminUser]:
+        query = sa.select(_U.c.id, _U.c.email, _U.c.name, _U.c.disabled_at).order_by(_U.c.email)
+        if team_ids is not None:
+            members = sa.select(_M.c.user_id).where(_M.c.team_id.in_(list(team_ids)))
+            query = query.where(_U.c.id.in_(members))
+        async with self._tx("account.list") as conn:
+            rows = (await conn.execute(query.limit(limit))).all()
+        found = await self.memberships([r.id for r in rows], team_ids)
+        return [
+            AdminUser(r.id, r.email, r.name, r.disabled_at is not None, tuple(found.get(r.id, ())))
+            for r in rows
+        ]
+
+    async def list_invitations(
+        self, team_ids: Collection[UUID] | None, limit: int
+    ) -> list[Invitation]:
+        i = t.invitations
+        query = sa.select(*i.c).where(i.c.used_at.is_(None)).order_by(i.c.expires_at.desc())
+        if team_ids is not None:
+            query = query.where(i.c.team_id.in_(list(team_ids)))
+        async with self._tx("invitation.list") as conn:
+            rows = (await conn.execute(query.limit(limit))).all()
+        return [
+            Invitation(r.id, r.email, r.team_id, r.role, r.invited_by, r.expires_at, r.used_at)
+            for r in rows
+        ]
+
+    async def revoke_invitation(self, invitation_id: UUID, actor: UUID) -> None:
+        i = t.invitations
+        async with self._tx("invitation.revoke") as conn:
+            row = (
+                await conn.execute(
+                    sa.select(i.c.team_id, i.c.role, i.c.used_at)
+                    .where(i.c.id == invitation_id)
+                    .with_for_update()
+                )
+            ).one_or_none()
+            if row is None:
+                raise NotFound("invitation introuvable")
+            actor_role = await self._actor_role(conn, actor, row.team_id)
+            if actor_role not in ADMIN_ROLES:
+                raise ElevationDenied("droits insuffisants")
+            require_grant(actor_role, row.role)
+            if row.used_at is not None:
+                raise InvalidInvitation("invitation déjà utilisée")
+            await conn.execute(sa.delete(i).where(i.c.id == invitation_id))
+            await self._audit(conn, actor, "invitation.revoke", invitation_id, row.role, None)
+
+    async def move_project(self, project_id: UUID, team_id: UUID, actor: UUID) -> None:
+        async with self._tx("project.move") as conn:
+            if await self._actor_role(conn, actor, None) != "org_admin":
+                raise ElevationDenied("droits insuffisants")
+            await self._require_shared_team(conn, team_id)
+            old = (
+                await conn.execute(
+                    sa.select(t.projects.c.team_id)
+                    .where(t.projects.c.id == project_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if old is None:
+                raise NotFound("projet introuvable")
+            await conn.execute(
+                sa.update(t.projects).where(t.projects.c.id == project_id).values(team_id=team_id)
+            )
+            await self._audit(conn, actor, "project.move", project_id, str(old), str(team_id))
+
     # --- internes -------------------------------------------------------------------------
 
     def _tx(self, operation: str) -> "_Tx":
         return _Tx(self._engine, operation)
+
+    async def _audit(
+        self,
+        conn: AsyncConnection,
+        actor: UUID | None,
+        action: str,
+        target: object,
+        old: str | None,
+        new: str | None,
+    ) -> None:
+        """Dans la transaction de la mutation ; identifiants et rôles, jamais de secret."""
+        await conn.execute(
+            sa.insert(t.audit_events).values(
+                actor_kind="user",
+                actor_id=actor,
+                tool=f"identity.{action}",
+                decision="allow",
+                params_redacted={"cible": str(target), "ancien": old, "nouveau": new},
+            )
+        )
 
     async def _cap(self, conn: AsyncConnection, table: sa.Table, limit: int, *where: Any) -> None:
         await conn.execute(sa.select(sa.func.pg_advisory_xact_lock(ACCOUNT_CREATE_LOCK_KEY)))

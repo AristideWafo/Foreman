@@ -16,6 +16,7 @@ from foreman.core.identity import Role
 
 SESSION_TTL: Final = timedelta(hours=12)  # glissante : repoussée à chaque requête
 ADMIN_INVITATION_TTL: Final = timedelta(hours=1)
+INVITATION_TTL: Final = timedelta(days=7)
 
 
 def new_token() -> str:
