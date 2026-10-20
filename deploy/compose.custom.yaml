@@ -3,7 +3,8 @@
 # grâce aux labels ci-dessous ; aucun port n'est publié sur l'hôte.
 #
 # Variables obligatoires : PROJECT, FOREMAN_IMAGE, FOREMAN_DOMAIN (fournies par deploy-custom.sh) et
-# FOREMAN_BASIC_AUTH_USERS (dans /opt/<projet>/.env : `utilisateur:hash`, voir docs/DEPLOYMENT.md).
+# FOREMAN_AUTH_MODE (dans /opt/<projet>/.env). En `session` (cible), Traefik n'ajoute aucune authentification.
+# Hors `session` (retour arrière), FOREMAN_BASIC_AUTH_USERS (`utilisateur:hash`) est obligatoire : voir docs/DEPLOYMENT.md.
 # Les autres ont une valeur par défaut, surchargeable dans /opt/<projet>/.env.
 
 name: ${PROJECT:?PROJECT requis}
@@ -54,19 +55,19 @@ services:
       - traefik.http.routers.${PROJECT}.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}
       - traefik.http.routers.${PROJECT}.tls=true
       - traefik.http.routers.${PROJECT}.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
-      # Authentification : active par défaut. FOREMAN_AUTH_PREFIX= (défini et vide dans .env) retire le
-      # middleware du routeur : le site devient public. Choix explicite du propriétaire, voir DEPLOYMENT.md.
-      - traefik.http.routers.${PROJECT}.middlewares=${FOREMAN_AUTH_PREFIX-${PROJECT}-auth,}${PROJECT}-headers,${PROJECT}-compress
+      # Authentification : le basicAuth n'est attaché au routeur QUE si FOREMAN_BASIC_AUTH_USERS est défini
+      # (retour arrière vers FOREMAN_AUTH_MODE=proxy_header). En mode session, la variable est absente et
+      # c'est l'application qui authentifie (cookie, CSRF). deploy-custom.sh impose la cohérence entre
+      # FOREMAN_AUTH_MODE et la présence de la variable, de sorte que le site ne soit jamais ouvert par oubli.
+      - traefik.http.routers.${PROJECT}.middlewares=${FOREMAN_BASIC_AUTH_USERS:+${PROJECT}-auth,}${PROJECT}-headers,${PROJECT}-compress
       - traefik.http.routers.${PROJECT}.service=${PROJECT}
 
-      # Authentification HTTP sur tout le site, flux SSE compris (le navigateur renvoie les
-      # identifiants seul au même domaine). Sans FOREMAN_BASIC_AUTH_USERS, le déploiement est
-      # refusé : le site ne peut pas être publié ouvert par oubli. L'en-tête Authorization est
-      # retiré avant d'atteindre l'application.
-      - traefik.http.middlewares.${PROJECT}-auth.basicauth.users=${FOREMAN_BASIC_AUTH_USERS:?FOREMAN_BASIC_AUTH_USERS requis (utilisateur:hash, voir docs/DEPLOYMENT.md)}
+      # Middleware basicAuth, défini en permanence mais inutilisé sans FOREMAN_BASIC_AUTH_USERS (la valeur de
+      # repli ne peut correspondre à aucun mot de passe). L'en-tête Authorization est retiré avant l'application.
+      - traefik.http.middlewares.${PROJECT}-auth.basicauth.users=${FOREMAN_BASIC_AUTH_USERS:-inutilise:!}
       - traefik.http.middlewares.${PROJECT}-auth.basicauth.removeheader=true
-      # Traefik écrit le nom authentifié dans X-Forwarded-User et écrase celui du client : c'est
-      # l'identité lue par l'application quand FOREMAN_AUTH_MODE=proxy_header.
+      # Retour arrière uniquement : Traefik écrit le nom authentifié dans X-Forwarded-User et écrase celui du
+      # client (identité lue quand FOREMAN_AUTH_MODE=proxy_header). Ignoré par l'application en mode session.
       - traefik.http.middlewares.${PROJECT}-auth.basicauth.headerfield=X-Forwarded-User
 
       # /healthz reste public (supervision, vérification du déploiement) : il ne renvoie que l'état.
@@ -85,7 +86,10 @@ services:
       - "traefik.http.middlewares.${PROJECT}-headers.headers.customResponseHeaders.Content-Security-Policy=default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
       - traefik.http.middlewares.${PROJECT}-compress.compress=true
 
-      # Service : l'application écoute sur 8000 dans le conteneur
+      # Service : l'application écoute sur 8000 dans le conteneur. Traefik transmet Host d'origine (passHostHeader
+      # par défaut) : l'Origin du navigateur correspond au Host vu par l'application (contrôle CSRF). Aucun
+      # buffering de réponse par défaut : le flux SSE (GET) passe au fil de l'eau, compress comprise (text/event-stream
+      # est exclu de la compression par Traefik).
       - traefik.http.services.${PROJECT}.loadbalancer.server.port=8000
 
   # PostgreSQL : optionnel, activé par `deploy-custom.sh --with-db` (profil « db »).

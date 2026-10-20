@@ -105,14 +105,29 @@ TRAEFIK_NETWORK="$(env_value TRAEFIK_NETWORK)"; TRAEFIK_NETWORK="${TRAEFIK_NETWO
 [[ -n "$DOMAIN" ]] || die "FOREMAN_DOMAIN absent de ${APP_DIR}/.env" 66
 [[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || die "FOREMAN_DOMAIN invalide" 66
 
-# Authentification obligatoire : `utilisateur:hash` (htpasswd). Un mot de passe en clair est refusé.
+# Authentification : un seul interrupteur, FOREMAN_AUTH_MODE. En `session` (cible, #228) l'application
+# authentifie elle-même et Traefik n'ajoute aucun basicAuth. Dans les autres modes (retour arrière
+# `proxy_header`, essai `none`), le basicAuth reste OBLIGATOIRE : `utilisateur:hash` (htpasswd), mot de
+# passe en clair refusé. Le site ne peut donc pas être publié ouvert par oubli.
+AUTH_MODE="$(env_value FOREMAN_AUTH_MODE)"
 AUTH_USERS="$(env_value FOREMAN_BASIC_AUTH_USERS)"
-[[ -n "$AUTH_USERS" ]] || die "FOREMAN_BASIC_AUTH_USERS absent de ${APP_DIR}/.env (voir docs/DEPLOYMENT.md)" 66
-IFS=',' read -r -a auth_entries <<<"$AUTH_USERS"
-for entry in "${auth_entries[@]}"; do
-  [[ "$entry" =~ ^[A-Za-z0-9._-]+:(\$apr1\$|\$2[aby]\$|\{SHA\}) ]] \
-    || die "FOREMAN_BASIC_AUTH_USERS doit contenir des mots de passe hachés (utilisateur:\$apr1\$...), pas en clair" 66
-done
+if [[ "$AUTH_MODE" == "session" ]]; then
+  [[ -z "$AUTH_USERS" ]] || die "FOREMAN_BASIC_AUTH_USERS doit être retiré de ${APP_DIR}/.env en mode session (double authentification)" 66
+  [[ "$(env_value FOREMAN_PUBLIC_URL)" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$ ]] \
+    || die "FOREMAN_PUBLIC_URL absent ou non HTTPS dans ${APP_DIR}/.env (https://<domaine>, voir docs/DEPLOYMENT.md)" 66
+  [[ "$(env_value FOREMAN_COOKIE_SECURE)" != "0" ]] || die "FOREMAN_COOKIE_SECURE=0 interdit en déploiement" 66
+  # Sans cela uvicorn ne fait confiance qu'à 127.0.0.1 : request.client serait l'IP de Traefik (rate-limit commun).
+  FWD="$(env_value FORWARDED_ALLOW_IPS)"
+  [[ -n "$FWD" && "$FWD" != *'*'* && "$FWD" != "127.0.0.1" ]] \
+    || die "FORWARDED_ALLOW_IPS doit être le sous-réseau du réseau Traefik, sans '*' (docker network inspect ${TRAEFIK_NETWORK})" 66
+else
+  [[ -n "$AUTH_USERS" ]] || die "FOREMAN_BASIC_AUTH_USERS absent de ${APP_DIR}/.env (hors FOREMAN_AUTH_MODE=session ; voir docs/DEPLOYMENT.md)" 66
+  IFS=',' read -r -a auth_entries <<<"$AUTH_USERS"
+  for entry in "${auth_entries[@]}"; do
+    [[ "$entry" =~ ^[A-Za-z0-9._-]+:(\$apr1\$|\$2[aby]\$|\{SHA\}) ]] \
+      || die "FOREMAN_BASIC_AUTH_USERS doit contenir des mots de passe hachés (utilisateur:\$apr1\$...), pas en clair" 66
+  done
+fi
 
 docker network inspect "$TRAEFIK_NETWORK" >/dev/null 2>&1 \
   || die "réseau Traefik '${TRAEFIK_NETWORK}' introuvable (docker network ls) ; ajuster TRAEFIK_NETWORK dans .env" 69
