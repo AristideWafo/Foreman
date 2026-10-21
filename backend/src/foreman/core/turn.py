@@ -321,6 +321,15 @@ class TurnService:
             logger.exception("provider_failed project=%s turn=%s", project_id, turn_id)
             await self._fail(project_id, turn_id, "internal_error")
             return
+        # Coût visible dans les logs serveur : nombres et identifiants seulement, aucun contenu.
+        logger.info(
+            "turn_cost project=%s turn=%s model=%s tokens=%d cost_eur=%.6f",
+            project_id,
+            turn_id,
+            reply.usage.model if reply.usage else "replay",
+            meter.tokens,
+            meter.cost,
+        )
         if (limit := meter.over()) is not None:
             # Le coût est engagé mais rien de ce que la réponse demande n'est exécuté.
             await self._stop(project_id, turn_id, meter, limit)

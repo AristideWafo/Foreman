@@ -30,6 +30,7 @@ from foreman.core.accounts import AccountStore
 from foreman.core.approval import ApprovalService
 from foreman.core.auth import AuthStore, PasswordHasher
 from foreman.core.catalog import Catalog
+from foreman.core.connector_state import ConnectorStore
 from foreman.core.execution.engine import ExecutionEngine
 from foreman.core.gateway.port import Gateway
 from foreman.core.identity import ROLES, Member
@@ -40,6 +41,7 @@ from foreman.core.store import DEV_USER_ID, DEV_USER_NAME, Stores
 from foreman.core.turn import TurnService
 from foreman.infra.db.accounts import PostgresAccountStore
 from foreman.infra.db.auth import PostgresAuthStore
+from foreman.infra.db.connectors import PostgresConnectorStore
 from foreman.infra.db.engine import make_engine
 from foreman.infra.db.events import PostgresEventLog
 from foreman.infra.db.members import PostgresMemberStore
@@ -128,6 +130,7 @@ class App:
         default_factory=lambda: InMemorySecretStore(Keyring.of(os.urandom(32)))
     )
     key_file: KeyFile | None = None  # PostgreSQL seulement (rotation par la CLI)
+    connectors: ConnectorStore | None = None  # PostgreSQL seulement (API d'intégrations)
 
 
 def invitation_link(token: str) -> str:
@@ -170,6 +173,7 @@ def configure(profile: Profile) -> App:
     persistence = "memory"
     secrets: SecretStore = InMemorySecretStore(Keyring.of(os.urandom(32)))
     key_file: KeyFile | None = None
+    connectors: ConnectorStore | None = None
     url = os.environ.get(ENV_DATABASE_URL)
     if url and profile in _PERSISTENT_PROFILES:
         engine = make_engine(url)  # ne se connecte pas : les migrations viennent au démarrage
@@ -182,6 +186,7 @@ def configure(profile: Profile) -> App:
         members = PostgresMemberStore(engine)
         accounts = PostgresAccountStore(engine)
         auth = PostgresAuthStore(engine)
+        connectors = PostgresConnectorStore(engine)
         persistence = "postgres"
     else:
         memory_projects = InMemoryProjectStore()
@@ -194,7 +199,13 @@ def configure(profile: Profile) -> App:
         raise ValueError(f"{ENV_DATABASE_URL} est obligatoire en mode {AuthMode.SESSION}")
     provider = choose_provider(replay, secrets, force_replay=profile is Profile.EVAL)
     # 4. Services du cœur
-    gateway = build_gateway(catalog, stores, members, durable_registry=persistence == "postgres")
+    gateway = build_gateway(
+        catalog,
+        stores,
+        members,
+        durable_registry=persistence == "postgres",
+        connector_store=connectors,
+    )
     return App(
         profile=profile,
         projects=projects,
@@ -216,6 +227,7 @@ def configure(profile: Profile) -> App:
         auth=auth,
         secrets=secrets,
         key_file=key_file,
+        connectors=connectors,
         cookie_secure=os.environ.get(ENV_COOKIE_SECURE, "1") != "0",
         catalog=catalog,
         gateway=gateway,

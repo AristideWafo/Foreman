@@ -2,9 +2,11 @@
 
 Seules les sondes DÉCLARÉES dans `connector.yaml` s'exécutent, en lecture seule (GET ou HEAD,
 vérifié au chargement du catalogue). La gateway ne voit jamais un jeton : l'adaptateur le détient.
-Le statut `incomplete` est gardé en mémoire du processus (shortcut: perdu au redémarrage, la table
-`connectors` de #260 le persistera) ; tant qu'un connecteur n'est pas sondé, ses outils restent
-permis.
+Le statut est persisté (`ConnectorStore`, table `connectors`) et relu au premier usage : un
+connecteur `incomplete` le reste après un redémarrage. Sans store (tests, CLI), il reste en mémoire
+du processus. Tant qu'un connecteur n'est pas sondé, ses outils restent permis.
+shortcut: l'état est relu une fois par processus ; plusieurs conteneurs ne se voient qu'au
+redémarrage, à revoir si on passe à plusieurs instances.
 """
 
 import asyncio
@@ -16,6 +18,7 @@ from typing import Final, Literal, cast
 from uuid import UUID
 
 from foreman.core.catalog import Catalog, ConnectorDefinition, ToolDefinition
+from foreman.core.connector_state import ConnectorStatus, ConnectorStore
 from foreman.core.gateway.errors import CallFailed, FailureCode, ProbeDenialCode, ProbeDenied
 from foreman.core.gateway.port import ProbeReport, RightVerdict
 from foreman.core.gateway.redact import mask_text
@@ -62,7 +65,10 @@ class ConnectorProbes:
         members: MemberStore,
         probers: Mapping[str, ConnectorProber],
         clock: Callable[[], float] = time.monotonic,
+        store: ConnectorStore | None = None,
     ) -> None:
+        self._store = store
+        self._loaded = store is None
         self._catalog = catalog
         self._audit = audit
         self._members = members
@@ -71,8 +77,18 @@ class ConnectorProbes:
         self._limiter = ProbeLimiter(clock)
         self._missing: dict[str, frozenset[str]] = {}  # connecteur -> jetons dont un droit manque
 
-    def blocks(self, tool: ToolDefinition) -> bool:
+    async def _load(self) -> None:
+        if self._loaded or self._store is None:
+            return
+        for name, state in (await self._store.states()).items():
+            self._missing.setdefault(
+                name, frozenset(r.token for r in state.rights if r.verdict == "missing")
+            )
+        self._loaded = True
+
+    async def blocks(self, tool: ToolDefinition) -> bool:
         """Vrai si un jeton requis par l'outil a un droit manquant (connecteur `incomplete`)."""
+        await self._load()
         definition = self._catalog.connectors.get(tool.connector)
         if definition is None:
             return False
@@ -87,8 +103,13 @@ class ConnectorProbes:
         try:
             denial = await self._precheck(connector, actor)
             if denial is None:
-                report = await self._run(self._catalog.connectors[connector])
+                definition = self._catalog.connectors[connector]
+                report = await self._run(definition)
                 await self._write(actor, name, started, "executed", _report_json(report))
+                if self._store is not None:
+                    declared = {k: list(v.scopes) for k, v in definition.tokens.items()}
+                    saved: ConnectorStatus = "ok" if report.status == "complete" else "incomplete"
+                    await self._store.save_probe(connector, declared, saved, report.rights, actor)
                 self._missing[connector] = frozenset(
                     r.token for r in report.rights if r.verdict == "missing"
                 )

@@ -3,7 +3,15 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    SecretStr,
+    model_validator,
+)
 
 from foreman.core.accounts import PASSWORD_MAX, PASSWORD_MIN
 from foreman.core.events import (
@@ -269,3 +277,67 @@ class InvitationCreated(InvitationView):
     """Le lien contient le jeton : montré une seule fois, seul son condensat est stocké."""
 
     link: Annotated[str, Field(max_length=500)]
+
+
+# --- Intégrations (org_admin) ---------------------------------------------------------------------
+
+
+class SetCredentialRequest(BaseModel):
+    """Jeton en écriture seule : jamais relu, jamais renvoyé, jamais journalisé."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token: Annotated[SecretStr, Field(min_length=1, max_length=512)]
+    # Nom du jeton déclaré (`read`, `write`...). Facultatif si le connecteur n'en déclare qu'un.
+    name: Annotated[str | None, Field(pattern=r"^[a-z][a-z0-9_]*$", max_length=64)] = None
+
+
+class SetModelRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model: Annotated[str, Field(min_length=1, max_length=64)]
+
+
+class RightView(BaseModel):
+    token: str
+    right: str
+    verdict: Literal["ok", "missing", "excess"]
+
+
+class TokenView(BaseModel):
+    name: str
+    scopes: list[str]  # droits déclarés dans le connecteur
+    boundary: str | None = None
+    configured: bool  # un jeton est enregistré (sa valeur n'est jamais rendue)
+
+
+class ModelOption(BaseModel):
+    id: str
+    label: str
+    # USD par million de jetons.
+    input_usd: float
+    output_usd: float
+    cache_read_usd: float
+    cache_write_usd: float
+
+
+class LlmView(BaseModel):
+    models: list[ModelOption]
+    model: str | None = None  # modèle choisi
+
+
+class IntegrationView(BaseModel):
+    connector: str
+    kind: Literal["llm", "connector"]
+    status: Literal["ok", "incomplete", "revoked", "unprobed"]
+    configured: bool  # tous les jetons déclarés sont enregistrés
+    tokens: list[TokenView]
+    rights: list[RightView]  # droits vérifiés par la dernière sonde
+    last_probe_at: AwareDatetime | None = None
+    llm: LlmView | None = None  # seulement pour `anthropic`
+
+
+class IntegrationTestResult(BaseModel):
+    connector: str
+    status: Literal["ok", "incomplete", "failed"]
+    rights: list[RightView]

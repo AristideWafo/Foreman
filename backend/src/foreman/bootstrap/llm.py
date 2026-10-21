@@ -26,8 +26,8 @@ from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.llm_recording import RecordingRefused, build_recording, write_recording
 from foreman.infra.llm_settings import SecretLlmSettings
 from foreman.infra.replay_provider import sha256_of
-from foreman.integrations.anthropic.models import model_prices
-from foreman.integrations.anthropic.provider import AnthropicProvider
+from foreman.integrations.anthropic.models import ModelEntry, load_connector, model_prices, probe
+from foreman.integrations.anthropic.provider import AnthropicProvider, ProviderFailed
 
 MESSAGES_PATH = "/v1/messages"
 
@@ -60,7 +60,7 @@ async def set_llm_key(app: App, key: str) -> None:
 
 
 async def set_llm_model(app: App, model: str) -> None:
-    """Choisit le modèle dans la liste déclarée (`connector.yaml`) ; sinon refus."""
+    """Choisit le modèle dans la liste déclarée (`models.yaml`) ; sinon refus."""
     if model not in model_prices():
         raise RecordRefused("modèle hors de la liste déclarée")
     await app.secrets.put(LLM_MODEL_ID, LLM_MODEL_KIND, SecretStr(model), created_by="cli")
@@ -92,3 +92,22 @@ async def record_llm_response(
         return write_recording(catalog_dir or catalog_dir_from_env(), name, recording)
     except RecordingRefused:
         raise RecordRefused("contenu refusé (motif de secret ou forme invalide)") from None
+
+
+def declared_models() -> list[ModelEntry]:
+    """Modèles proposés à l'admin (liste fermée de `models.yaml` d'Anthropic)."""
+    return load_connector().models
+
+
+async def probe_llm(app: App) -> bool:
+    """Sonde `models.retrieve` : faux si le fournisseur refuse ; `LlmNotConfigured` si rien n'est
+    saisi. Aucun détail du SDK ne remonte."""
+    try:
+        return await probe(SecretLlmSettings(app.secrets))
+    except ProviderFailed:
+        return False
+
+
+async def chosen_model(app: App) -> str | None:
+    """Modèle choisi par l'admin (pas un secret), ou `None`."""
+    return await SecretLlmSettings(app.secrets).model()

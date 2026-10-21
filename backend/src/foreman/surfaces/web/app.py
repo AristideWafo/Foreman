@@ -9,8 +9,10 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from foreman.bootstrap.configure import App, AuthMode, Profile, configure
 from foreman.config.env import DEFAULT_VERSION, ENV_STATIC_DIR, ENV_VERSION
@@ -21,6 +23,26 @@ from foreman.surfaces.web.errors import install_error_handlers
 from foreman.surfaces.web.openapi import install_event_schema
 from foreman.surfaces.web.schemas import HealthResponse
 from foreman.surfaces.web.tasks import TaskRegistry
+
+
+class NoStoreAdmin:
+    """`Cache-Control: no-store` sur TOUTE réponse de `/api/admin` (erreurs comprises)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or not scope["path"].startswith("/api/admin"):
+            await self._app(scope, receive, send)
+            return
+
+        async def send_no_store(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers["Cache-Control"] = "no-store"
+            await send(message)
+
+        await self._app(scope, receive, send_no_store)
 
 
 class SpaStaticFiles(StaticFiles):
@@ -108,6 +130,7 @@ def create_app(app_state: App | None = None) -> FastAPI:
 
     api = FastAPI(title="Foreman", lifespan=lifespan)
     install_error_handlers(api)
+    api.add_middleware(NoStoreAdmin)
     api.include_router(create_router(state, tasks))
     api.include_router(create_auth_router(state))
     api.include_router(create_admin_router(state))

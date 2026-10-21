@@ -322,3 +322,21 @@ secrets = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
     sa.Column("rotated_at", sa.DateTime(timezone=True), nullable=True),
 )
+
+# Statut des sondes d'un connecteur (migration 0008) : jamais de jeton, seulement des références.
+connectors = sa.Table(
+    "connectors",
+    metadata,
+    sa.Column(
+        "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+    ),
+    sa.Column("provider", sa.Text, nullable=False, unique=True),
+    sa.Column("name", sa.Text, nullable=False),
+    sa.Column("status", sa.Text, nullable=False, server_default="incomplete"),
+    sa.Column("declared_scopes", JSONB, nullable=False),
+    sa.Column("verified_scopes", JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")),
+    sa.Column("read_secret_ref", sa.Text, nullable=True),
+    sa.Column("write_secret_ref", sa.Text, nullable=True),
+    sa.Column("last_probe_at", sa.DateTime(timezone=True), nullable=True),
+    sa.CheckConstraint("status IN ('ok', 'incomplete', 'revoked')", name="connectors_status_check"),
+)
