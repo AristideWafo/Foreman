@@ -9,6 +9,7 @@ from pydantic import JsonValue
 
 from foreman.core.events import AnyEvent, ClarificationQuestion, EventData
 from foreman.core.identity import Member, Role
+from foreman.core.pricing import Usage
 from foreman.core.projects import Project
 
 
@@ -26,6 +27,7 @@ class ToolCall:
 class ModelReply:
     text: str
     tool_calls: tuple[ToolCall, ...] = ()
+    usage: Usage | None = None  # absent pour le rejeu : aucun coût
 
 
 @dataclass(frozen=True, slots=True)

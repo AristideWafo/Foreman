@@ -9,6 +9,7 @@ import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -628,6 +629,20 @@ async def time_budget_is_spent() -> tuple[World, Refusal]:
     return world, Refusal(call_for(started), "budget_exceeded", 1, ("allow", "denied"))
 
 
+async def step_retries_are_spent() -> tuple[World, Refusal]:
+    world = make_world(tight_budget(max_retries_per_step=0))  # une seule tentative par étape
+    started = await start(world, ONE_GROUP)
+    await world.gateway.call(call_for(started))
+    return world, Refusal(call_for(started), "budget_exceeded", 1, ("allow", "denied"))
+
+
+async def model_cost_is_spent() -> tuple[World, Refusal]:
+    world = make_world(tight_budget(max_model_cost_eur=1))
+    started = await start(world, ONE_GROUP)
+    world.gateway.record_model_cost(started.execution_id, Decimal("1.5"))
+    return world, Refusal(call_for(started), "budget_exceeded", 0, ("denied",))
+
+
 @pytest.mark.parametrize(
     "scenario",
     [
@@ -655,6 +670,8 @@ async def time_budget_is_spent() -> tuple[World, Refusal]:
         requirement_cannot_be_met,
         call_budget_is_spent,
         time_budget_is_spent,
+        step_retries_are_spent,
+        model_cost_is_spent,
     ],
 )
 async def test_a_refused_call_never_reaches_the_adapter_and_is_audited(scenario: Scenario) -> None:

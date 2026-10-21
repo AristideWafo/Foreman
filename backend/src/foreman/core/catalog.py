@@ -610,8 +610,16 @@ class ExecutionBudget(_Strict):
     max_model_cost_eur: Annotated[float, Field(ge=0)]
 
 
+class TurnBudget(_Strict):
+    max_model_calls: Annotated[int, Field(gt=0)]
+    max_tokens: Annotated[int, Field(gt=0)]
+    max_cost_eur: Annotated[float, Field(ge=0)]
+    max_seconds: Annotated[int, Field(gt=0)]
+
+
 class Budgets(_Strict):
     per_execution: ExecutionBudget
+    per_turn: TurnBudget
 
 
 class PolicyMatrix(_Strict):

@@ -701,7 +701,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "internal_error" | "unknown_tool" | "invalid_plan";
+            code: "internal_error" | "unknown_tool" | "invalid_plan" | "budget_exceeded";
             /**
              * Message
              * @description Texte fixe dérivé de `code`, jamais une exception
