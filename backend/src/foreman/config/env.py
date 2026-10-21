@@ -31,3 +31,7 @@ ENV_COOKIE_SECURE: Final = "FOREMAN_COOKIE_SECURE"
 # Base des liens d'invitation affichés par `foreman admin create`.
 ENV_PUBLIC_URL: Final = "FOREMAN_PUBLIC_URL"
 DEFAULT_PUBLIC_URL: Final = "http://localhost:8000"
+
+# Clé maître des secrets : créée au premier démarrage dans un volume dédié (docs/DEPLOYMENT.md).
+ENV_SECRETS_KEY_FILE: Final = "FOREMAN_SECRETS_KEY_FILE"
+DEFAULT_SECRETS_KEY_FILE: Final = "/var/lib/foreman/secrets/master.key"

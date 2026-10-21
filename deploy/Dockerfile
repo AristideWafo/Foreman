@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-edi
 
 # --- Image finale -----------------------------------------------------------
 FROM python:3.12-slim
-RUN useradd --system --uid 10001 --no-create-home foreman
+RUN useradd --system --uid 10001 --no-create-home foreman && install -d -o 10001 -m 0700 /var/lib/foreman/secrets
 WORKDIR /app
 COPY --from=backend /app/.venv /app/.venv
 COPY --from=frontend /frontend/dist /app/static
