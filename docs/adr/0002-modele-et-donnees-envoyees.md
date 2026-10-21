@@ -50,6 +50,32 @@ production. Une rétention plus courte demandera un accord dédié et un nouvel 
 - **Accès** : réservé à `org_admin` par défaut ; les autres rôles ne voient que la version masquée.
   Décision détaillée : ticket #70 (visibilité par rôle), qui s'appuie sur cet ADR.
 
+### Diagnostic des échecs sans logs bruts
+
+Sans logs bruts, le modèle ne juge pas une action sur du texte libre : le compromis est couvert par
+des couches, de la plus à la moins utile. Chacune réduit le besoin de la suivante.
+
+1. **Diagnostic déclaré par l'outil.** L'outil renvoie un résultat typé : code d'erreur normalisé
+   (`port_in_use`, `permission_missing`, `image_not_found`…), état attendu contre état observé, et une
+   sonde de vérification après action. Le modèle raisonne sur ces champs, pas sur du texte libre. S'appuie
+   sur `expects` / `strip_from_results` de `connector.yaml` (chargés mais pas encore appliqués, voir PR #264).
+2. **Extrait ciblé.** En cas d'échec, seules les N dernières lignes pertinentes, ou la ligne qui matche un
+   motif d'erreur connu, sont transmises, passées par `mask_text` puis `filter_logs`, de taille bornée.
+3. **Masquage par liste d'autorisation.** Seuls les champs déclarés partent ; tout le reste est écarté,
+   plutôt qu'une liste d'interdits qui laisse passer l'inconnu (#178).
+4. **Aliasing stable.** Hôtes et valeurs internes deviennent des alias stables (`host-1`, `var-A`) : le
+   modèle corrèle sans voir la valeur.
+5. **Repli humain.** Sans code connu, le modèle ne devine pas : une carte « diagnostic requis » (via
+   `ask_user`) montre le log brut à l'humain habilité (#70, qui voit les logs bruts).
+6. **Mesure.** Dans les évaluations (#61), scénarios d'échec S3 à S9, indicateur « le modèle corrige
+   l'erreur avec le seul extrait filtré ». Si trop bas, on enrichit l'outil (couche 1), jamais en envoyant
+   le flux brut.
+
+**Ce qu'on ne fait pas** : aucun envoi de logs bruts en repli ; le modèle ne demande pas lui-même plus de
+logs sans validation humaine.
+
+**Ordre recommandé** : couches 1, 2, 5, puis 6, puis 3 et 4.
+
 ## Conséquences
 
 - Le contrôleur est la seule frontière de confiance : la redaction est testée côté contrôleur, pas déléguée.
