@@ -11,7 +11,7 @@ from foreman.core.execution.cards import _blocked_summary
 from foreman.core.execution.engine import ExecutionEngine
 from foreman.core.gateway.pipeline import ToolGateway
 from foreman.core.planning import Draft, DraftStep, Planner
-from foreman.core.ports import AdapterError, AdapterResult, ToolAdapter
+from foreman.core.ports import AdapterError, AdapterResult, RawLogStore, ToolAdapter
 from foreman.core.store import DEV_USER_ID, Approved, AuditEntry, Stores
 from foreman.infra.file_catalog import load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
@@ -48,7 +48,12 @@ def gitlab(first_group_id: int = 2000) -> SimulatedGitLab:
     )
 
 
-def engine_for(stores: Stores, events: InMemoryEventLog, adapter: ToolAdapter) -> ExecutionEngine:
+def engine_for(
+    stores: Stores,
+    events: InMemoryEventLog,
+    adapter: ToolAdapter,
+    raw_logs: RawLogStore | None = None,
+) -> ExecutionEngine:
     gateway = ToolGateway(
         catalog=catalog(),
         stores=stores,
@@ -59,7 +64,9 @@ def engine_for(stores: Stores, events: InMemoryEventLog, adapter: ToolAdapter) -
             "dns": SimulatedDns.from_referentiel(catalog().referentiels["infra-staging"].data),
         },
     )
-    return ExecutionEngine(catalog=catalog(), stores=stores, gateway=gateway, events=events)
+    return ExecutionEngine(
+        catalog=catalog(), stores=stores, gateway=gateway, events=events, raw_logs=raw_logs
+    )
 
 
 async def run_plan(

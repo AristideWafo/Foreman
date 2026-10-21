@@ -65,6 +65,13 @@ class ProbeDenied(GatewayError):
 class CallFailed(GatewayError):
     """L'appel était permis mais l'exécution a échoué ou sa sortie est inutilisable."""
 
-    def __init__(self, code: FailureCode, diagnostic: ToolDiagnostic | None = None) -> None:
+    def __init__(
+        self,
+        code: FailureCode,
+        diagnostic: ToolDiagnostic | None = None,
+        raw_logs: tuple[str, ...] = (),
+    ) -> None:
         super().__init__(code, FAILED_MESSAGE)
         self.diagnostic = diagnostic
+        # Log brut de l'adaptateur : destiné à l'humain habilité seulement, jamais au modèle.
+        self.raw_logs = raw_logs

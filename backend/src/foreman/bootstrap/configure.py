@@ -35,7 +35,7 @@ from foreman.core.execution.engine import ExecutionEngine
 from foreman.core.gateway.port import Gateway
 from foreman.core.identity import ROLES, Member
 from foreman.core.planning import Planner
-from foreman.core.ports import EventLog, MemberStore, ProjectStore
+from foreman.core.ports import EventLog, MemberStore, ProjectStore, RawLogStore
 from foreman.core.secrets import SecretStore
 from foreman.core.store import DEV_USER_ID, DEV_USER_NAME, Stores
 from foreman.core.turn import TurnService
@@ -52,6 +52,7 @@ from foreman.infra.in_memory import (
     InMemoryEventLog,
     InMemoryMemberStore,
     InMemoryProjectStore,
+    InMemoryRawLogStore,
     in_memory_stores,
 )
 from foreman.infra.passwords import Argon2Hasher
@@ -117,6 +118,7 @@ class App:
     gateway: Gateway | None = None  # seul chemin vers les outils ; consommé par le moteur
     approvals: ApprovalService | None = None
     engine: ExecutionEngine | None = None
+    raw_logs: RawLogStore | None = None
     persistence: str = "memory"  # « postgres » quand le stockage durable est branché
     members: MemberStore = field(default_factory=_dev_member_store)
     auth_mode: AuthMode = AuthMode.NONE
@@ -198,6 +200,7 @@ def configure(profile: Profile) -> App:
     if (auth_mode is AuthMode.SESSION or profile is Profile.ADMIN) and auth is None:
         raise ValueError(f"{ENV_DATABASE_URL} est obligatoire en mode {AuthMode.SESSION}")
     provider = choose_provider(replay, secrets, force_replay=profile is Profile.EVAL)
+    raw_logs = InMemoryRawLogStore()
     # 4. Services du cœur
     gateway = build_gateway(
         catalog,
@@ -232,5 +235,8 @@ def configure(profile: Profile) -> App:
         catalog=catalog,
         gateway=gateway,
         approvals=ApprovalService(catalog, stores, events, members),
-        engine=ExecutionEngine(catalog=catalog, stores=stores, gateway=gateway, events=events),
+        engine=ExecutionEngine(
+            catalog=catalog, stores=stores, gateway=gateway, events=events, raw_logs=raw_logs
+        ),
+        raw_logs=raw_logs,
     )

@@ -132,6 +132,8 @@ function hasExpectedShape(card: CardData): boolean {
       );
     case "clarification":
       return Array.isArray(card.questions);
+    case "diagnostic":
+      return Array.isArray(card.extract);
     default:
       return true;
   }

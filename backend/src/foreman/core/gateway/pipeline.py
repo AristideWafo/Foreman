@@ -151,12 +151,22 @@ class _Failure:
 
 _DIAGNOSTIC_CODES: Final = frozenset(get_args(DiagnosticCode))
 MAX_DIAGNOSTIC_VALUE: Final = 100
+MAX_RAW_LINES: Final = 200
+MAX_RAW_LINE: Final = 500
 
 
 def _value(value: object) -> str | int | bool | None:
     if isinstance(value, bool | int):
         return value
     return mask_text(value)[:MAX_DIAGNOSTIC_VALUE] if isinstance(value, str) else None
+
+
+def _raw_logs(raw: AdapterDiagnostic | None) -> tuple[str, ...]:
+    """Fin du log brut (bornée), pour l'humain habilité ; ne passe jamais par un événement."""
+    if not isinstance(raw, AdapterDiagnostic) or not isinstance(raw.logs, tuple):
+        return ()
+    lines = [line[:MAX_RAW_LINE] for line in raw.logs if isinstance(line, str)]
+    return tuple(lines[-MAX_RAW_LINES:])
 
 
 def _diagnostic(code: str, raw: AdapterDiagnostic | None) -> ToolDiagnostic:
@@ -280,6 +290,7 @@ class ToolGateway:
         denial: DenialCode | None = None
         failure: FailureCode = "internal_error"
         diagnostic: ToolDiagnostic | None = None
+        raw_logs: tuple[str, ...] = ()
         rule_id: str | None = None
         try:
             authorized = await self._authorize(call, trace)
@@ -295,7 +306,7 @@ class ToolGateway:
             denial, rule_id = refusal.code, refusal.rule_id
         except CallFailed as failed:
             failure, rule_id = cast(FailureCode, failed.code), trace.rule_id
-            diagnostic = failed.diagnostic
+            diagnostic, raw_logs = failed.diagnostic, failed.raw_logs
         except StoreError:
             log.warning("gateway : stockage indisponible (étape %d)", call.step_seq)
             failure, rule_id = "storage_unavailable", trace.rule_id
@@ -313,7 +324,7 @@ class ToolGateway:
             await self._audit(call, trace, "denied", denial, rule_id, started)
             raise CallDenied(denial)
         await self._audit(call, trace, "error", failure, rule_id, started)
-        raise CallFailed(failure, diagnostic or _diagnostic(failure, None))
+        raise CallFailed(failure, diagnostic or _diagnostic(failure, None), raw_logs)
 
     # --- Étapes 1 à 7 : décider --------------------------------------------------------------
 
@@ -496,7 +507,7 @@ class ToolGateway:
         tool = authorized.tool
         raw = await self._invoke(call, tool)
         if isinstance(raw, _Failure):
-            raise CallFailed(raw.code, _diagnostic(raw.code, raw.raw))
+            raise CallFailed(raw.code, _diagnostic(raw.code, raw.raw), _raw_logs(raw.raw))
         fields = frozenset(tool.redact)
         resources, reused = await self._resources(call, tool, raw)
         masked = redact_value(dict(raw.output), fields)

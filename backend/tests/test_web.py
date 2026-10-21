@@ -417,3 +417,21 @@ def test_admin_approval_over_http_approves_then_replays_and_a_rejection_invalida
 
 def test_admin_roles_in_the_store_match_the_policy_matrix() -> None:
     assert set(ADMIN_ROLES) == set(load_catalog(environment="staging").policy.approvers.admin)
+
+
+def test_the_raw_log_is_read_by_a_team_admin_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FOREMAN_AUTH_MODE", "proxy_header")
+    monkeypatch.setenv("FOREMAN_DEV_MEMBERS", "alice:developer,bob:team_admin")
+    state = configure(Profile.WEB)
+    assert state.raw_logs is not None
+    with TestClient(create_app(state)) as client:
+        alice, bob = {"X-Forwarded-User": "alice"}, {"X-Forwarded-User": "bob"}
+        project = client.post("/api/projects", headers=alice).json()["id"]
+        execution = uuid4()
+        state.raw_logs.put(UUID(project), execution, 1, ["ligne brute"])
+        url = f"/api/projects/{project}/executions/{execution}/steps/1/raw-log"
+        denied = client.get(url, headers=alice)
+        assert (denied.status_code, denied.json()) == (403, {"error": "forbidden"})
+        allowed = client.get(url, headers=bob)
+        assert (allowed.status_code, allowed.json()) == (200, {"lines": ["ligne brute"]})
+        assert client.get(url.replace("/1/", "/2/"), headers=bob).status_code == 404

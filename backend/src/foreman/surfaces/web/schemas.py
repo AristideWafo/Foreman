@@ -89,6 +89,12 @@ class QuestionAnswerRequest(BaseModel):
         return self
 
 
+class RawLogView(BaseModel):
+    """Log brut d'un échec (administrateurs seulement) : à afficher comme texte, jamais en HTML."""
+
+    lines: Annotated[list[Annotated[str, Field(max_length=500)]], Field(max_length=200)]
+
+
 class QuestionAccepted(BaseModel):
     question_id: Annotated[str, Field(max_length=64)]
     status: Literal["answered", "deferred"]

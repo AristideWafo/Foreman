@@ -369,6 +369,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/executions/{execution_id}/steps/{step}/raw-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Raw Log
+         * @description Log brut d'un échec sans code connu : org_admin et team_admin de l'équipe seulement.
+         *
+         *     Un développeur reçoit 403 (il ne voit que l'extrait masqué de la carte) ; le modèle ne le
+         *     lit jamais.
+         */
+        get: operations["get_raw_log_api_projects__project_id__executions__execution_id__steps__step__raw_log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/messages": {
         parameters: {
             query?: never;
@@ -633,7 +656,7 @@ export interface components {
              */
             at: string;
             /** Data */
-            data: components["schemas"]["PlanCardData"] | components["schemas"]["ExecutionCardData"] | components["schemas"]["ClarificationCardData"] | components["schemas"]["ApprovalCardData"];
+            data: components["schemas"]["PlanCardData"] | components["schemas"]["ExecutionCardData"] | components["schemas"]["ClarificationCardData"] | components["schemas"]["ApprovalCardData"] | components["schemas"]["DiagnosticCardData"];
             /**
              * Project Id
              * Format: uuid
@@ -772,6 +795,41 @@ export interface components {
             first_admin_id: string;
             /** Name */
             name: string;
+        };
+        /**
+         * DiagnosticCardData
+         * @description Carte « diagnostic requis » (ADR 0002, couche 5) : échec sans code connu, l'humain décide.
+         *
+         *     Ne porte jamais le log brut (le flux est lu par tous les membres) : seulement l'extrait masqué.
+         *     Le log brut se lit par une route réservée aux administrateurs de l'équipe (`raw_log_available`).
+         */
+        DiagnosticCardData: {
+            /** Card Id */
+            card_id: string;
+            /**
+             * Execution Id
+             * Format: uuid
+             */
+            execution_id: string;
+            /**
+             * Extract
+             * @default []
+             */
+            extract: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "diagnostic";
+            /**
+             * Raw Log Available
+             * @default false
+             */
+            raw_log_available: boolean;
+            /** Step */
+            step: number;
+            /** Tool */
+            tool: string;
         };
         /** ErrorData */
         ErrorData: {
@@ -1560,6 +1618,14 @@ export interface components {
             decision: "answer" | "defer";
             /** Value */
             value?: string | null;
+        };
+        /**
+         * RawLogView
+         * @description Log brut d'un échec (administrateurs seulement) : texte à afficher tel quel, jamais en HTML.
+         */
+        RawLogView: {
+            /** Lines */
+            lines: string[];
         };
         /** ResourceRef */
         ResourceRef: {
@@ -3505,6 +3571,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExecutionView"];
+                };
+            };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rôle insuffisant (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Introuvable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Pas encore implémenté */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_raw_log_api_projects__project_id__executions__execution_id__steps__step__raw_log_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                execution_id: string;
+                step: number;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RawLogView"];
                 };
             };
             /** @description Non authentifié (`unauthenticated`) */

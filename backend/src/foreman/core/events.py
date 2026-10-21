@@ -9,7 +9,8 @@ consigne de validation côté client) ; sans cela, aucun ajout ne serait réelle
 
 Sémantique de `seq` : strictement croissant, contigu à partir de 1, par projet, livré dans l'ordre.
 Une carte (`card`) remplace la précédente de même `card_id`. Quatre sortes de cartes (`kind`) :
-`plan`, `execution`, `clarification` (S3) et `approval` (S4), ajouts additifs.
+`plan`, `execution`, `clarification` (S3), `approval` (S4) et `diagnostic` (échec sans code connu),
+ajouts additifs.
 
 Ordre et portée (Semaine 2) :
 - après l'approbation, la carte plan est RÉÉMISE (`status: dev_approved`, `approvable: false`)
@@ -268,8 +269,28 @@ class ApprovalCardData(_Model):
     decided_by: UserRef | None = None
 
 
+class DiagnosticCardData(_Model):
+    """Carte « diagnostic requis » (ADR 0002, couche 5) : échec sans code connu, l'humain décide.
+
+    Ne porte jamais le log brut (le flux est lu par tous les membres) : seulement l'extrait masqué.
+    Le log brut se lit par une route réservée aux administrateurs de l'équipe (`raw_log_available`).
+    """
+
+    card_id: Annotated[str, Field(max_length=100)]
+    kind: Literal["diagnostic"]
+    execution_id: UUID
+    step: Annotated[int, Field(ge=1)]
+    tool: Annotated[str, Field(max_length=100)]
+    extract: Annotated[list[Annotated[str, Field(max_length=200)]], Field(max_length=5)] = []
+    raw_log_available: bool = False
+
+
 CardData = Annotated[
-    PlanCardData | ExecutionCardData | ClarificationCardData | ApprovalCardData,
+    PlanCardData
+    | ExecutionCardData
+    | ClarificationCardData
+    | ApprovalCardData
+    | DiagnosticCardData,
     Field(discriminator="kind"),
 ]
 
@@ -401,6 +422,7 @@ EventData = (
     | ExecutionCardData
     | ClarificationCardData
     | ApprovalCardData
+    | DiagnosticCardData
     | ExecutionStepData
     | ExecutionLogData
     | ExecutionDiagnosticData
@@ -424,7 +446,13 @@ def make_event(seq: int, project_id: UUID, turn_id: UUID, data: EventData) -> An
     match data:
         case MessageData():
             return MessageEvent(seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data)
-        case PlanCardData() | ExecutionCardData() | ClarificationCardData() | ApprovalCardData():
+        case (
+            PlanCardData()
+            | ExecutionCardData()
+            | ClarificationCardData()
+            | ApprovalCardData()
+            | DiagnosticCardData()
+        ):
             return CardEvent(seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data)
         case ExecutionLogData():
             return ExecutionLogEvent(

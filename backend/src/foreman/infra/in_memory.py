@@ -642,3 +642,20 @@ def in_memory_stores(
         audit=InMemoryAuditLog(state),
         projects=known,
     )
+
+
+class InMemoryRawLogStore:
+    """Journaux bruts des échecs. shortcut: en mémoire et borné (perdu au redémarrage), à passer
+    en base si les administrateurs doivent relire un échec après redémarrage."""
+
+    def __init__(self, capacity: int = 100) -> None:
+        self._capacity = capacity
+        self._logs: dict[tuple[UUID, UUID, int], tuple[str, ...]] = {}
+
+    def put(self, project_id: UUID, execution_id: UUID, step: int, lines: Sequence[str]) -> None:
+        self._logs[(project_id, execution_id, step)] = tuple(lines)
+        while len(self._logs) > self._capacity:
+            del self._logs[next(iter(self._logs))]
+
+    def get(self, project_id: UUID, execution_id: UUID, step: int) -> Sequence[str] | None:
+        return self._logs.get((project_id, execution_id, step))
