@@ -1167,6 +1167,23 @@ export interface components {
             /** Version */
             version: string;
         };
+        /**
+         * HelpView
+         * @description Aide « Comment configurer ? » déclarée dans `connector.yaml`, jamais écrite dans la page.
+         */
+        HelpView: {
+            /** Note */
+            note?: string | null;
+            /**
+             * Sources
+             * @default []
+             */
+            sources: string[];
+            /** Steps */
+            steps: string[];
+            /** Url */
+            url?: string | null;
+        };
         /** IntegrationTestResult */
         IntegrationTestResult: {
             /** Connector */
@@ -1191,6 +1208,7 @@ export interface components {
             configured: boolean;
             /** Connector */
             connector: string;
+            help?: components["schemas"]["HelpView"] | null;
             /**
              * Kind
              * @enum {string}
@@ -1432,6 +1450,13 @@ export interface components {
              * Format: uuid
              */
             team_id: string;
+        };
+        /** PermissionView */
+        PermissionView: {
+            /** Explanation */
+            explanation: string;
+            /** Name */
+            name: string;
         };
         /** PlanCardData */
         PlanCardData: {
@@ -1724,8 +1749,15 @@ export interface components {
             boundary?: string | null;
             /** Configured */
             configured: boolean;
+            /** Label */
+            label: string;
             /** Name */
             name: string;
+            /**
+             * Permissions
+             * @default []
+             */
+            permissions: components["schemas"]["PermissionView"][];
             /** Scopes */
             scopes: string[];
         };

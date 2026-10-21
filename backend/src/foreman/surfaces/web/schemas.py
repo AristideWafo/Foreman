@@ -310,8 +310,24 @@ class RightView(BaseModel):
     verdict: Literal["ok", "missing", "excess"]
 
 
+class PermissionView(BaseModel):
+    name: str  # droit réel à cocher à la création du jeton
+    explanation: str
+
+
+class HelpView(BaseModel):
+    """Aide « Comment configurer ? » déclarée dans `connector.yaml`, jamais écrite dans la page."""
+
+    steps: list[str]
+    url: str | None = None  # page de création du jeton
+    sources: list[str] = []  # documentation consultée
+    note: str | None = None
+
+
 class TokenView(BaseModel):
     name: str
+    label: str  # libellé explicite à afficher à la place du nom technique
+    permissions: list[PermissionView] = []
     scopes: list[str]  # droits déclarés dans le connecteur
     boundary: str | None = None
     configured: bool  # un jeton est enregistré (sa valeur n'est jamais rendue)
@@ -339,6 +355,7 @@ class IntegrationView(BaseModel):
     configured: bool  # tous les jetons déclarés sont enregistrés
     availability: Literal["available", "soon"] = "available"  # « soon » : ni saisie ni test
     tokens: list[TokenView]
+    help: HelpView | None = None
     rights: list[RightView]  # droits vérifiés par la dernière sonde
     last_probe_at: AwareDatetime | None = None
     llm: LlmView | None = None  # seulement pour `anthropic`

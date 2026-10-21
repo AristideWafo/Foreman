@@ -861,3 +861,14 @@ def test_startup_fails_clearly_on_a_missing_catalog_or_a_draft_skill_in_producti
     monkeypatch.setenv("FOREMAN_ENVIRONMENT", "production")
     with pytest.raises(CatalogError, match="brouillon"):
         configure(Profile.CLI)
+
+
+def test_gitlab_help_is_declared_with_explicit_labels() -> None:
+    gitlab = load_catalog(CATALOG_DIR, environment="staging").connectors["gitlab"]
+    assert gitlab.help is not None and gitlab.help.steps and gitlab.help.sources
+    assert gitlab.help.url is not None and gitlab.help.url.startswith("https://gitlab.com/")
+    assert {n: [p.name for p in t.permissions] for n, t in gitlab.tokens.items()} == {
+        "read": ["read_api"],
+        "write": ["api"],
+    }
+    assert all(t.label not in {n, "read", "write"} for n, t in gitlab.tokens.items())
