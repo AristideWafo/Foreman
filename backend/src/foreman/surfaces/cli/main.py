@@ -4,6 +4,7 @@ import sys
 from datetime import UTC, datetime
 
 from foreman.bootstrap.configure import App, Profile, configure, invitation_link
+from foreman.bootstrap.llm import RecordRefused, record_llm_response
 from foreman.bootstrap.secrets import rotate_master_key
 from foreman.core.accounts import AccountError
 from foreman.core.auth import create_admin_invitation
@@ -67,7 +68,33 @@ def _secrets(argv: list[str]) -> None:
     sys.stdout.write(f"{count} secret(s) rechiffré(s)\n")
 
 
+async def _llm_record(name: str, message: str) -> str:
+    app = configure(Profile.ADMIN)
+    await app.lifecycle.start()
+    try:
+        return str(await record_llm_response(app, name, message))
+    finally:
+        await app.lifecycle.stop()
+
+
+def _llm(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser(prog="foreman llm")
+    parser.add_argument("action", choices=["record"])
+    parser.add_argument("--name", required=True, help="nom du fichier (a-z, 0-9, tirets)")
+    parser.add_argument("--message", required=True, help="message utilisateur à envoyer")
+    args = parser.parse_args(argv)
+    try:
+        path = asyncio.run(_llm_record(args.name, args.message))
+    except RecordRefused as exc:
+        sys.exit(f"enregistrement impossible : {exc}")
+    except Exception:
+        sys.exit("enregistrement impossible : voir les journaux")
+    sys.stdout.write(f"{path}\n")
+
+
 def main() -> None:
+    if sys.argv[1:2] == ["llm"]:
+        return _llm(sys.argv[2:])
     if sys.argv[1:2] == ["admin"]:
         return _admin(sys.argv[2:])
     if sys.argv[1:2] == ["secrets"]:
