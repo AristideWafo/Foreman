@@ -310,6 +310,10 @@ class ToolDiagnostic(_Model):
     expected: DiagnosticValue | None = None
     observed: DiagnosticValue | None = None
     probe: Literal["ok", "failed", "not_run"] = "not_run"
+    # Couche 2 : lignes ciblées de l'échec, masquées, sans hôte, bornées (5 x 200 caractères).
+    extract: Annotated[list[Annotated[str, Field(max_length=200)]], Field(max_length=5)] | None = (
+        None
+    )
 
 
 class ExecutionDiagnosticData(_Model):

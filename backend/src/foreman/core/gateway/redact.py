@@ -235,6 +235,43 @@ def redact_value(
     return value
 
 
+MAX_EXTRACT_LINES: Final = 5
+MAX_EXTRACT_LINE_CHARS: Final = 200
+SCANNED_TAIL_LINES: Final = 200
+HOST_MASK: Final = "[hôte]"
+_ERROR_LINE: Final = re.compile(
+    r"\b(?:error|fatal|failed|failure|denied|refused|forbidden|unauthori[sz]ed|not found|no such|"
+    r"in use|timed? ?out|exception|panic)\b",
+    re.IGNORECASE,
+)
+# shortcut : hôtes d'URL, IPv4 et noms en `.internal|.local|.lan|.corp|.com|.org|.net|.io|.fr|.dev|
+# .cloud` ; l'aliasing stable (`host-1`, ADR 0002 couche 4) remplacera cette liste.
+_HOST: Final = re.compile(
+    r"(?<=://)[^\s/?#]{1,255}"
+    r"|\b\d{1,3}(?:\.\d{1,3}){3}\b"
+    r"|\b(?:[a-z0-9\-]{1,63}\.){1,5}(?:internal|local|lan|corp|com|org|net|io|fr|dev|cloud)\b",
+    re.IGNORECASE,
+)
+
+
+def failure_extract(lines: Iterable[str]) -> list[str]:
+    """Extrait ciblé d'un échec (ADR 0002, couche 2) : les dernières lignes (5 au plus) qui
+    matchent un motif d'erreur connu, à défaut les dernières lignes. Tout passe par le masquage des
+    secrets (`_Masker`, état des blocs conservé), `filter_logs`, puis les hôtes sont retirés.
+    Borné : 5 lignes de 200 caractères.
+
+    shortcut : seules les `SCANNED_TAIL_LINES` dernières lignes sont lues ; une clé privée dont le
+    BEGIN est plus haut n'est pas reconnue comme bloc.
+    """
+    masker = _Masker()
+    tail = [masker.line(raw) for raw in list(lines)[-SCANNED_TAIL_LINES:]]
+    chosen = [line for line in tail if _ERROR_LINE.search(line)] or tail
+    return [
+        _HOST.sub(HOST_MASK, line)[:MAX_EXTRACT_LINE_CHARS]
+        for line in filter_logs(chosen[-MAX_EXTRACT_LINES:])
+    ]
+
+
 def strip_paths(output: dict[str, JsonValue], paths: Iterable[str]) -> dict[str, JsonValue]:
     """Retire de `output` (déjà copié par `redact_value`) les chemins `a.b[*].c` : le champ est
     absent, pas masqué. Un chemin sans correspondance ne fait rien."""
