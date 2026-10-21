@@ -1,4 +1,4 @@
-"""Liste des modèles autorisés (`connector.yaml`) et sonde `models.retrieve`."""
+"""Liste des modèles autorisés (`models.yaml`) et sonde `models.retrieve`."""
 
 from decimal import Decimal
 from pathlib import Path
@@ -13,7 +13,7 @@ from foreman.core.llm import LlmNotConfigured, LlmSettings
 from foreman.core.pricing import ModelPrice
 from foreman.integrations.anthropic.provider import ProviderFailed
 
-CONNECTOR_FILE = Path(__file__).with_name("connector.yaml")
+CONNECTOR_FILE = Path(__file__).with_name("models.yaml")
 
 
 class _Strict(BaseModel):

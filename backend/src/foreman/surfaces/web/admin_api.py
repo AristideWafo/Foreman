@@ -30,6 +30,7 @@ from foreman.core.accounts import (
 from foreman.core.auth import INVITATION_TTL, new_token, token_hash
 from foreman.core.identity import Principal
 from foreman.core.ports import CapacityExceeded
+from foreman.surfaces.web.admin_integrations import add_integration_routes
 from foreman.surfaces.web.auth import make_current_principal
 from foreman.surfaces.web.errors import ApiError
 from foreman.surfaces.web.schemas import (
@@ -232,4 +233,12 @@ def create_admin_router(app: App) -> APIRouter:
             await accounts().revoke_invitation(invitation_id, caller.user_id)
         return Response(status_code=204)
 
+    add_integration_routes(
+        router,
+        app,
+        current_principal=current_principal,
+        admin_scope=admin_scope,
+        org_only=org_only,
+        refusals=refusals,
+    )
     return router

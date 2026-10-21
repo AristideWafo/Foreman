@@ -1298,6 +1298,113 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "IntegrationTestResult": {
+        "properties": {
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "rights": {
+            "items": {
+              "$ref": "#/components/schemas/RightView"
+            },
+            "title": "Rights",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "incomplete",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connector",
+          "status",
+          "rights"
+        ],
+        "title": "IntegrationTestResult",
+        "type": "object"
+      },
+      "IntegrationView": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "llm",
+              "connector"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_probe_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Probe At"
+          },
+          "llm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LlmView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rights": {
+            "items": {
+              "$ref": "#/components/schemas/RightView"
+            },
+            "title": "Rights",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "incomplete",
+              "revoked",
+              "unprobed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tokens": {
+            "items": {
+              "$ref": "#/components/schemas/TokenView"
+            },
+            "title": "Tokens",
+            "type": "array"
+          }
+        },
+        "required": [
+          "connector",
+          "kind",
+          "status",
+          "configured",
+          "tokens",
+          "rights"
+        ],
+        "title": "IntegrationView",
+        "type": "object"
+      },
       "Invalidation": {
         "additionalProperties": false,
         "properties": {
@@ -1453,6 +1560,33 @@
           "url"
         ],
         "title": "Link",
+        "type": "object"
+      },
+      "LlmView": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelOption"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models"
+        ],
+        "title": "LlmView",
         "type": "object"
       },
       "LoginRequest": {
@@ -1731,6 +1865,44 @@
           "text"
         ],
         "title": "MessageRequest",
+        "type": "object"
+      },
+      "ModelOption": {
+        "properties": {
+          "cache_read_usd": {
+            "title": "Cache Read Usd",
+            "type": "number"
+          },
+          "cache_write_usd": {
+            "title": "Cache Write Usd",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_usd": {
+            "title": "Input Usd",
+            "type": "number"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "output_usd": {
+            "title": "Output Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "input_usd",
+          "output_usd",
+          "cache_read_usd",
+          "cache_write_usd"
+        ],
+        "title": "ModelOption",
         "type": "object"
       },
       "MoveProjectRequest": {
@@ -2251,6 +2423,82 @@
         "title": "ResourceRef",
         "type": "object"
       },
+      "RightView": {
+        "properties": {
+          "right": {
+            "title": "Right",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "ok",
+              "missing",
+              "excess"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "right",
+          "verdict"
+        ],
+        "title": "RightView",
+        "type": "object"
+      },
+      "SetCredentialRequest": {
+        "additionalProperties": false,
+        "description": "Jeton en \u00e9criture seule : jamais relu, jamais renvoy\u00e9, jamais journalis\u00e9.",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "token": {
+            "format": "password",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "SetCredentialRequest",
+        "type": "object"
+      },
+      "SetModelRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model"
+        ],
+        "title": "SetModelRequest",
+        "type": "object"
+      },
       "SetRoleRequest": {
         "additionalProperties": false,
         "description": "Ajoute le membre \u00e0 l'\u00e9quipe ou change son r\u00f4le. Jamais `org_admin` ici.",
@@ -2316,6 +2564,43 @@
           "name"
         ],
         "title": "TeamView",
+        "type": "object"
+      },
+      "TokenView": {
+        "properties": {
+          "boundary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Boundary"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "scopes",
+          "configured"
+        ],
+        "title": "TokenView",
         "type": "object"
       },
       "TurnStatusData": {
@@ -2453,6 +2738,453 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/admin/integrations": {
+      "get": {
+        "operationId": "list_integrations_api_admin_integrations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IntegrationView"
+                  },
+                  "title": "Response List Integrations Api Admin Integrations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Droits insuffisants ou CSRF (`forbidden`)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable ou mode `session` inactif"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`last_admin`, `last_team_admin`, `invalid_invitation` ou `conflict`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "List Integrations",
+        "tags": [
+          "admin",
+          "integrations"
+        ]
+      }
+    },
+    "/api/admin/integrations/anthropic/model": {
+      "put": {
+        "description": "Le mod\u00e8le doit figurer dans la liste d\u00e9clar\u00e9e ; sinon 422 opaque.",
+        "operationId": "set_model_api_admin_integrations_anthropic_model_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Droits insuffisants ou CSRF (`forbidden`)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable ou mode `session` inactif"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`last_admin`, `last_team_admin`, `invalid_invitation` ou `conflict`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Set Model",
+        "tags": [
+          "admin",
+          "integrations"
+        ]
+      }
+    },
+    "/api/admin/integrations/{connector}/credentials": {
+      "delete": {
+        "operationId": "revoke_credentials_api_admin_integrations__connector__credentials_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connector",
+            "required": true,
+            "schema": {
+              "title": "Connector",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Droits insuffisants ou CSRF (`forbidden`)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable ou mode `session` inactif"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`last_admin`, `last_team_admin`, `invalid_invitation` ou `conflict`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Revoke Credentials",
+        "tags": [
+          "admin",
+          "integrations"
+        ]
+      },
+      "put": {
+        "description": "Jeton en \u00e9criture seule. Remet le statut \u00e0 `incomplete` : relancer la sonde.",
+        "operationId": "set_credentials_api_admin_integrations__connector__credentials_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connector",
+            "required": true,
+            "schema": {
+              "title": "Connector",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Droits insuffisants ou CSRF (`forbidden`)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable ou mode `session` inactif"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`last_admin`, `last_team_admin`, `invalid_invitation` ou `conflict`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Set Credentials",
+        "tags": [
+          "admin",
+          "integrations"
+        ]
+      }
+    },
+    "/api/admin/integrations/{connector}/test": {
+      "post": {
+        "description": "Lance les sondes d\u00e9clar\u00e9es (lecture seule). Un \u00e9chec de sonde rend `failed`, pas 5xx.",
+        "operationId": "test_connector_api_admin_integrations__connector__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connector",
+            "required": true,
+            "schema": {
+              "title": "Connector",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationTestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Droits insuffisants ou CSRF (`forbidden`)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable ou mode `session` inactif"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`last_admin`, `last_team_admin`, `invalid_invitation` ou `conflict`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Test Connector",
+        "tags": [
+          "admin",
+          "integrations"
+        ]
+      }
+    },
     "/api/admin/invitations": {
       "get": {
         "operationId": "list_invitations_api_admin_invitations_get",

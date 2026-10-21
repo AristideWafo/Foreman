@@ -27,6 +27,7 @@ from jsonschema import Draft202012Validator
 from pydantic import JsonValue
 
 from foreman.core.catalog import Catalog, ToolDefinition
+from foreman.core.connector_state import ConnectorStore
 from foreman.core.events import Requirement
 from foreman.core.gateway.budget import CallBudget
 from foreman.core.gateway.errors import CallDenied, CallFailed, DenialCode, FailureCode
@@ -169,6 +170,7 @@ class ToolGateway:
         members: MemberStore,
         clock: Callable[[], float] = time.monotonic,
         probers: Mapping[str, ConnectorProber] | None = None,
+        connector_store: ConnectorStore | None = None,
     ) -> None:
         missing = {t.connector for t in catalog.tools.values()} - set(adapters)
         if missing:
@@ -193,6 +195,7 @@ class ToolGateway:
             members=members,
             probers=probers or {},
             clock=clock,
+            store=connector_store,
         )
         budget = catalog.policy.budgets.per_execution
         self._budget = CallBudget(
@@ -274,7 +277,7 @@ class ToolGateway:
         if tool is None:
             raise _Refusal("unknown_tool")
         trace.tool = tool
-        if self._probes.blocks(tool):  # connecteur `incomplete` : un droit requis manque
+        if await self._probes.blocks(tool):  # connecteur `incomplete` : un droit requis manque
             raise _Refusal("permission_missing")
         if not self._validators[tool.tool].is_valid(call.params):  # 3
             raise _Refusal("invalid_params")
