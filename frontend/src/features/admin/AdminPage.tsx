@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMe } from "../cards/useMe";
+import { IntegrationsTab } from "./IntegrationsTab";
 import { InvitationsTab } from "./InvitationsTab";
 import { MembersTab } from "./MembersTab";
 import { TeamsTab } from "./TeamsTab";
@@ -31,6 +32,9 @@ export function AdminPage() {
               <TabsTrigger value="teams">Équipes</TabsTrigger>
               <TabsTrigger value="members">Membres</TabsTrigger>
               <TabsTrigger value="invitations">Invitations</TabsTrigger>
+              {me.role === "org_admin" ? (
+                <TabsTrigger value="integrations">Intégrations</TabsTrigger>
+              ) : null}
             </TabsList>
             <TabsContent value="teams" className="pt-4">
               <TeamsTab isOrgAdmin={me.role === "org_admin"} />
@@ -41,6 +45,11 @@ export function AdminPage() {
             <TabsContent value="invitations" className="pt-4">
               <InvitationsTab role={me.role} />
             </TabsContent>
+            {me.role === "org_admin" ? (
+              <TabsContent value="integrations" className="pt-4">
+                <IntegrationsTab />
+              </TabsContent>
+            ) : null}
           </Tabs>
         )}
       </main>

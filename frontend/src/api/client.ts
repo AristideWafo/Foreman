@@ -23,6 +23,9 @@ export type InvitationView = components["schemas"]["InvitationView"];
 export type InvitationCreated = components["schemas"]["InvitationCreated"];
 type CreateTeamBody = components["schemas"]["CreateTeamRequest"];
 type CreateInvitationBody = components["schemas"]["CreateInvitationRequest"];
+export type IntegrationView = components["schemas"]["IntegrationView"];
+export type IntegrationTestResult = components["schemas"]["IntegrationTestResult"];
+export type RightView = components["schemas"]["RightView"];
 export type MemberRole = components["schemas"]["SetRoleRequest"]["role"];
 
 type QuestionBody = components["schemas"]["QuestionAnswerRequest"];
@@ -145,6 +148,31 @@ export const removeMember = (teamId: string, userId: string) =>
 export const disableUser = (userId: string) =>
   request<void>(adminPath(`users/${seg(userId)}/disable`), { method: "POST" });
 
+export const listIntegrations = () => request<IntegrationView[]>(adminPath("integrations"));
+
+/** Le jeton part dans le corps seulement : jamais dans l'URL, jamais relu. */
+export const setCredentials = (v: { connector: string; token: string; name?: string }) =>
+  request<void>(adminPath(`integrations/${seg(v.connector)}/credentials`), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: v.token, ...(v.name ? { name: v.name } : {}) }),
+  });
+
+export const revokeCredentials = (connector: string) =>
+  request<void>(adminPath(`integrations/${seg(connector)}/credentials`), { method: "DELETE" });
+
+export const testIntegration = (connector: string) =>
+  request<IntegrationTestResult>(adminPath(`integrations/${seg(connector)}/test`), {
+    method: "POST",
+  });
+
+export const setAnthropicModel = (model: string) =>
+  request<void>(adminPath("integrations/anthropic/model"), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model }),
+  });
+
 /** Message utilisateur opaque pour une action d'administration. */
 export function describeAdminError(error: unknown): string {
   const status = error instanceof ApiError ? error.status : 0;
@@ -157,6 +185,7 @@ export function describeAdminError(error: unknown): string {
   }
   if (code === "invalid_invitation") return "Cette invitation n'est plus valide.";
   if (status === 403) return "Votre rôle ne permet pas cette action.";
+  if (status === 429) return "Trop de tentatives. Patientez un instant avant de réessayer.";
   if (status === 409) {
     return "Cette action entre en conflit avec l'état actuel. Actualisez et réessayez.";
   }
