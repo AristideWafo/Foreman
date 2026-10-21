@@ -10,6 +10,7 @@ from pydantic import JsonValue
 from foreman.core.catalog import ConnectorDefinition
 from foreman.core.gateway.errors import CallFailed
 from foreman.core.gateway.probe import expectation_met
+from foreman.core.gateway.redact import failure_extract
 from foreman.core.ports import AdapterDiagnostic, AdapterError, AdapterResult
 from foreman.core.turn import model_history
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
@@ -91,3 +92,19 @@ def test_expects_is_closed_by_default() -> None:
     assert not expectation_met("access_level >= 40", {"access_level": 30})
     assert not expectation_met("access_level >= 40", None)
     assert expectation_met(None, None)
+
+
+def test_the_failure_extract_keeps_the_error_line_and_drops_secrets_and_hosts() -> None:
+    noise = [f"étape {i} ok sur 10.0.3.{i}" for i in range(300)]
+    logs = [
+        *noise,
+        f"connexion https://oauth2:{SECRET_TOKEN}@git.corp.internal/x",
+        "ERROR bind 0.0.0.0:8080 : port already in use (db.internal)",
+        "z" * 5000,
+        *noise[:20],
+    ]
+    extract = failure_extract(logs)
+    text = "\n".join(extract)
+    assert len(extract) <= 5 and all(len(line) <= 200 for line in extract)
+    assert "port already in use" in text
+    assert SECRET_TOKEN not in text and "internal" not in text and "10.0.3" not in text

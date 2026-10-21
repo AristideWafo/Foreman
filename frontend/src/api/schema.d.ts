@@ -1675,6 +1675,11 @@ export interface components {
              */
             expected: string | number | boolean | null;
             /**
+             * Extract
+             * @default null
+             */
+            extract: string[] | null;
+            /**
              * Observed
              * @default null
              */

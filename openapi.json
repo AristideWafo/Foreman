@@ -2727,6 +2727,23 @@
             "default": null,
             "title": "Expected"
           },
+          "extract": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                "maxItems": 5,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Extract"
+          },
           "observed": {
             "anyOf": [
               {

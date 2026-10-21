@@ -36,6 +36,7 @@ from foreman.core.gateway.probe import ConnectorProbes
 from foreman.core.gateway.redact import (
     MAX_OUTPUT_BYTES,
     bounded_for_audit,
+    failure_extract,
     filter_logs,
     json_size,
     mask_text,
@@ -169,8 +170,12 @@ def _diagnostic(code: str, raw: AdapterDiagnostic | None) -> ToolDiagnostic:
     probe: Literal["ok", "failed", "not_run"] = (
         "not_run" if raw.probe is None else "ok" if raw.probe else "failed"
     )
+    lines = (
+        [line for line in raw.logs if isinstance(line, str)] if isinstance(raw.logs, tuple) else []
+    )
     return ToolDiagnostic(
         code=cast(DiagnosticCode, chosen if chosen in _DIAGNOSTIC_CODES else "unknown"),
+        extract=failure_extract(lines) or None,
         expected=_value(raw.expected),
         observed=_value(raw.observed),
         probe=probe,

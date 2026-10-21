@@ -54,6 +54,8 @@ class AdapterDiagnostic:
     expected: str | int | bool | None = None
     observed: str | int | bool | None = None
     probe: bool | None = None
+    # Sortie brute de l'échec : jamais transmise telle quelle, la gateway en tire un extrait.
+    logs: tuple[str, ...] = ()
 
 
 class AdapterError(Exception):
