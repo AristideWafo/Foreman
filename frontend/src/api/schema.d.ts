@@ -1621,7 +1621,7 @@ export interface components {
         };
         /**
          * RawLogView
-         * @description Log brut d'un échec (administrateurs seulement) : texte à afficher tel quel, jamais en HTML.
+         * @description Log brut d'un échec (administrateurs seulement) : à afficher comme texte, jamais en HTML.
          */
         RawLogView: {
             /** Lines */

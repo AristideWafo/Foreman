@@ -2503,7 +2503,7 @@
         "type": "object"
       },
       "RawLogView": {
-        "description": "Log brut d'un \u00e9chec (administrateurs seulement) : texte \u00e0 afficher tel quel, jamais en HTML.",
+        "description": "Log brut d'un \u00e9chec (administrateurs seulement) : \u00e0 afficher comme texte, jamais en HTML.",
         "properties": {
           "lines": {
             "items": {
