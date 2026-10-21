@@ -1,14 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   createInvitation,
   createTeam,
   disableUser,
   listAdminTeams,
   listAdminUsers,
+  listIntegrations,
   listInvitations,
   removeMember,
+  revokeCredentials,
   revokeInvitation,
+  setAnthropicModel,
+  setCredentials,
   setMemberRole,
+  testIntegration,
   type MemberRole,
 } from "../../api/client";
 
@@ -50,3 +56,37 @@ export const useSetMemberRole = () =>
   useAdminMutation((v: { teamId: string; userId: string; role: MemberRole }) =>
     setMemberRole(v.teamId, v.userId, v.role),
   );
+
+export function useIntegrations() {
+  return useQuery({ queryKey: ["admin", "integrations"], queryFn: listIntegrations, retry: false });
+}
+
+export const useRevokeCredentials = () => useAdminMutation(revokeCredentials);
+export const useSetModel = () => useAdminMutation(setAnthropicModel);
+/** Test : le résultat reste local à la ligne (pas d'invalidation, il ne change aucune donnée). */
+export const useTestIntegration = () => useMutation({ mutationFn: testIntegration });
+
+/**
+ * Enregistrement du jeton, volontairement hors `useMutation` : le cache de mutations de TanStack Query
+ * conserve les variables (donc le jeton). Ici, le jeton ne vit que le temps de l'appel.
+ */
+export function useSetCredentials() {
+  const queryClient = useQueryClient();
+  const [state, setState] = useState<{ pending: boolean; error: unknown }>({
+    pending: false,
+    error: null,
+  });
+  const save = async (v: { connector: string; token: string; name?: string }): Promise<boolean> => {
+    setState({ pending: true, error: null });
+    try {
+      await setCredentials(v);
+      await queryClient.invalidateQueries({ queryKey: ["admin", "integrations"] });
+      setState({ pending: false, error: null });
+      return true;
+    } catch (error) {
+      setState({ pending: false, error });
+      return false;
+    }
+  };
+  return { save, isPending: state.pending, error: state.error };
+}
