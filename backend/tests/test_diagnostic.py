@@ -3,16 +3,24 @@
 import json
 from collections.abc import Mapping
 from dataclasses import replace
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import JsonValue
 
 from foreman.core.catalog import ConnectorDefinition
+from foreman.core.events import (
+    AnyEvent,
+    ExecutionDiagnosticData,
+    MessageData,
+    ToolDiagnostic,
+    make_event,
+)
 from foreman.core.gateway.errors import CallFailed
 from foreman.core.gateway.probe import expectation_met
 from foreman.core.gateway.redact import failure_extract
 from foreman.core.ports import AdapterDiagnostic, AdapterError, AdapterResult
-from foreman.core.turn import model_history
+from foreman.core.turn import allowed_fields, model_history, model_view
 from foreman.infra.in_memory import (
     InMemoryEventLog,
     InMemoryProjectStore,
@@ -99,7 +107,15 @@ def test_expects_is_closed_by_default() -> None:
     assert expectation_met(None, None)
 
 
-def test_the_failure_extract_keeps_the_error_line_and_drops_secrets_and_hosts() -> None:
+def diagnostic_event(seq: int, extract: list[str], observed: str | None = None) -> AnyEvent:
+    diagnostic = ToolDiagnostic(code="port_in_use", extract=extract, observed=observed)
+    data = ExecutionDiagnosticData(
+        card_id="c", step=1, tool="server.healthcheck", diagnostic=diagnostic
+    )
+    return make_event(seq, UUID(int=1), uuid4(), data)
+
+
+def test_the_failure_extract_keeps_the_error_line_and_drops_secrets() -> None:
     noise = [f"étape {i} ok sur 10.0.3.{i}" for i in range(300)]
     logs = [
         *noise,
@@ -112,7 +128,10 @@ def test_the_failure_extract_keeps_the_error_line_and_drops_secrets_and_hosts() 
     text = "\n".join(extract)
     assert len(extract) <= 5 and all(len(line) <= 200 for line in extract)
     assert "port already in use" in text
-    assert SECRET_TOKEN not in text and "internal" not in text and "10.0.3" not in text
+    assert SECRET_TOKEN not in text
+    # Les hôtes ne sont plus retirés ici : le modèle ne les voit que sous forme d'alias.
+    shown = "\n".join(m.text for m in model_history([diagnostic_event(1, extract)]))
+    assert "port already in use" in shown and "internal" not in shown and "10.0.3" not in shown
 
 
 RAW_LINE = f"INTERNAL-RAW-DUMP db-7.corp.internal token={SECRET_TOKEN}"
@@ -156,3 +175,31 @@ async def test_a_known_code_does_not_raise_the_card() -> None:
     await run_plan(stores, events, engine_for(stores, events, PortInUse()), project, "bb")
     stream = await events.read_after(project, 0)
     assert not [e for e in stream if e.type == "card" and e.data.kind == "diagnostic"]
+
+
+def test_internal_values_get_the_same_alias_in_two_messages_and_come_back_in_the_reply() -> None:
+    said = MessageData(role="user", text="Le déploiement sur db.corp.internal échoue")
+    events = [
+        make_event(1, UUID(int=1), uuid4(), said),
+        diagnostic_event(
+            2, ["connect 10.0.3.7 refused", "retry db.corp.internal"], "DB_NAME=safe_eat"
+        ),
+        diagnostic_event(3, ["bind via 10.0.3.7 puis web.corp.internal"], "DB_NAME=safe_eat"),
+    ]
+    history, aliases = model_view(events)
+    text = "\n".join(m.text for m in history)
+    assert history[0].text == "Le déploiement sur host-1 échoue"
+    assert "retry host-1" in history[1].text and "connect host-2 refused" in history[1].text
+    assert "bind via host-2 puis host-3" in history[2].text  # même valeur, même alias
+    assert history[1].text.count("var-A") == history[2].text.count("var-A") == 1
+    for internal in ("corp.internal", "10.0.3.7", "safe_eat"):
+        assert internal not in text
+    assert aliases.restore({"host": "host-2", "env": ["DB_NAME=var-A"]}) == {
+        "host": "10.0.3.7",
+        "env": ["DB_NAME=safe_eat"],
+    }
+
+
+def test_an_undeclared_diagnostic_field_is_never_sent_to_the_model() -> None:
+    declared = allowed_fields({"code": "unknown", "extract": ["x"], "internal_path": "/srv/clé"})
+    assert declared == {"code": "unknown", "extract": ["x"]}

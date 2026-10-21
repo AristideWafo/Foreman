@@ -83,9 +83,9 @@ cases:
     observed: in_use
     probe: failed
     extract:
-    - 'bind [hôte]:8080 : address already in use'
+    - 'bind db-7.corp.internal:8080 : address already in use'
     - token=[masqué]
-  input_sha256: 4a5e406052ee40bdc458acde63750c73b309d898aeb9cc83d69e2932783b2a1e
+  input_sha256: b2da46f8ab4e63ff2c224cc1df794d06ef07b386fa82920601ab256ab60008c5
   expect_tool: propose_plan
   reply:
     text: 'Le port 8080 est pris : je propose un plan avec un autre port.'
