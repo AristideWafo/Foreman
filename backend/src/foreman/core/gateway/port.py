@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import UUID
 
 from pydantic import JsonValue
@@ -48,6 +48,28 @@ class GatewayResult:
     audit: AuditEntry
 
 
+ProbeVerdict = Literal["ok", "missing", "excess"]
+
+
+@dataclass(frozen=True, slots=True)
+class RightVerdict:
+    """Verdict d'un droit : `ok` (prouvé), `missing` (la sonde échoue) ou `excess` (le jeton porte
+    un scope non déclaré). `right` est le nom d'une sonde, ou d'un scope pour `excess`."""
+
+    token: str
+    right: str
+    verdict: ProbeVerdict
+
+
+@dataclass(frozen=True, slots=True)
+class ProbeReport:
+    """`incomplete` dès qu'un droit manque ; un droit `excess` seul n'empêche pas `complete`."""
+
+    connector: str
+    status: Literal["complete", "incomplete"]
+    rights: tuple[RightVerdict, ...]
+
+
 class Gateway(Protocol):
     # Suffixe de clé d'idempotence propre à cette instance d'adaptateurs non durables (faux en
     # mémoire, voir `ToolAdapter`) : amnésiques au redémarrage, pas de rejeu d'un ancien résultat.
@@ -64,5 +86,15 @@ class Gateway(Protocol):
         Lève `CallDenied` (refus, adaptateur non appelé) ou `CallFailed` (échec d'exécution) ; ces
         deux cas sont déjà audités par la gateway. Les messages sont opaques. Toute autre
         exception est un défaut : le moteur finit alors l'exécution en `blocked`.
+        """
+        ...
+
+    async def probe(self, connector: str, actor: UUID) -> ProbeReport:
+        """Exécute les sondes déclarées du connecteur (lecture seule) pour `actor`.
+
+        Le rôle est relu en base : `org_admin` requis. Lève `ProbeDenied` (rôle, limite, connecteur
+        inconnu) ou `CallFailed` (échec d'une sonde) ; tout est audité (`tool="<c>.probe"`), sans
+        jeton ni détail. Le statut du connecteur est mémorisé : un outil dépendant d'un droit
+        manquant est ensuite refusé par `call` (`permission_missing`).
         """
         ...

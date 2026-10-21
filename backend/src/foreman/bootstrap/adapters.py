@@ -9,7 +9,7 @@ import secrets
 
 from foreman.core.catalog import Catalog
 from foreman.core.gateway.pipeline import ToolGateway
-from foreman.core.ports import MemberStore, ToolAdapter
+from foreman.core.ports import ConnectorProber, MemberStore, ToolAdapter
 from foreman.core.store import Stores
 from foreman.integrations.dns.simulated import SimulatedDns
 from foreman.integrations.gitlab.simulated import (
@@ -43,9 +43,12 @@ def build_adapters(catalog: Catalog, *, durable_registry: bool = False) -> dict[
 def build_gateway(
     catalog: Catalog, stores: Stores, members: MemberStore, *, durable_registry: bool = False
 ) -> ToolGateway:
+    adapters = build_adapters(catalog, durable_registry=durable_registry)
     return ToolGateway(
         catalog=catalog,
         stores=stores,
-        adapters=build_adapters(catalog, durable_registry=durable_registry),
+        adapters=adapters,
         members=members,
+        # Les faux sondent eux-mêmes (`probe`) ; un vrai connecteur fournira son propre sondeur.
+        probers={name: a for name, a in adapters.items() if isinstance(a, ConnectorProber)},
     )

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from pydantic import JsonValue
 
-from foreman.core.ports import AdapterError, AdapterResult
+from foreman.core.ports import AdapterError, AdapterResult, ProbeOutcome
 
 DEFAULT_WILDCARD = "*.staging.example.org"
 DEFAULT_POINTS_TO = "server-staging-1"
@@ -36,6 +36,10 @@ class SimulatedDns:
         if not isinstance(wildcard, str) or not isinstance(points_to, str):
             raise AdapterError("référentiel DNS invalide")
         return cls(wildcard, points_to)
+
+    async def probe(self, token: str, name: str, call: str) -> ProbeOutcome:
+        """Faux : tous les droits déclarés sont présents, aucun état n'est touché."""
+        return ProbeOutcome(ok=True)
 
     async def execute(
         self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str

@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from pydantic import JsonValue
 
-from foreman.core.ports import AdapterError, AdapterResult, ForeignResource
+from foreman.core.ports import AdapterError, AdapterResult, ForeignResource, ProbeOutcome
 
 BASE_URL = "https://gitlab.example.org"
 ROOT_GROUP_ID = 1000
@@ -137,6 +137,10 @@ class SimulatedGitLab:
             web_url=f"{BASE_URL}/{full_path}/legacy-api",
             description="Dépôt historique",
         )
+
+    async def probe(self, token: str, name: str, call: str) -> ProbeOutcome:
+        """Faux : tous les droits déclarés sont présents, aucun état n'est touché."""
+        return ProbeOutcome(ok=True)
 
     async def execute(
         self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str

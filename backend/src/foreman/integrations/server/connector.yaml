@@ -1,0 +1,16 @@
+connector: server
+version: 1
+# Scopes SIMULÉS (faux serveur). Le connecteur réel (SSH / Ansible) déclarera les siens.
+tokens:
+  read:
+    scopes: [simulated.read]
+  write:
+    scopes: [simulated.write]
+    boundary: "serveur de staging"
+tools_enabled_when:
+  server.healthcheck: [read]
+  server.apply_playbook: [write]
+probes:
+  - {name: lire_etat, token: read, call: "GET /simulated/state"}
+  - {name: ecrire_staging, token: write, call: "GET /simulated/access"}
+strip_from_results: []
