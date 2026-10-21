@@ -213,7 +213,7 @@ Le rôle de l'utilisateur vient de `GET /api/me` (`useMe`), jamais d'une règle 
 
 Entrée « Administration » dans le rail, visible si `/api/me` donne `org_admin` ou `team_admin` d'une équipe
 partagée (aide visuelle : le serveur refuse le reste). Un autre rôle voit « Cette page est réservée aux
-administrateurs. ». Trois onglets (`Tabs`) : Équipes (création réservée à l'org_admin, premier admin
+administrateurs. ». Trois onglets (`Tabs`), plus « Intégrations » pour l'org_admin (voir ci-dessous) : Équipes (création réservée à l'org_admin, premier admin
 obligatoire), Membres (rôle par équipe, ajout, retrait, désactivation), Invitations (lien copiable affiché une
 seule fois, avec avertissement). Rétrograder, retirer, désactiver et révoquer passent par un `AlertDialog` de
 confirmation. Les listes déroulantes sont des `<select>` natifs (`NativeSelect`). Les erreurs 403/409
@@ -227,6 +227,30 @@ n'appartiennent à aucune d'elles). « Toutes » (défaut) = aucune restriction 
 liste est groupée par équipe (titre de groupe = nom de l'équipe) dès que plusieurs groupes sont visibles. La
 sélection est mémorisée dans `localStorage` (`foreman.activeTeams`, essai/erreur : la page marche sans) ; une
 équipe disparue de `/api/me` en est retirée.
+
+## Intégrations (`/admin`, onglet « Intégrations », #261)
+
+Quatrième onglet de `/admin`, **visible seulement pour l'org_admin** (un team_admin n'a pas l'onglet ; le
+serveur refuse de toute façon). Une ligne par connecteur (GitLab, Docker, serveur, DNS, Anthropic…), composant
+`IntegrationRow` :
+
+- **Logo** svgl via `BrandLogo` (Anthropic à ajouter dans `src/assets/logos/` et `brandLogos.ts`), **nom**, `Badge`
+  de statut : `complete`, `incomplete` ou « non configuré » (texte + variante, jamais la couleur seule).
+- **Droits requis** : liste lue de l'API (contrat de #260), jamais écrite en dur dans le front. Types générés
+  depuis l'OpenAPI.
+- **Jeton** : champ `type="password"` avec `autocomplete="new-password"`. Il est vidé dès l'envoi (succès ou
+  échec), n'entre ni dans le cache TanStack Query (mutation sans `onSuccess` qui renvoie la valeur, pas de
+  `queryKey` ni de `mutationKey` contenant le jeton), ni dans l'URL, ni dans `localStorage` ; **jamais réaffiché**
+  (la ligne indique seulement « jeton enregistré »).
+- **Enregistrer** = 2 clics au plus (ouvrir la ligne puis Enregistrer). **Tester** = 1 clic ; le résultat est
+  listé **par droit** : ok, manquant ou en trop (icône + texte, `role="status"`). **Révoquer** passe par
+  `ConfirmDialog` (comme les autres actions destructives de l'admin).
+- **Anthropic** : `NativeSelect` des modèles déclarés par l'API, tarif affiché dans chaque option. Choisir un modèle
+  non rejoué affiche une `Alert` : « Évaluations non rejouées sur ce modèle » avec lien vers #61.
+- **États** : chargement (`Skeleton` par ligne), vide (« Aucun connecteur déclaré. »), erreur (`Alert` + « Réessayer »).
+  Erreurs 403/4xx traduites en messages clairs, jamais le détail serveur.
+- **Mobile** : les lignes s'empilent (logo et nom, puis statut, puis champs en pleine largeur). Clair et sombre
+  par tokens de thème ; aucune couleur codée en dur.
 
 ## Badge nom et rôle (barre latérale)
 
@@ -305,5 +329,5 @@ Contraste AA, focus visible, tout au clavier, cibles tactiles suffisantes sur mo
 
 ## Hors périmètre
 
-Thème personnalisé, tableau de bord, toasts, illustrations, pièces jointes et choix de modèle (aucun
-support serveur).
+Thème personnalisé, tableau de bord, toasts, illustrations, pièces jointes. Le choix de modèle n'est permis que pour Anthropic, dans
+l'onglet Intégrations (liste déroulante des modèles déclarés, pas de saisie libre).
