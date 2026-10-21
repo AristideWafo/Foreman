@@ -75,6 +75,9 @@ jobs:
           image-ref: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          # Faux positif : des docstrings du SDK anthropic ressemblent à une clé de compte de service Google.
+          # Seul le code source du paquet est exclu ; ses vulnérabilités connues restent lues dans son dist-info.
+          skip-dirs: /app/.venv/lib/python3.12/site-packages/anthropic
           exit-code: "1"
 
       - name: Installe Cosign
