@@ -36,6 +36,8 @@ classes:
 
 budgets:                              # valeurs de départ
   per_execution: {max_tool_calls: 60, max_minutes: 30, max_retries_per_step: 3, max_model_cost_eur: 2}
+  # Un tour = un message de l'utilisateur. Coût en EUR (taux fixe dans core/pricing.py).
+  per_turn: {max_model_calls: 4, max_tokens: 60000, max_cost_eur: 0.5, max_seconds: 120}
 
 rules:
   - {id: R1-lecture,   match: {class: read},    min_level: 1, decision: allow}

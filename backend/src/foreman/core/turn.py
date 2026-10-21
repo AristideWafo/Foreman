@@ -6,7 +6,8 @@ Deux outils existent : `propose_plan` (validé puis haché par le `Planner`) et 
 
 import asyncio
 import logging
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
@@ -36,10 +37,12 @@ from foreman.core.events import (
 )
 from foreman.core.planning import Draft, DraftStep, InvalidPlan, Planner
 from foreman.core.ports import ConversationMessage, EventLog, ProjectStore, Provider, ToolCall
+from foreman.core.pricing import ModelPrice
+from foreman.core.turn_budget import TurnLimit, TurnMeter
 
 logger = logging.getLogger(__name__)
 
-FailureCode = Literal["internal_error", "unknown_tool", "invalid_plan"]
+FailureCode = Literal["internal_error", "unknown_tool", "invalid_plan", "budget_exceeded"]
 
 PROPOSE_PLAN = "propose_plan"
 DEFAULT_PROVIDER_TIMEOUT_S = 60.0
@@ -145,6 +148,8 @@ class TurnService:
         planner: Planner,
         projects: ProjectStore,
         provider_timeout_s: float = DEFAULT_PROVIDER_TIMEOUT_S,
+        prices: Mapping[str, ModelPrice] | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._provider = provider
         self._events = events
@@ -152,6 +157,8 @@ class TurnService:
         self._projects = projects
         self._rules = ClarificationRules.from_catalog(planner.catalog)
         self._provider_timeout_s = provider_timeout_s
+        self._prices = prices or {}
+        self._clock = clock
         self._active: dict[UUID, UUID] = {}
 
     def begin(self, project_id: UUID) -> UUID:
@@ -243,6 +250,18 @@ class TurnService:
         await self._emit(project_id, turn_id, ErrorData(code=code, message=ERROR_MESSAGES[code]))
         await self._emit(project_id, turn_id, TurnStatusData(status="failed"))
 
+    async def _stop(
+        self, project_id: UUID, turn_id: UUID, meter: TurnMeter, limit: TurnLimit
+    ) -> None:
+        """Arrêt propre sur dépassement : résumé, erreur `budget_exceeded`, tour en échec."""
+        logger.warning(
+            "turn_budget_exceeded project=%s turn=%s limit=%s", project_id, turn_id, limit
+        )
+        await self._emit(
+            project_id, turn_id, MessageData(role="assistant", text=meter.summary(limit))
+        )
+        await self._fail(project_id, turn_id, "budget_exceeded")
+
     async def _history(self, project_id: UUID) -> list[ConversationMessage]:
         events = await self._events.read_after(project_id, 0)
         return bounded_history(
@@ -264,13 +283,30 @@ class TurnService:
             updated = with_status(questions, answer.question_id, "answered", answer.value)
             await self._projects.set_open_questions(project_id, updated)
             await self._emit(project_id, turn_id, card_of(round_of(answer.question_id), updated))
+        limits = self._planner.catalog.policy.budgets.per_turn
+        meter = TurnMeter(limits, self._prices, self._clock)
+        if (limit := meter.admit()) is not None:
+            await self._stop(project_id, turn_id, meter, limit)
+            return
         try:
             # Délai explicite : sinon un fournisseur muet bloque le projet en 409 pour toujours.
-            async with asyncio.timeout(self._provider_timeout_s):
+            async with asyncio.timeout(min(self._provider_timeout_s, limits.max_seconds)):
                 reply = await self._provider.complete(await self._history(project_id))
+            meter.record(reply.usage)
+        except TimeoutError:
+            if limits.max_seconds <= self._provider_timeout_s:
+                await self._stop(project_id, turn_id, meter, "duration")
+                return
+            logger.exception("provider_failed project=%s turn=%s", project_id, turn_id)
+            await self._fail(project_id, turn_id, "internal_error")
+            return
         except Exception:
             logger.exception("provider_failed project=%s turn=%s", project_id, turn_id)
             await self._fail(project_id, turn_id, "internal_error")
+            return
+        if (limit := meter.over()) is not None:
+            # Le coût est engagé mais rien de ce que la réponse demande n'est exécuté.
+            await self._stop(project_id, turn_id, meter, limit)
             return
         await self._emit(project_id, turn_id, MessageData(role="assistant", text=reply.text))
         for call in reply.tool_calls:

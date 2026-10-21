@@ -18,6 +18,7 @@ import logging
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Final, cast
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -184,11 +185,21 @@ class ToolGateway:
         self._members = members
         self._clock = clock
         budget = catalog.policy.budgets.per_execution
-        self._budget = CallBudget(budget.max_tool_calls, budget.max_minutes * 60.0, clock)
+        self._budget = CallBudget(
+            budget.max_tool_calls,
+            budget.max_minutes * 60.0,
+            clock,
+            max_retries_per_step=budget.max_retries_per_step,
+            max_cost_eur=budget.max_model_cost_eur,
+        )
         self._validators = {
             name: Draft202012Validator(tool.input) for name, tool in catalog.tools.items()
         }
         self._inflight: set[tuple[UUID, int]] = set()
+
+    def record_model_cost(self, execution_id: UUID, eur: Decimal) -> None:
+        """Impute à l'exécution le coût d'un appel modèle fait pour elle (EUR)."""
+        self._budget.add_cost(execution_id, eur)
 
     async def call(self, call: GatewayCall) -> GatewayResult:
         key = (call.execution_id, call.step_seq)
@@ -214,7 +225,9 @@ class ToolGateway:
             try:
                 await self._record_decision(call, trace, authorized, started)
             except BaseException:
-                self._budget.refund(call.execution_id)  # rien ne s'exécutera : appel non compté
+                self._budget.refund(
+                    call.execution_id, call.step_seq
+                )  # rien ne s'exécutera : appel non compté
                 raise
             return await self._execute(call, trace, authorized, started)
         except _Refusal as refusal:
@@ -280,7 +293,9 @@ class ToolGateway:
             plan, requirements(matrix, verdict, environment), verdict.rule_id
         )
         await self._check_invariants(call, tool, environment)  # 6
-        if not self._budget.consume(call.execution_id):  # 7
+        exceeded = self._budget.consume(call.execution_id, call.step_seq)  # 7
+        if exceeded is not None:
+            log.warning("gateway : budget dépassé (%s, étape %d)", exceeded, call.step_seq)
             raise _Refusal("budget_exceeded", verdict.rule_id)
         return _Authorized(tool, verdict)
 
