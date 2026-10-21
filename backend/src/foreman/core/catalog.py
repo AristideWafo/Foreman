@@ -440,6 +440,7 @@ class ConnectorDefinition(_Strict):
 
     connector: str = Field(pattern=_CONNECTOR_NAME_RE.pattern, max_length=64)
     version: int = Field(ge=1)
+    availability: Literal["available", "soon"] = "available"  # « soon » : simulé, non configurable
     tokens: dict[str, TokenDeclaration] = Field(min_length=1)
     tools_enabled_when: dict[str, list[str]] = Field(default_factory=dict)
     probes: list[ProbeDefinition] = Field(min_length=1, max_length=50)

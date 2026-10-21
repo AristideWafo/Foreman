@@ -1181,6 +1181,12 @@ export interface components {
         };
         /** IntegrationView */
         IntegrationView: {
+            /**
+             * Availability
+             * @default available
+             * @enum {string}
+             */
+            availability: "available" | "soon";
             /** Configured */
             configured: boolean;
             /** Connector */
