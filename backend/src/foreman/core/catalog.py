@@ -405,17 +405,27 @@ class TokenDeclaration(_Strict):
     boundary: str | None = Field(default=None, max_length=200)
 
 
+EXPECTS_RE: Final = re.compile(r"\s*([A-Za-z_][\w.]{0,63})\s*(>=|<=|==|>|<)\s*(-?\d{1,15})\s*")
+
+
 class ProbeDefinition(_Strict):
     """Une sonde déclarée : un appel en LECTURE SEULE (GET ou HEAD) qui prouve un droit.
 
-    `expects` est une indication pour l'adaptateur réel (ex. « access_level >= 40 ») : la gateway
-    ne l'interprète pas.
+    `expects` (ex. « access_level >= 40 ») est évalué par la gateway sur les valeurs que la sonde
+    observe (`ProbeOutcome.observed`) : valeur absente ou hors condition = droit manquant.
     """
 
     name: str = Field(pattern=_CONNECTOR_NAME_RE.pattern, max_length=64)
     token: str
     call: str = Field(max_length=300)
     expects: str | None = Field(default=None, max_length=200)
+
+    @field_validator("expects")
+    @classmethod
+    def _expects_form(cls, value: str | None) -> str | None:
+        if value is not None and not EXPECTS_RE.fullmatch(value):
+            raise ValueError("expects: forme « champ >= entier » (>=, <=, ==, >, <)")
+        return value
 
     @field_validator("call")
     @classmethod

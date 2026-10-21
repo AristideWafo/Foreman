@@ -758,6 +758,7 @@
           "mapping": {
             "card": "#/components/schemas/CardEvent",
             "error": "#/components/schemas/ErrorEvent",
+            "execution_diagnostic": "#/components/schemas/ExecutionDiagnosticEvent",
             "execution_log": "#/components/schemas/ExecutionLogEvent",
             "execution_step": "#/components/schemas/ExecutionStepEvent",
             "message": "#/components/schemas/MessageEvent",
@@ -777,6 +778,9 @@
           },
           {
             "$ref": "#/components/schemas/ExecutionLogEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ExecutionDiagnosticEvent"
           },
           {
             "$ref": "#/components/schemas/TurnStatusEvent"
@@ -873,6 +877,89 @@
           "budget"
         ],
         "title": "ExecutionCardData",
+        "type": "object"
+      },
+      "ExecutionDiagnosticData": {
+        "additionalProperties": false,
+        "description": "\u00c9chec d'une \u00e9tape : diagnostic typ\u00e9, transmis au mod\u00e8le \u00e0 son prochain tour.",
+        "properties": {
+          "card_id": {
+            "maxLength": 64,
+            "title": "Card Id",
+            "type": "string"
+          },
+          "diagnostic": {
+            "$ref": "#/components/schemas/ToolDiagnostic"
+          },
+          "step": {
+            "minimum": 1,
+            "title": "Step",
+            "type": "integer"
+          },
+          "tool": {
+            "maxLength": 100,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id",
+          "step",
+          "tool",
+          "diagnostic"
+        ],
+        "title": "ExecutionDiagnosticData",
+        "type": "object"
+      },
+      "ExecutionDiagnosticEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "Horodatage avec fuseau (UTC)",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ExecutionDiagnosticData"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "seq": {
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "turn_id": {
+            "format": "uuid",
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "execution_diagnostic",
+            "default": "execution_diagnostic",
+            "title": "Type",
+            "type": "string"
+          },
+          "v": {
+            "const": 1,
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "project_id",
+          "turn_id",
+          "at",
+          "data"
+        ],
+        "title": "ExecutionDiagnosticEvent",
         "type": "object"
       },
       "ExecutionLogData": {
@@ -2601,6 +2688,79 @@
           "configured"
         ],
         "title": "TokenView",
+        "type": "object"
+      },
+      "ToolDiagnostic": {
+        "additionalProperties": false,
+        "description": "Diagnostic typ\u00e9 d'un outil en \u00e9chec (ADR 0002, couche 1) : le mod\u00e8le raisonne sur ces champs,\njamais sur du texte libre. `expected` / `observed` : \u00e9tats comparables (valeurs courtes,\nmasqu\u00e9es par la gateway). `probe` : r\u00e9sultat de la sonde de v\u00e9rification apr\u00e8s action.",
+        "properties": {
+          "code": {
+            "enum": [
+              "port_in_use",
+              "permission_missing",
+              "image_not_found",
+              "foreign_resource",
+              "timeout",
+              "invalid_output",
+              "adapter_error",
+              "unknown"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected"
+          },
+          "observed": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Observed"
+          },
+          "probe": {
+            "default": "not_run",
+            "enum": [
+              "ok",
+              "failed",
+              "not_run"
+            ],
+            "title": "Probe",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "ToolDiagnostic",
         "type": "object"
       },
       "TurnStatusData": {

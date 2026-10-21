@@ -833,7 +833,7 @@ export interface components {
              */
             error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented" | "plan_hash_mismatch" | "plan_not_approvable" | "execution_in_progress" | "question_closed" | "unauthenticated" | "forbidden" | "policy_denied" | "too_many_requests" | "last_admin" | "last_team_admin" | "invalid_invitation" | "conflict";
         };
-        Event: components["schemas"]["MessageEvent"] | components["schemas"]["CardEvent"] | components["schemas"]["ExecutionStepEvent"] | components["schemas"]["ExecutionLogEvent"] | components["schemas"]["TurnStatusEvent"] | components["schemas"]["ErrorEvent"];
+        Event: components["schemas"]["MessageEvent"] | components["schemas"]["CardEvent"] | components["schemas"]["ExecutionStepEvent"] | components["schemas"]["ExecutionLogEvent"] | components["schemas"]["ExecutionDiagnosticEvent"] | components["schemas"]["TurnStatusEvent"] | components["schemas"]["ErrorEvent"];
         /**
          * ExecutionCardData
          * @description Carte d'exécution : réémise entière (remplacement par `card_id`) à chaque changement.
@@ -870,6 +870,55 @@ export interface components {
             state: "running" | "awaiting_permission" | "awaiting_remediation" | "succeeded" | "partial" | "failed_compensated" | "blocked" | "degraded";
             /** Steps */
             steps: components["schemas"]["CardStep"][];
+        };
+        /**
+         * ExecutionDiagnosticData
+         * @description Échec d'une étape : diagnostic typé, transmis au modèle à son prochain tour.
+         */
+        ExecutionDiagnosticData: {
+            /** Card Id */
+            card_id: string;
+            diagnostic: components["schemas"]["ToolDiagnostic"];
+            /** Step */
+            step: number;
+            /** Tool */
+            tool: string;
+        };
+        /** ExecutionDiagnosticEvent */
+        ExecutionDiagnosticEvent: {
+            /**
+             * At
+             * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
+             */
+            at: string;
+            data: components["schemas"]["ExecutionDiagnosticData"];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /**
+             * Seq
+             * @description Strictement croissant, contigu à partir de 1, par projet
+             */
+            seq: number;
+            /**
+             * Turn Id
+             * Format: uuid
+             */
+            turn_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "execution_diagnostic";
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
         };
         /**
          * ExecutionLogData
@@ -1607,6 +1656,35 @@ export interface components {
             name: string;
             /** Scopes */
             scopes: string[];
+        };
+        /**
+         * ToolDiagnostic
+         * @description Diagnostic typé d'un outil en échec (ADR 0002, couche 1) : le modèle raisonne sur ces champs,
+         *     jamais sur du texte libre. `expected` / `observed` : états comparables (valeurs courtes,
+         *     masquées par la gateway). `probe` : résultat de la sonde de vérification après action.
+         */
+        ToolDiagnostic: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "port_in_use" | "permission_missing" | "image_not_found" | "foreign_resource" | "timeout" | "invalid_output" | "adapter_error" | "unknown";
+            /**
+             * Expected
+             * @default null
+             */
+            expected: string | number | boolean | null;
+            /**
+             * Observed
+             * @default null
+             */
+            observed: string | number | boolean | null;
+            /**
+             * Probe
+             * @default not_run
+             * @enum {string}
+             */
+            probe: "ok" | "failed" | "not_run";
         };
         /** TurnStatusData */
         TurnStatusData: {

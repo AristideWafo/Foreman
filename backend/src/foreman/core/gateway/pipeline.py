@@ -19,7 +19,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Final, cast
+from typing import Final, Literal, cast, get_args
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -28,7 +28,7 @@ from pydantic import JsonValue
 
 from foreman.core.catalog import Catalog, ToolDefinition
 from foreman.core.connector_state import ConnectorStore
-from foreman.core.events import Requirement
+from foreman.core.events import DiagnosticCode, Requirement, ToolDiagnostic
 from foreman.core.gateway.budget import CallBudget
 from foreman.core.gateway.errors import CallDenied, CallFailed, DenialCode, FailureCode
 from foreman.core.gateway.port import GatewayCall, GatewayResult, ProbeReport
@@ -40,6 +40,7 @@ from foreman.core.gateway.redact import (
     json_size,
     mask_text,
     redact_value,
+    strip_paths,
     truncated_output,
 )
 from foreman.core.gateway.scope import in_scope
@@ -53,6 +54,7 @@ from foreman.core.policy.matrix import (
     requirements,
 )
 from foreman.core.ports import (
+    AdapterDiagnostic,
     AdapterError,
     AdapterResult,
     ConnectorProber,
@@ -136,6 +138,43 @@ def safe_url(value: object) -> str | None:
     if parts.scheme not in ("http", "https") or not host:
         return None
     return f"{parts.scheme}://{host}{port}{parts.path}"
+
+
+@dataclass(frozen=True, slots=True)
+class _Failure:
+    """Échec d'un adaptateur : le code de la gateway et le diagnostic fourni (zone non fiable)."""
+
+    code: FailureCode
+    raw: AdapterDiagnostic | None = None
+
+
+_DIAGNOSTIC_CODES: Final = frozenset(get_args(DiagnosticCode))
+MAX_DIAGNOSTIC_VALUE: Final = 100
+
+
+def _value(value: object) -> str | int | bool | None:
+    if isinstance(value, bool | int):
+        return value
+    return mask_text(value)[:MAX_DIAGNOSTIC_VALUE] if isinstance(value, str) else None
+
+
+def _diagnostic(code: str, raw: AdapterDiagnostic | None) -> ToolDiagnostic:
+    """Diagnostic typé et sûr : code de la liste fermée (sinon celui de la gateway, sinon
+    `unknown`), valeurs masquées et bornées. Rien d'autre de l'adaptateur n'est conservé."""
+    if not isinstance(raw, AdapterDiagnostic):
+        return ToolDiagnostic(
+            code=cast(DiagnosticCode, code if code in _DIAGNOSTIC_CODES else "unknown")
+        )
+    chosen = raw.code if raw.code in _DIAGNOSTIC_CODES else code
+    probe: Literal["ok", "failed", "not_run"] = (
+        "not_run" if raw.probe is None else "ok" if raw.probe else "failed"
+    )
+    return ToolDiagnostic(
+        code=cast(DiagnosticCode, chosen if chosen in _DIAGNOSTIC_CODES else "unknown"),
+        expected=_value(raw.expected),
+        observed=_value(raw.observed),
+        probe=probe,
+    )
 
 
 def _valid_result(raw: object) -> AdapterResult | None:
@@ -235,6 +274,7 @@ class ToolGateway:
     async def _run(self, call: GatewayCall, trace: _Trace, started: float) -> GatewayResult:
         denial: DenialCode | None = None
         failure: FailureCode = "internal_error"
+        diagnostic: ToolDiagnostic | None = None
         rule_id: str | None = None
         try:
             authorized = await self._authorize(call, trace)
@@ -250,6 +290,7 @@ class ToolGateway:
             denial, rule_id = refusal.code, refusal.rule_id
         except CallFailed as failed:
             failure, rule_id = cast(FailureCode, failed.code), trace.rule_id
+            diagnostic = failed.diagnostic
         except StoreError:
             log.warning("gateway : stockage indisponible (étape %d)", call.step_seq)
             failure, rule_id = "storage_unavailable", trace.rule_id
@@ -267,7 +308,7 @@ class ToolGateway:
             await self._audit(call, trace, "denied", denial, rule_id, started)
             raise CallDenied(denial)
         await self._audit(call, trace, "error", failure, rule_id, started)
-        raise CallFailed(failure)
+        raise CallFailed(failure, diagnostic or _diagnostic(failure, None))
 
     # --- Étapes 1 à 7 : décider --------------------------------------------------------------
 
@@ -419,7 +460,7 @@ class ToolGateway:
 
     # --- Étapes 8 et 9 : exécuter et filtrer --------------------------------------------------
 
-    async def _invoke(self, call: GatewayCall, tool: ToolDefinition) -> AdapterResult | FailureCode:
+    async def _invoke(self, call: GatewayCall, tool: ToolDefinition) -> AdapterResult | _Failure:
         """Appelle l'adaptateur. Rend un code (jamais une exception) : le message d'origine ne
         survit pas."""
         adapter = self._adapters[tool.connector]
@@ -431,29 +472,32 @@ class ToolGateway:
                 )
                 raw = await adapter.execute(tool.tool, call.params, key)
         except TimeoutError:
-            return "timeout"
-        except PermissionMissing:
-            return "permission_missing"
-        except ForeignResource:
-            return "foreign_resource"
-        except AdapterError:
-            return "adapter_error"
+            return _Failure("timeout")
+        except PermissionMissing as exc:
+            return _Failure("permission_missing", exc.diagnostic)
+        except ForeignResource as exc:
+            return _Failure("foreign_resource", exc.diagnostic)
+        except AdapterError as exc:
+            return _Failure("adapter_error", exc.diagnostic)
         except Exception as exc:
             log.warning("gateway : défaut d'adaptateur (%s)", type(exc).__name__)
-            return "adapter_defect"
+            return _Failure("adapter_defect")
         valid = _valid_result(raw)
-        return "invalid_output" if valid is None else valid
+        return _Failure("invalid_output") if valid is None else valid
 
     async def _execute(
         self, call: GatewayCall, trace: _Trace, authorized: _Authorized, started: float
     ) -> GatewayResult:
         tool = authorized.tool
         raw = await self._invoke(call, tool)
-        if isinstance(raw, str):
-            raise CallFailed(raw)
+        if isinstance(raw, _Failure):
+            raise CallFailed(raw.code, _diagnostic(raw.code, raw.raw))
         fields = frozenset(tool.redact)
         resources, reused = await self._resources(call, tool, raw)
         masked = redact_value(dict(raw.output), fields)
+        connector = self._catalog.connectors.get(tool.connector)
+        if connector is not None and isinstance(masked, dict):  # `strip_from_results` du connecteur
+            masked = strip_paths(masked, connector.strip_from_results)
         output = (
             masked
             if isinstance(masked, dict) and json_size(masked) <= MAX_OUTPUT_BYTES

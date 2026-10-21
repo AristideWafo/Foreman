@@ -235,6 +235,28 @@ def redact_value(
     return value
 
 
+def strip_paths(output: dict[str, JsonValue], paths: Iterable[str]) -> dict[str, JsonValue]:
+    """Retire de `output` (déjà copié par `redact_value`) les chemins `a.b[*].c` : le champ est
+    absent, pas masqué. Un chemin sans correspondance ne fait rien."""
+    for path in paths:
+        _strip(output, path.split("."))
+    return output
+
+
+def _strip(node: JsonValue, segments: list[str]) -> None:
+    head, *rest = segments
+    each = head.endswith("[*]")
+    key = head[:-3] if each else head
+    if not isinstance(node, dict) or key not in node:
+        return
+    if not rest:
+        del node[key]
+        return
+    child = node[key]
+    for item in child if each and isinstance(child, list) else [child]:
+        _strip(item, rest)
+
+
 def json_size(value: Mapping[str, JsonValue]) -> int:
     return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
 

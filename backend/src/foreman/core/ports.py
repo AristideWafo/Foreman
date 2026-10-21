@@ -44,8 +44,26 @@ class Provider(Protocol):
     async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply: ...
 
 
+@dataclass(frozen=True, slots=True)
+class AdapterDiagnostic:
+    """Ce qu'un adaptateur sait de son échec, en champs typés (zone non fiable : la gateway valide,
+    masque et borne). `code` : un code normalisé (`port_in_use`, `image_not_found`...) ; `probe` :
+    la sonde de vérification après action a réussi (`True`) ou échoué (`False`)."""
+
+    code: str
+    expected: str | int | bool | None = None
+    observed: str | int | bool | None = None
+    probe: bool | None = None
+
+
 class AdapterError(Exception):
-    """Un adaptateur a échoué. Le message est interne : la gateway ne le transmet pas tel quel."""
+    """Un adaptateur a échoué. Le message est interne : la gateway ne le transmet pas tel quel.
+
+    `diagnostic` (facultatif) est la seule partie qui atteint le modèle, une fois validée."""
+
+    def __init__(self, message: str = "", diagnostic: AdapterDiagnostic | None = None) -> None:
+        super().__init__(message)
+        self.diagnostic = diagnostic
 
 
 class ForeignResource(AdapterError):
@@ -110,6 +128,8 @@ class ProbeOutcome:
 
     ok: bool
     scopes: frozenset[str] = frozenset()
+    # Valeurs observées (ex. `access_level`), comparées à `expects` de la sonde par la gateway.
+    observed: Mapping[str, int] | None = None
 
 
 @runtime_checkable

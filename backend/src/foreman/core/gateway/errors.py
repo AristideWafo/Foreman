@@ -3,6 +3,8 @@ d'adaptateur) ne sort. Le `code` est un identifiant stable, choisi dans une list
 
 from typing import Literal
 
+from foreman.core.events import ToolDiagnostic
+
 DenialCode = Literal[
     "unknown_context",  # exécution, plan ou étape introuvable pour ce projet, exécution terminée
     "unknown_tool",
@@ -63,5 +65,6 @@ class ProbeDenied(GatewayError):
 class CallFailed(GatewayError):
     """L'appel était permis mais l'exécution a échoué ou sa sortie est inutilisable."""
 
-    def __init__(self, code: FailureCode) -> None:
+    def __init__(self, code: FailureCode, diagnostic: ToolDiagnostic | None = None) -> None:
         super().__init__(code, FAILED_MESSAGE)
+        self.diagnostic = diagnostic

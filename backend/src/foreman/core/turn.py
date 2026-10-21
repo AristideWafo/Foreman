@@ -5,6 +5,7 @@ Deux outils existent : `propose_plan` (validé puis haché par le `Planner`) et 
 """
 
 import asyncio
+import json
 import logging
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -28,6 +29,7 @@ from foreman.core.clarification import (
 )
 from foreman.core.events import (
     ERROR_MESSAGES,
+    AnyEvent,
     ClarificationQuestion,
     ErrorData,
     EventData,
@@ -145,6 +147,21 @@ def bounded_history(messages: Sequence[ConversationMessage]) -> list[Conversatio
         kept.append(message)
     kept.reverse()
     return kept
+
+
+def model_history(events: Sequence[AnyEvent]) -> list[ConversationMessage]:
+    """Ce que le modèle lit du flux : les messages (masqués) et les diagnostics d'échec typés."""
+    history: list[ConversationMessage] = []
+    for e in events:
+        if e.type == "message":
+            history.append(ConversationMessage(e.data.role, mask_for_model(e.data.text)))
+        elif e.type == "execution_diagnostic":
+            # Champs typés seulement (liste fermée, valeurs masquées et bornées par la gateway).
+            result: dict[str, object] = {"tool": e.data.tool, "step": e.data.step}
+            result |= e.data.diagnostic.model_dump(exclude_none=True)
+            text = json.dumps({"tool_result": result}, ensure_ascii=False)
+            history.append(ConversationMessage("user", text))
+    return bounded_history(history)
 
 
 class TurnService:
@@ -276,14 +293,7 @@ class TurnService:
         await self._fail(project_id, turn_id, "budget_exceeded")
 
     async def _history(self, project_id: UUID) -> list[ConversationMessage]:
-        events = await self._events.read_after(project_id, 0)
-        return bounded_history(
-            [
-                ConversationMessage(e.data.role, mask_for_model(e.data.text))
-                for e in events
-                if e.type == "message"
-            ]
-        )
+        return model_history(await self._events.read_after(project_id, 0))
 
     async def _run(self, request: TurnRequest, turn_id: UUID) -> None:
         project_id = request.project_id
