@@ -13,7 +13,12 @@ from foreman.core.gateway.probe import expectation_met
 from foreman.core.gateway.redact import failure_extract
 from foreman.core.ports import AdapterDiagnostic, AdapterError, AdapterResult
 from foreman.core.turn import model_history
-from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
+from foreman.infra.in_memory import (
+    InMemoryEventLog,
+    InMemoryProjectStore,
+    InMemoryRawLogStore,
+    in_memory_stores,
+)
 from test_blocked_and_epoch import engine_for, run_plan
 from test_gateway import ONE_GROUP, SECRET_TOKEN, LeakyAdapter, call_for, make_world, start
 
@@ -108,3 +113,46 @@ def test_the_failure_extract_keeps_the_error_line_and_drops_secrets_and_hosts() 
     assert len(extract) <= 5 and all(len(line) <= 200 for line in extract)
     assert "port already in use" in text
     assert SECRET_TOKEN not in text and "internal" not in text and "10.0.3" not in text
+
+
+RAW_LINE = f"INTERNAL-RAW-DUMP db-7.corp.internal token={SECRET_TOKEN}"
+RAW = (RAW_LINE, *(f"étape {i} ok" for i in range(300)), "ERROR boom")
+
+
+class NoKnownCode:
+    """Échec sans code reconnu ; le log brut porte un secret et un hôte interne."""
+
+    async def execute(
+        self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str
+    ) -> AdapterResult:
+        raise AdapterError("x", AdapterDiagnostic(code="???", logs=RAW))
+
+
+async def test_an_unknown_failure_asks_the_human_and_hides_the_raw_log_from_the_model() -> None:
+    projects = InMemoryProjectStore()
+    _, stores = in_memory_stores(projects=projects)
+    events, raw = InMemoryEventLog(), InMemoryRawLogStore()
+    project = (await projects.create("p")).id
+    engine = engine_for(stores, events, NoKnownCode(), raw)
+    execution = await run_plan(stores, events, engine, project, "bb")
+
+    stream = await events.read_after(project, 0)
+    cards = [e.data for e in stream if e.type == "card" and e.data.kind == "diagnostic"]
+    assert len(cards) == 1 and cards[0].raw_log_available and cards[0].step == 1
+    assert raw.get(project, execution, 1) == RAW[-200:]  # fin du log, bornée
+    assert cards[0].extract == ["ERROR boom"]
+    # Ni le flux (lu par tous) ni l'historique du modèle ne contiennent le log brut.
+    everything = "".join(e.model_dump_json() for e in stream)
+    history = "".join(m.text for m in model_history(stream))
+    for text in (everything, history):
+        assert "INTERNAL-RAW-DUMP" not in text and SECRET_TOKEN not in text
+
+
+async def test_a_known_code_does_not_raise_the_card() -> None:
+    projects = InMemoryProjectStore()
+    _, stores = in_memory_stores(projects=projects)
+    events = InMemoryEventLog()
+    project = (await projects.create("p")).id
+    await run_plan(stores, events, engine_for(stores, events, PortInUse()), project, "bb")
+    stream = await events.read_after(project, 0)
+    assert not [e for e in stream if e.type == "card" and e.data.kind == "diagnostic"]

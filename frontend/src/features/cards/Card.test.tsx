@@ -355,3 +355,37 @@ test("S12, plan invalidé le plus récent : findRetry renvoie le message d'origi
     text: "Crée le projet Safe Eat : GitLab, puis déploiement en staging.",
   });
 });
+
+// --- #277 : carte « diagnostic requis » ------------------------------------------------------------
+
+test("diagnostic : extrait masqué, Réessayer et Annuler ; log brut seulement pour un administrateur", async () => {
+  const card: CardData = {
+    card_id: "diagnostic-e-1",
+    kind: "diagnostic",
+    execution_id: "e",
+    step: 1,
+    tool: "gitlab.create_group",
+    extract: ["ERROR boom"],
+    raw_log_available: true,
+  };
+  stubFetch(new FakeFetch(200, { name: "x", role: "developer", user_id: "u" }));
+  const view = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Card card={card} projectId={PROJECT_ID} />
+    </QueryClientProvider>,
+  );
+  const group = screen.getByRole("group", { name: "Diagnostic requis" });
+  expect(within(group).getByRole("log")).toHaveTextContent("ERROR boom");
+  expect(within(group).getByRole("button", { name: "Réessayer" })).toBeEnabled();
+  expect(within(group).getByRole("button", { name: "Annuler" })).toBeEnabled();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(within(group).queryByRole("button", { name: "Voir le log brut" })).toBeNull();
+  view.unmount();
+  stubFetch(new FakeFetch(200, { name: "x", role: "team_admin", user_id: "u" }));
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Card card={card} projectId={PROJECT_ID} />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByRole("button", { name: "Voir le log brut" })).toBeEnabled();
+});

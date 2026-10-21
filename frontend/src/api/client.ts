@@ -219,6 +219,16 @@ export function postMessage(projectId: string, text: string): Promise<MessageAcc
   );
 }
 
+export function getRawLog(
+  projectId: string,
+  executionId: string,
+  step: number,
+): Promise<components["schemas"]["RawLogView"]> {
+  return request(
+    `/api/projects/${encodeURIComponent(projectId)}/executions/${encodeURIComponent(executionId)}/steps/${step}/raw-log`,
+  );
+}
+
 /** Identité de l'appelant, lue côté serveur (le rôle ne vient jamais du front). Retient le jeton CSRF. */
 export async function getMe(): Promise<Me> {
   const me = await request<Me>("/api/me");

@@ -43,6 +43,7 @@ from foreman.surfaces.web.schemas import (
     ProjectView,
     QuestionAccepted,
     QuestionAnswerRequest,
+    RawLogView,
 )
 from foreman.surfaces.web.tasks import TaskRegistry
 
@@ -479,5 +480,24 @@ def create_router(app: App, tasks: TaskRegistry) -> APIRouter:
             resources=card.resources,
             result=card.result,
         )
+
+    @router.get(
+        "/projects/{project_id}/executions/{execution_id}/steps/{step}/raw-log",
+        response_model=RawLogView,
+        responses=_ERRORS,
+    )
+    async def get_raw_log(execution_id: UUID, step: int, access: Access) -> RawLogView:
+        """Log brut d'un échec sans code connu : org_admin et team_admin de l'équipe seulement.
+
+        Un développeur reçoit 403 (il ne voit que l'extrait masqué de la carte) ; le modèle ne le
+        lit jamais.
+        """
+        _members_only(access)
+        if access.principal.role not in ("team_admin", "org_admin"):
+            raise ApiError(403, "forbidden")
+        lines = app.raw_logs.get(access.project.id, execution_id, step) if app.raw_logs else None
+        if lines is None:
+            raise ApiError(404, "not_found")
+        return RawLogView(lines=list(lines))
 
     return router

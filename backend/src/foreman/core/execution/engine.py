@@ -21,6 +21,7 @@ from pydantic import JsonValue
 
 from foreman.core.catalog import Catalog
 from foreman.core.events import (
+    DiagnosticCardData,
     EventData,
     ExecutionDiagnosticData,
     ExecutionLogData,
@@ -30,7 +31,7 @@ from foreman.core.events import (
 from foreman.core.execution.cards import execution_card, execution_card_id
 from foreman.core.gateway.errors import CallDenied, CallFailed, GatewayError
 from foreman.core.gateway.port import Gateway, GatewayCall, GatewayResult
-from foreman.core.ports import EventLog
+from foreman.core.ports import EventLog, RawLogStore
 from foreman.core.references import UnresolvedReference, resolve_params
 from foreman.core.store import (
     AuditEntry,
@@ -56,6 +57,8 @@ RESUME_CLAIM_DELAY_S: Final = 5.0
 IN_PROGRESS_ATTEMPTS: Final = 5  # `call_in_progress` : le même appel tourne encore
 IN_PROGRESS_DELAY_S: Final = 1.0
 LEASE_RENEW_INTERVAL_S: Final = 20.0  # un tiers du bail (60 s) : renouvelé pendant un appel long
+# Sans code connu, le modèle ne devine pas : une carte « diagnostic requis » appelle l'humain.
+HUMAN_FALLBACK_CODES: Final = frozenset({"unknown", "adapter_error"})
 SHUTDOWN_GRACE_S: Final = 8.0  # sous les 10 s de `docker stop` par défaut (voir `shutdown`)
 
 
@@ -87,11 +90,13 @@ class ExecutionEngine:
         resume_claim_attempts: int = RESUME_CLAIM_ATTEMPTS,
         resume_claim_delay_s: float = RESUME_CLAIM_DELAY_S,
         lease_renew_interval_s: float = LEASE_RENEW_INTERVAL_S,
+        raw_logs: RawLogStore | None = None,
     ) -> None:
         self._catalog = catalog
         self._stores = stores
         self._gateway = gateway
         self._events = events
+        self._raw_logs = raw_logs
         self._clock = clock
         self._resume_attempts = resume_claim_attempts
         self._resume_delay_s = resume_claim_delay_s
@@ -284,6 +289,8 @@ class ExecutionEngine:
                         diagnostic=error.diagnostic,
                     ),
                 )
+                if error.diagnostic.code in HUMAN_FALLBACK_CODES:
+                    await self._ask_human(project_id, lease.execution_id, step, error)
             if isinstance(error, CallDenied) and error.code != "call_in_progress":
                 # Refus avant effet : la clé ne doit pas rester orpheline pour un plan identique.
                 await self._release(lease, step.seq, keep_lease=True)
@@ -309,6 +316,26 @@ class ExecutionEngine:
             )
         await self._step_event(project_id, lease.execution_id, step.seq, "succeeded")
         await self._emit_card(project_id, lease.execution_id, started)
+
+    async def _ask_human(
+        self, project_id: UUID, execution_id: UUID, step: StepRecord, error: CallFailed
+    ) -> None:
+        """Carte « diagnostic requis » : extrait masqué au flux, log brut gardé côté serveur."""
+        assert error.diagnostic is not None  # noqa: S101 - vérifié par l'appelant
+        kept = False
+        if self._raw_logs is not None and error.raw_logs:
+            self._raw_logs.put(project_id, execution_id, step.seq, error.raw_logs)
+            kept = True
+        card = DiagnosticCardData(
+            card_id=f"diagnostic-{execution_id}-{step.seq}",
+            kind="diagnostic",
+            execution_id=execution_id,
+            step=step.seq,
+            tool=step.tool,
+            extract=error.diagnostic.extract or [],
+            raw_log_available=kept,
+        )
+        await self._emit(project_id, execution_id, card)
 
     async def _call(
         self,

@@ -13,11 +13,19 @@ function stepMeta(step: CardStep): string {
 }
 
 /** Journal filtré d'une étape : défilement interne, focalisable au clavier. */
-function LogBlock({ step, lines }: { step: number; lines: readonly string[] }) {
+export function LogBlock({
+  step,
+  lines,
+  label = `Journal de l'étape ${step}`,
+}: {
+  step: number;
+  lines: readonly string[];
+  label?: string;
+}) {
   return (
     <pre
       role="log"
-      aria-label={`Journal de l'étape ${step}`}
+      aria-label={label}
       tabIndex={0}
       className="mt-1 max-h-40 overflow-auto rounded-md bg-muted p-2 font-mono text-xs wrap-break-word whitespace-pre-wrap text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >

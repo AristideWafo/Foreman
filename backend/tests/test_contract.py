@@ -276,6 +276,7 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
         "/api/admin/integrations/{connector}/test",
         "/api/admin/integrations/anthropic/model",
         "/api/projects/{project_id}/executions/{execution_id}",
+        "/api/projects/{project_id}/executions/{execution_id}/steps/{step}/raw-log",
         "/api/projects/{project_id}/questions/{question_id}",
     }
     card = schemas["CardEvent"]["properties"]["data"]
@@ -285,6 +286,7 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
         "execution",
         "clarification",
         "approval",
+        "diagnostic",
     }
     assert (
         "kind" in schemas["PlanCardData"]["required"]

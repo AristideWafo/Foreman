@@ -3,6 +3,7 @@ import { Card as UiCard, CardContent } from "@/components/ui/card";
 import type { StepLogs } from "../events/timeline";
 import { ApprovalCard } from "./ApprovalCard";
 import { ClarificationCard } from "./ClarificationCard";
+import { DiagnosticCard } from "./DiagnosticCard";
 import { ExecutionCard } from "./ExecutionCard";
 import { PlanCard } from "./PlanCard";
 
@@ -41,6 +42,8 @@ export function Card({
       return <ClarificationCard card={card} projectId={projectId} />;
     case "approval":
       return <ApprovalCard card={card} projectId={projectId} />;
+    case "diagnostic":
+      return <DiagnosticCard card={card} projectId={projectId} />;
     default:
       return (
         <UiCard className="border border-dashed text-sm">

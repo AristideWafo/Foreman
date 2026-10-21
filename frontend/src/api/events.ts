@@ -8,7 +8,9 @@ export type ExecutionCardData = components["schemas"]["ExecutionCardData"];
 /** Données d'une carte : union discriminée sur `kind` (`plan`, `execution`, `clarification` ou `approval`). */
 export type ClarificationCardData = components["schemas"]["ClarificationCardData"];
 export type ApprovalCardData = components["schemas"]["ApprovalCardData"];
-export type CardData = PlanCardData | ExecutionCardData | ClarificationCardData | ApprovalCardData;
+export type DiagnosticCardData = components["schemas"]["DiagnosticCardData"];
+export type CardData =
+  PlanCardData | ExecutionCardData | ClarificationCardData | ApprovalCardData | DiagnosticCardData;
 export type CardStep = components["schemas"]["CardStep"];
 export type StepStatus = CardStep["status"];
 export type PlanStatus = NonNullable<PlanCardData["status"]>;

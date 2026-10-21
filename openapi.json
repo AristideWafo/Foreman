@@ -312,6 +312,7 @@
               "mapping": {
                 "approval": "#/components/schemas/ApprovalCardData",
                 "clarification": "#/components/schemas/ClarificationCardData",
+                "diagnostic": "#/components/schemas/DiagnosticCardData",
                 "execution": "#/components/schemas/ExecutionCardData",
                 "plan": "#/components/schemas/PlanCardData"
               },
@@ -329,6 +330,9 @@
               },
               {
                 "$ref": "#/components/schemas/ApprovalCardData"
+              },
+              {
+                "$ref": "#/components/schemas/DiagnosticCardData"
               }
             ],
             "title": "Data"
@@ -639,6 +643,61 @@
           "first_admin_id"
         ],
         "title": "CreateTeamRequest",
+        "type": "object"
+      },
+      "DiagnosticCardData": {
+        "additionalProperties": false,
+        "description": "Carte \u00ab diagnostic requis \u00bb (ADR 0002, couche 5) : \u00e9chec sans code connu, l'humain d\u00e9cide.\n\nNe porte jamais le log brut (le flux est lu par tous les membres) : seulement l'extrait masqu\u00e9.\nLe log brut se lit par une route r\u00e9serv\u00e9e aux administrateurs de l'\u00e9quipe (`raw_log_available`).",
+        "properties": {
+          "card_id": {
+            "maxLength": 100,
+            "title": "Card Id",
+            "type": "string"
+          },
+          "execution_id": {
+            "format": "uuid",
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "extract": {
+            "default": [],
+            "items": {
+              "maxLength": 200,
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Extract",
+            "type": "array"
+          },
+          "kind": {
+            "const": "diagnostic",
+            "title": "Kind",
+            "type": "string"
+          },
+          "raw_log_available": {
+            "default": false,
+            "title": "Raw Log Available",
+            "type": "boolean"
+          },
+          "step": {
+            "minimum": 1,
+            "title": "Step",
+            "type": "integer"
+          },
+          "tool": {
+            "maxLength": 100,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id",
+          "kind",
+          "execution_id",
+          "step",
+          "tool"
+        ],
+        "title": "DiagnosticCardData",
         "type": "object"
       },
       "ErrorData": {
@@ -2441,6 +2500,25 @@
           "decision"
         ],
         "title": "QuestionAnswerRequest",
+        "type": "object"
+      },
+      "RawLogView": {
+        "description": "Log brut d'un \u00e9chec (administrateurs seulement) : \u00e0 afficher comme texte, jamais en HTML.",
+        "properties": {
+          "lines": {
+            "items": {
+              "maxLength": 500,
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines"
+        ],
+        "title": "RawLogView",
         "type": "object"
       },
       "ResourceRef": {
@@ -5084,6 +5162,116 @@
           }
         },
         "summary": "Get Execution"
+      }
+    },
+    "/api/projects/{project_id}/executions/{execution_id}/steps/{step}/raw-log": {
+      "get": {
+        "description": "Log brut d'un \u00e9chec sans code connu : org_admin et team_admin de l'\u00e9quipe seulement.\n\nUn d\u00e9veloppeur re\u00e7oit 403 (il ne voit que l'extrait masqu\u00e9 de la carte) ; le mod\u00e8le ne le\nlit jamais.",
+        "operationId": "get_raw_log_api_projects__project_id__executions__execution_id__steps__step__raw_log_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "execution_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Execution Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "step",
+            "required": true,
+            "schema": {
+              "title": "Step",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RawLogView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Non authentifi\u00e9 (`unauthenticated`)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "R\u00f4le insuffisant (`forbidden`)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Introuvable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requ\u00eate invalide"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pas encore impl\u00e9ment\u00e9"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Capacit\u00e9 atteinte"
+          }
+        },
+        "summary": "Get Raw Log"
       }
     },
     "/api/projects/{project_id}/messages": {

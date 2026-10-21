@@ -181,6 +181,18 @@ class Subscription(Protocol):
     def close(self) -> None: ...
 
 
+class RawLogStore(Protocol):
+    """Log brut des échecs sans code connu : côté serveur, lu par l'humain habilité seulement.
+
+    Jamais écrit dans le flux d'événements ni lu par le modèle."""
+
+    def put(
+        self, project_id: UUID, execution_id: UUID, step: int, lines: Sequence[str]
+    ) -> None: ...
+
+    def get(self, project_id: UUID, execution_id: UUID, step: int) -> Sequence[str] | None: ...
+
+
 class EventLog(Protocol):
     """Journal d'événements par projet. `seq` est assigné par le journal (contigu dès 1)."""
 

@@ -209,6 +209,14 @@ Le rôle de l'utilisateur vient de `GET /api/me` (`useMe`), jamais d'une règle 
 **Carte plan** : si `admin_approval_required`, l'action devient **« Valider et transmettre à l'admin »** ; sur 202
 (`ApprovalPending`), la ligne de statut dit « Validé. En attente d'un administrateur. ».
 
+## Carte « diagnostic requis » (#277)
+
+Rendue depuis l'événement `card` de `kind = "diagnostic"` : un échec d'outil sans code connu. C'est une `Card`
+shadcn (`CardHeading` : icône `ExclamationTriangleIcon`, titre « Diagnostic requis »). Elle montre l'**extrait
+masqué** (même bloc `role="log"` que le journal d'étape) et, pour `org_admin` et `team_admin` seulement,
+« Voir le log brut » (appel à la demande, le serveur refuse les développeurs en 403). Le pied propose
+**Réessayer** et **Annuler** (un message envoyé au chat) ; « préciser » se fait dans la zone de message.
+
 ## Administration (`/admin`) et équipes
 
 Entrée « Administration » dans le rail, visible si `/api/me` donne `org_admin` ou `team_admin` d'une équipe
