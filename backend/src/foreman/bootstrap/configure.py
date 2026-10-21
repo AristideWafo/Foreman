@@ -9,6 +9,7 @@ from typing import Final
 
 from foreman.bootstrap.adapters import build_gateway
 from foreman.bootstrap.database import DatabaseLifecycle, Lifecycle, NoLifecycle
+from foreman.bootstrap.provider import choose_provider
 from foreman.bootstrap.secrets import SecretsLifecycle
 from foreman.config.env import (
     DEFAULT_AUTH_MODE,
@@ -54,6 +55,7 @@ from foreman.infra.in_memory import (
 from foreman.infra.passwords import Argon2Hasher
 from foreman.infra.replay_provider import ReplayProvider
 from foreman.infra.secrets import InMemorySecretStore, KeyFile, Keyring
+from foreman.integrations.anthropic.models import model_prices
 
 
 class Profile(StrEnum):
@@ -143,7 +145,12 @@ def configure(profile: Profile) -> App:
     environment = os.environ.get(ENV_ENVIRONMENT, DEFAULT_ENVIRONMENT)
     catalog = load_catalog(environment=environment)
     # 3. Adaptateurs de connecteurs : bootstrap/adapters.py (seul endroit qui importe integrations)
-    provider = ReplayProvider.from_dir(catalog_dir_from_env())
+    replay = ReplayProvider.from_dir(catalog_dir_from_env())
+    logging.getLogger("httpx2").setLevel(
+        logging.WARNING
+    )  # les URL et en-têtes n'ont rien à faire dans les logs
+    logging.getLogger("httpcore2").setLevel(logging.WARNING)
+    logging.getLogger("anthropic").setLevel(logging.WARNING)
     auth_mode = AuthMode(os.environ.get(ENV_AUTH_MODE, DEFAULT_AUTH_MODE))
     dev_members = parse_dev_members(os.environ.get(ENV_DEV_MEMBERS, ""))
     if auth_mode is AuthMode.PROXY_HEADER and not dev_members:
@@ -185,6 +192,7 @@ def configure(profile: Profile) -> App:
         lifecycle = NoLifecycle()
     if (auth_mode is AuthMode.SESSION or profile is Profile.ADMIN) and auth is None:
         raise ValueError(f"{ENV_DATABASE_URL} est obligatoire en mode {AuthMode.SESSION}")
+    provider = choose_provider(replay, secrets, force_replay=profile is Profile.EVAL)
     # 4. Services du cœur
     gateway = build_gateway(catalog, stores, members, durable_registry=persistence == "postgres")
     return App(
@@ -192,7 +200,11 @@ def configure(profile: Profile) -> App:
         projects=projects,
         events=events,
         turns=TurnService(
-            provider, events, Planner(catalog, stores.plans, stores.registry), projects
+            provider,
+            events,
+            Planner(catalog, stores.plans, stores.registry),
+            projects,
+            prices=model_prices(),
         ),
         stores=stores,
         lifecycle=lifecycle,
