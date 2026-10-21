@@ -30,7 +30,8 @@ from foreman.core.catalog import Catalog, ToolDefinition
 from foreman.core.events import Requirement
 from foreman.core.gateway.budget import CallBudget
 from foreman.core.gateway.errors import CallDenied, CallFailed, DenialCode, FailureCode
-from foreman.core.gateway.port import GatewayCall, GatewayResult
+from foreman.core.gateway.port import GatewayCall, GatewayResult, ProbeReport
+from foreman.core.gateway.probe import ConnectorProbes
 from foreman.core.gateway.redact import (
     MAX_OUTPUT_BYTES,
     bounded_for_audit,
@@ -53,6 +54,7 @@ from foreman.core.policy.matrix import (
 from foreman.core.ports import (
     AdapterError,
     AdapterResult,
+    ConnectorProber,
     ForeignResource,
     MemberStore,
     PermissionMissing,
@@ -166,6 +168,7 @@ class ToolGateway:
         adapters: Mapping[str, ToolAdapter],
         members: MemberStore,
         clock: Callable[[], float] = time.monotonic,
+        probers: Mapping[str, ConnectorProber] | None = None,
     ) -> None:
         missing = {t.connector for t in catalog.tools.values()} - set(adapters)
         if missing:
@@ -184,6 +187,13 @@ class ToolGateway:
         self.idempotency_scope = "@" + ",".join(epochs) if epochs else ""
         self._members = members
         self._clock = clock
+        self._probes = ConnectorProbes(
+            catalog=catalog,
+            audit=stores.audit,
+            members=members,
+            probers=probers or {},
+            clock=clock,
+        )
         budget = catalog.policy.budgets.per_execution
         self._budget = CallBudget(
             budget.max_tool_calls,
@@ -215,6 +225,9 @@ class ToolGateway:
             return await self._run(call, trace, started)
         finally:
             self._inflight.discard(key)
+
+    async def probe(self, connector: str, actor: UUID) -> ProbeReport:
+        return await self._probes.probe(connector, actor)
 
     async def _run(self, call: GatewayCall, trace: _Trace, started: float) -> GatewayResult:
         denial: DenialCode | None = None
@@ -261,6 +274,8 @@ class ToolGateway:
         if tool is None:
             raise _Refusal("unknown_tool")
         trace.tool = tool
+        if self._probes.blocks(tool):  # connecteur `incomplete` : un droit requis manque
+            raise _Refusal("permission_missing")
         if not self._validators[tool.tool].is_valid(call.params):  # 3
             raise _Refusal("invalid_params")
         environment = plan.content.get("environment")  # 4

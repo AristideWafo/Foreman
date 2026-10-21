@@ -1,0 +1,18 @@
+connector: gitlab
+version: 1
+# Scopes SIMULÉS (faux GitLab). Les scopes GitLab réels (jetons lecture/écriture, niveau d'accès sur
+# le groupe racine) sont à vérifier dans la doc GitLab avant d'être déclarés : voir #47 (T7b).
+tokens:
+  read:
+    scopes: [simulated.read]
+  write:
+    scopes: [simulated.write]
+    boundary: "groupe racine de la plateforme"
+tools_enabled_when:
+  gitlab.create_group: [write]
+  gitlab.create_project: [write]
+probes:
+  - {name: lire_groupes, token: read, call: "GET /groups?per_page=1"}
+  - {name: ecrire_dans_racine, token: write, call: "GET /groups/{root_id}", expects: "access_level >= 40"}
+strip_from_results:
+  - "variables[*].value"

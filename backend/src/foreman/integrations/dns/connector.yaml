@@ -1,0 +1,11 @@
+connector: dns
+version: 1
+# Scopes SIMULÉS (faux DNS, lecture seule : le wildcard est géré en externe).
+tokens:
+  read:
+    scopes: [simulated.read]
+tools_enabled_when:
+  dns.list_records: [read]
+probes:
+  - {name: lire_enregistrements, token: read, call: "GET /simulated/records"}
+strip_from_results: []

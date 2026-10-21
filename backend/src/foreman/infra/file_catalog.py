@@ -1,7 +1,8 @@
 """Lecteur du catalogue sur disque. Synchrone : appelé au démarrage, jamais dans la boucle async.
 
-Les définitions d'outils vivent à côté de leur connecteur (`integrations/<c>/tools/*.yaml`) ;
-elles sont lues par chemin, sans importer `integrations` (la couche `infra` ne dépend pas d'elle).
+Les définitions d'outils (`integrations/<c>/tools/*.yaml`) et le modèle du connecteur
+(`integrations/<c>/connector.yaml`) vivent à côté de lui ; ils sont lus par chemin, sans importer
+`integrations` (la couche `infra` ne dépend pas d'elle).
 Un Skill `draft` fait échouer le démarrage hors staging (voulu).
 """
 
@@ -14,8 +15,10 @@ from foreman.core.catalog import (
     MAX_CATALOG_FILE_BYTES,
     Catalog,
     CatalogError,
+    ConnectorDefinition,
     ToolDefinition,
     build_catalog,
+    parse_connector,
     parse_policy,
     parse_referentiel,
     parse_skill,
@@ -87,6 +90,13 @@ def load_catalog(
             raise CatalogError(f"{source}: le nom de l'outil ne suit pas son emplacement")
         tools.append(tool)
 
+    connectors: list[ConnectorDefinition] = []
+    for path in sorted(connectors_dir.glob("*/connector.yaml")):
+        connector_def = parse_connector(read_catalog_file(path, connectors_dir), path.parent.name)
+        if connector_def.connector != path.parent.name:
+            raise CatalogError(f"{path.parent.name}/connector.yaml: le nom ne suit pas son dossier")
+        connectors.append(connector_def)
+
     skill_files = _nonempty(sorted((base / "skills").glob(f"*/{SKILL_FILE}")), "skills/")
     skills = [
         parse_skill(
@@ -109,4 +119,5 @@ def load_catalog(
         policy=parse_policy(policy_raw, POLICY_FILE.as_posix()),
         policy_sha256=sha256_ref(policy_raw),
         environment=environment,
+        connectors=connectors,
     )

@@ -18,7 +18,9 @@ DenialCode = Literal[
     "stale_lease",  # le bail n'est plus celui de l'appelant
     "step_not_ready",  # étape non réservée (`running`) ou étape antérieure non réussie
     "call_in_progress",  # le même appel est déjà en cours d'exécution
+    "permission_missing",  # le connecteur de l'outil est `incomplete` (une sonde a échoué)
 ]
+ProbeDenialCode = Literal["forbidden", "rate_limited", "unknown_connector", "probe_unavailable"]
 FailureCode = Literal[
     "timeout",
     "permission_missing",
@@ -48,6 +50,13 @@ class CallDenied(GatewayError):
     """L'appel a été refusé AVANT toute exécution (l'adaptateur n'a pas été appelé)."""
 
     def __init__(self, code: DenialCode) -> None:
+        super().__init__(code, DENIED_MESSAGE)
+
+
+class ProbeDenied(GatewayError):
+    """`Gateway.probe` refusée avant toute sonde (rôle, limite, connecteur)."""
+
+    def __init__(self, code: ProbeDenialCode) -> None:
         super().__init__(code, DENIED_MESSAGE)
 
 

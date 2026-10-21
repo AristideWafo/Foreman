@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from pydantic import JsonValue
 
-from foreman.core.ports import AdapterError, AdapterResult
+from foreman.core.ports import AdapterError, AdapterResult, ProbeOutcome
 
 PLAYBOOKS = ("bootstrap_project", "deploy_compose")
 _TASKS = {
@@ -60,6 +60,10 @@ class SimulatedServer:
         self._results: dict[str, AdapterResult] = {}
         self._run_counter = 0
         self._lock = asyncio.Lock()
+
+    async def probe(self, token: str, name: str, call: str) -> ProbeOutcome:
+        """Faux : tous les droits déclarés sont présents, aucun état n'est touché."""
+        return ProbeOutcome(ok=True)
 
     async def execute(
         self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str

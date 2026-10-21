@@ -2,7 +2,7 @@
 
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import Literal, Protocol, runtime_checkable
 from uuid import UUID
 
 from pydantic import JsonValue
@@ -101,6 +101,30 @@ class ToolAdapter(Protocol):
     async def execute(
         self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str
     ) -> AdapterResult: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ProbeOutcome:
+    """Résultat d'UNE sonde : `ok` (le droit est prouvé) et les scopes que la sonde a révélés
+    (vide si elle n'en révèle aucun). Jamais de valeur de jeton."""
+
+    ok: bool
+    scopes: frozenset[str] = frozenset()
+
+
+@runtime_checkable
+class ConnectorProber(Protocol):
+    """Exécute les sondes DÉCLARÉES d'un connecteur. Appelé uniquement par `Gateway.probe`.
+
+    - `call` est la ligne déclarée (`GET /groups?per_page=1`), validée en lecture seule au
+      chargement du catalogue : une sonde n'écrit jamais, elle vérifie un scope ou un accès.
+    - `token` est le NOM du jeton déclaré (`read`, `write`) ; l'adaptateur détient le secret.
+    - Un droit refusé par le fournisseur (403) rend `ProbeOutcome(ok=False)` ; `PermissionMissing`
+      est aussi compris comme un droit manquant. Toute autre erreur est un échec de sonde.
+    - Aucun appel bloquant dans la boucle asynchrone.
+    """
+
+    async def probe(self, token: str, name: str, call: str) -> ProbeOutcome: ...
 
 
 class ProjectStore(Protocol):
