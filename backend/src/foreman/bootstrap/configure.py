@@ -4,15 +4,18 @@ import logging
 import os
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 from typing import Final
 
 from foreman.bootstrap.adapters import build_gateway
 from foreman.bootstrap.database import DatabaseLifecycle, Lifecycle, NoLifecycle
+from foreman.bootstrap.secrets import SecretsLifecycle
 from foreman.config.env import (
     DEFAULT_AUTH_MODE,
     DEFAULT_ENVIRONMENT,
     DEFAULT_LOG_LEVEL,
     DEFAULT_PUBLIC_URL,
+    DEFAULT_SECRETS_KEY_FILE,
     ENV_AUTH_MODE,
     ENV_COOKIE_SECURE,
     ENV_DATABASE_URL,
@@ -20,6 +23,7 @@ from foreman.config.env import (
     ENV_ENVIRONMENT,
     ENV_LOG_LEVEL,
     ENV_PUBLIC_URL,
+    ENV_SECRETS_KEY_FILE,
 )
 from foreman.core.accounts import AccountStore
 from foreman.core.approval import ApprovalService
@@ -30,6 +34,7 @@ from foreman.core.gateway.port import Gateway
 from foreman.core.identity import ROLES, Member
 from foreman.core.planning import Planner
 from foreman.core.ports import EventLog, MemberStore, ProjectStore
+from foreman.core.secrets import SecretStore
 from foreman.core.store import DEV_USER_ID, DEV_USER_NAME, Stores
 from foreman.core.turn import TurnService
 from foreman.infra.db.accounts import PostgresAccountStore
@@ -37,6 +42,7 @@ from foreman.infra.db.auth import PostgresAuthStore
 from foreman.infra.db.engine import make_engine
 from foreman.infra.db.events import PostgresEventLog
 from foreman.infra.db.members import PostgresMemberStore
+from foreman.infra.db.secrets import PostgresSecretStore
 from foreman.infra.db.stores import postgres_stores
 from foreman.infra.file_catalog import catalog_dir_from_env, load_catalog
 from foreman.infra.in_memory import (
@@ -47,6 +53,7 @@ from foreman.infra.in_memory import (
 )
 from foreman.infra.passwords import Argon2Hasher
 from foreman.infra.replay_provider import ReplayProvider
+from foreman.infra.secrets import InMemorySecretStore, KeyFile, Keyring
 
 
 class Profile(StrEnum):
@@ -114,6 +121,11 @@ class App:
     auth: AuthStore | None = None
     hasher: PasswordHasher = field(default_factory=Argon2Hasher)
     cookie_secure: bool = True
+    # Mémoire : clé éphémère. PostgreSQL : chiffré, clé maître dans un volume dédié.
+    secrets: SecretStore = field(
+        default_factory=lambda: InMemorySecretStore(Keyring.of(os.urandom(32)))
+    )
+    key_file: KeyFile | None = None  # PostgreSQL seulement (rotation par la CLI)
 
 
 def invitation_link(token: str) -> str:
@@ -149,13 +161,17 @@ def configure(profile: Profile) -> App:
     accounts: AccountStore | None = None
     auth: AuthStore | None = None
     persistence = "memory"
+    secrets: SecretStore = InMemorySecretStore(Keyring.of(os.urandom(32)))
+    key_file: KeyFile | None = None
     url = os.environ.get(ENV_DATABASE_URL)
     if url and profile in _PERSISTENT_PROFILES:
         engine = make_engine(url)  # ne se connecte pas : les migrations viennent au démarrage
         events = PostgresEventLog(engine)  # le chat survit au redémarrage
         stores = postgres_stores(engine)
         projects = stores.projects
-        lifecycle = DatabaseLifecycle(url, engine)
+        key_file = KeyFile(Path(os.environ.get(ENV_SECRETS_KEY_FILE, DEFAULT_SECRETS_KEY_FILE)))
+        secrets = PostgresSecretStore(engine, key_file.current)
+        lifecycle = SecretsLifecycle(DatabaseLifecycle(url, engine), key_file, engine)
         members = PostgresMemberStore(engine)
         accounts = PostgresAccountStore(engine)
         auth = PostgresAuthStore(engine)
@@ -186,6 +202,8 @@ def configure(profile: Profile) -> App:
         dev_members=dev_members,
         accounts=accounts,
         auth=auth,
+        secrets=secrets,
+        key_file=key_file,
         cookie_secure=os.environ.get(ENV_COOKIE_SECURE, "1") != "0",
         catalog=catalog,
         gateway=gateway,

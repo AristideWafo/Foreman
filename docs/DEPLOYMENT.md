@@ -283,6 +283,28 @@ entrypoints `web` et `websecure`, résolveur de certificats `letsencrypt`, provi
 `exposedByDefault=false`. Le premier déploiement réel sur votre serveur n'a pas été exécuté depuis
 l'environnement de développement (pas de démon Docker) : seul le rendu du compose et la validation des entrées sont testés.
 
+### Secrets chiffrés et clé maître (migration `0007`, #256)
+
+Les clés et jetons saisis dans l'interface sont chiffrés (AES-256-GCM) en base (table `secrets`). La **clé maître**
+est **générée automatiquement au premier démarrage** dans `/var/lib/foreman/secrets/master.key` (fichier `0600`),
+sur le **volume Docker dédié `foreman_secrets`**. Aucune variable d'environnement à éditer
+(`FOREMAN_SECRETS_KEY_FILE` existe pour le développement local seulement).
+
+- **Avant le déploiement : recopier `compose.custom.yaml` (et `compose.yaml` pour la variante Caddy) sur le serveur.**
+  Sans le volume, l'application ne peut pas écrire la clé (système de fichiers en lecture seule) et **refuse de démarrer**.
+- **Sauvegarde séparée du `pg_dump`.** Le dump contient les secrets chiffrés, le volume contient la clé : les stocker
+  ensemble annule le chiffrement. Sauvegarder le volume ailleurs et le restreindre :
+  `docker run --rm -v <projet>_foreman_secrets:/s:ro alpine cat /s/master.key > master.key.bak` (puis chiffrer ou
+  ranger dans un coffre ; ne jamais le committer).
+- **Démarrage refusé** si la base contient des secrets mais que le fichier de clé est absent (volume perdu ou non monté) :
+  l'application ne génère jamais une seconde clé, qui rendrait les secrets définitivement illisibles.
+- **Perte de la clé = ressaisir les jetons** : restaurer le volume si possible ; sinon `DELETE FROM secrets` puis
+  redémarrer (nouvelle clé) et ressaisir chaque clé/jeton depuis la page d'administration.
+- **Rotation** : `docker compose -p <projet> exec app foreman secrets rotate` ajoute une nouvelle clé active et
+  rechiffre tous les secrets (les anciennes clés restent dans le fichier, utile tant qu'une copie du dump est ancienne).
+  `--prune` retire ensuite les anciennes clés : à utiliser sans saisie de secret en cours, et après avoir mis à jour la
+  sauvegarde du volume (un ancien dump ne se relira plus qu'avec l'ancienne clé).
+
 ### Brancher `deploy-custom.sh` sur `env-perso`
 
 1. Générer une clé dédiée : `ssh-keygen -t ed25519 -N "" -C "foreman-env-perso" -f ./foreman-env-perso`.

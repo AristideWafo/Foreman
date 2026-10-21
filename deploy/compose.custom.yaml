@@ -33,6 +33,9 @@ services:
           pids: ${APP_PIDS_LIMIT:-200}
         reservations:
           memory: ${APP_MEM_RESERVATION:-128M}
+    # Clé maître des secrets (auto-générée au premier démarrage) : volume dédié, sauvegardé à part du dump.
+    volumes:
+      - foreman_secrets:/var/lib/foreman/secrets
     networks: [traefik, internal]
     # Avec --with-db, l'application attend que PostgreSQL soit sain ; sans le profil « db », la dépendance est ignorée.
     depends_on:
@@ -133,3 +136,4 @@ networks:
 
 volumes:
   db_data:
+  foreman_secrets:

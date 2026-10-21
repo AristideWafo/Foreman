@@ -308,3 +308,17 @@ audit_events = sa.Table(
     sa.Column("result_redacted", JSONB(none_as_null=True), nullable=True),
     sa.Column("duration_ms", sa.Integer, nullable=True),
 )
+
+# Secrets chiffrés (AES-256-GCM, migration 0007) : jamais de texte clair ; `key_id` = clé maître.
+secrets = sa.Table(
+    "secrets",
+    metadata,
+    sa.Column("id", sa.Text, primary_key=True),
+    sa.Column("kind", sa.Text, nullable=False),
+    sa.Column("key_id", sa.Text, nullable=False),
+    sa.Column("nonce", sa.LargeBinary, nullable=False),
+    sa.Column("ciphertext", sa.LargeBinary, nullable=False),
+    sa.Column("created_by", sa.Text, nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_NOW),
+    sa.Column("rotated_at", sa.DateTime(timezone=True), nullable=True),
+)

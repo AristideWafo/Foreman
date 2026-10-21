@@ -8,6 +8,7 @@ import hashlib
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -91,7 +92,59 @@ class InMemorySecretStore:
         return secret_id in self.rows
 
     async def rotate(self) -> int:
-        for sid, (kind, row) in list(self.rows.items()):
+        stale = {sid: kr for sid, kr in self.rows.items() if kr[1].key_id != self.ring.active}
+        for sid, (kind, row) in stale.items():
             clear = open_sealed(self.ring, sid, kind, row)
             self.rows[sid] = (kind, seal(self.ring, sid, kind, clear))
-        return len(self.rows)
+        return len(stale)
+
+
+class KeyFile:
+    """Clés maîtres dans un fichier 0600 d'un volume dédié : une clé hexadécimale par ligne,
+    la dernière est active. Relu quand le fichier change (rotation faite par la CLI)."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._ring: Keyring | None = None
+        self._mtime = 0
+
+    def exists(self) -> bool:
+        return self.path.is_file()
+
+    def current(self) -> Keyring:
+        try:
+            mtime = self.path.stat().st_mtime_ns
+        except OSError:
+            raise SecretError("Clé maître absente.") from None
+        if self._ring is None or mtime != self._mtime:
+            try:
+                keys = [bytes.fromhex(x) for x in self.path.read_text().split()]
+                self._ring = Keyring.of(*keys)
+            except (OSError, ValueError, IndexError):
+                raise SecretError("Clé maître illisible.") from None
+            self._mtime = mtime
+        return self._ring
+
+    def create(self) -> None:
+        """Première clé, créée sans écraser : échoue si le fichier existe déjà."""
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(os.urandom(KEY_BYTES).hex() + "\n")
+
+    def add_key(self) -> None:
+        """Ajoute une clé active en gardant les anciennes (écriture atomique, 0600)."""
+        text = self.path.read_text().rstrip("\n") + "\n" + os.urandom(KEY_BYTES).hex() + "\n"
+        self._replace(text)
+
+    def keep_only_active(self) -> None:
+        self._replace(self.path.read_text().split()[-1] + "\n")
+
+    def _replace(self, text: str) -> None:
+        tmp = self.path.with_name(self.path.name + ".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(self.path)

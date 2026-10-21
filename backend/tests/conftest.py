@@ -9,7 +9,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.engine import make_url
 
-from foreman.config.env import ENV_CATALOG_DIR, ENV_TEST_DATABASE_URL
+from foreman.config.env import ENV_CATALOG_DIR, ENV_SECRETS_KEY_FILE, ENV_TEST_DATABASE_URL
 
 CATALOG_DIR = Path(__file__).resolve().parents[2] / "catalog"
 
@@ -18,6 +18,12 @@ CATALOG_DIR = Path(__file__).resolve().parents[2] / "catalog"
 def catalog_dir_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Les tests tournent depuis `backend/` : on pointe vers le catalogue du dépôt."""
     monkeypatch.setenv(ENV_CATALOG_DIR, os.fspath(CATALOG_DIR))
+
+
+@pytest.fixture(autouse=True)
+def secrets_key_file_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """La clé maître est créée au démarrage : jamais dans le chemin système par défaut."""
+    monkeypatch.setenv(ENV_SECRETS_KEY_FILE, os.fspath(tmp_path / "secrets" / "master.key"))
 
 
 def _admin_url() -> str:

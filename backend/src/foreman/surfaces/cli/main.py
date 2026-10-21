@@ -4,9 +4,11 @@ import sys
 from datetime import UTC, datetime
 
 from foreman.bootstrap.configure import App, Profile, configure, invitation_link
+from foreman.bootstrap.secrets import rotate_master_key
 from foreman.core.accounts import AccountError
 from foreman.core.auth import create_admin_invitation
-from foreman.core.store import DEV_TEAM_ID, DEV_USER_ID
+from foreman.core.secrets import SecretError
+from foreman.core.store import DEV_TEAM_ID, DEV_USER_ID, StoreError
 from foreman.core.turn import TurnRequest
 
 
@@ -43,9 +45,33 @@ def _admin(argv: list[str]) -> None:
     sys.stdout.write(link + "\n")
 
 
+async def _secrets_rotate(prune: bool) -> int:
+    app = configure(Profile.ADMIN)
+    assert app.key_file is not None  # noqa: S101 - garanti par configure (base obligatoire)
+    await app.lifecycle.start()  # migrations puis chargement de la clé
+    try:
+        return await rotate_master_key(app.key_file, app.secrets, prune=prune)
+    finally:
+        await app.lifecycle.stop()
+
+
+def _secrets(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser(prog="foreman secrets")
+    parser.add_argument("action", choices=["rotate"])
+    parser.add_argument("--prune", action="store_true", help="retire les anciennes clés du fichier")
+    args = parser.parse_args(argv)
+    try:
+        count = asyncio.run(_secrets_rotate(args.prune))
+    except (RuntimeError, SecretError, StoreError):
+        sys.exit("rotation impossible : voir les journaux et docs/DEPLOYMENT.md")
+    sys.stdout.write(f"{count} secret(s) rechiffré(s)\n")
+
+
 def main() -> None:
     if sys.argv[1:2] == ["admin"]:
         return _admin(sys.argv[2:])
+    if sys.argv[1:2] == ["secrets"]:
+        return _secrets(sys.argv[2:])
     app = configure(Profile.CLI)
     replies = asyncio.run(_run(app, " ".join(sys.argv[1:])))
     sys.stdout.write("\n".join(replies) + "\n")
