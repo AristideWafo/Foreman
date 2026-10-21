@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.20.0](https://github.com/AristideWafo/Foreman/compare/v0.19.0...v0.20.0) (2026-10-21)
+
+
+### Features
+
+* AnthropicProvider branché (liste de modèles, sonde, masquage, choix de l'adaptateur) ([646305d](https://github.com/AristideWafo/Foreman/commit/646305d1e676d5879bf71c3f16860af60cb4e71f))
+* AnthropicProvider derrière Provider (modèles, sonde, masquage) ([ee7ca99](https://github.com/AristideWafo/Foreman/commit/ee7ca993989897d85ee845ab5f98f9147b65a482))
+* API /api/admin/integrations ([#260](https://github.com/AristideWafo/Foreman/issues/260)) ([96956e2](https://github.com/AristideWafo/Foreman/commit/96956e26bf5dd62eba03aa8a35cbc4e0ae09c5aa))
+* API /api/admin/integrations, table connectors et coût de chaque tour dans les logs ([23e81d2](https://github.com/AristideWafo/Foreman/commit/23e81d235492ca075704e8095125931b3b89aa84))
+* budgets par tour et par exécution (budget_exceeded) ([5fec98b](https://github.com/AristideWafo/Foreman/commit/5fec98b0e277503ccb81b3475470d13b318a3c4c))
+* budgets par tour et par exécution (essais, coût) avec budget_exceeded ([02dcafd](https://github.com/AristideWafo/Foreman/commit/02dcafdc584cd103004ca6fbb79b9f0161f2bd91))
+* **diagnostic:** carte « diagnostic requis » et repli humain (couche 5) ([9f53990](https://github.com/AristideWafo/Foreman/commit/9f53990a8cec41e622256abc164c22317e0c6920))
+* **diagnostic:** carte « diagnostic requis » et repli humain (couche 5) ([6577193](https://github.com/AristideWafo/Foreman/commit/6577193e845d7341bd188f2fba44a7c5943b9214)), closes [#277](https://github.com/AristideWafo/Foreman/issues/277)
+* enregistrement et rejeu des réponses réelles du modèle ([f6f0e10](https://github.com/AristideWafo/Foreman/commit/f6f0e10dd289341c0afec12c4043e9762a85ea04))
+* enregistrement et rejeu des réponses réelles du modèle (foreman llm record) ([d575027](https://github.com/AristideWafo/Foreman/commit/d575027802eebaf64508bf7cb08bc76ed567c318))
+* **eval:** indicateur de correction avec le seul extrait filtré (S3-S9) ([9ad66e6](https://github.com/AristideWafo/Foreman/commit/9ad66e6cb8a1de9c0bdf0a1f3de3f1895ff60e6e))
+* **eval:** indicateur de correction avec le seul extrait filtré (S3-S9) ([07bad85](https://github.com/AristideWafo/Foreman/commit/07bad85585a6fd6d354e86de82fb0eda2b7a9abe)), closes [#278](https://github.com/AristideWafo/Foreman/issues/278)
+* **front:** onglet Intégrations dans l'administration ([ac0ebe7](https://github.com/AristideWafo/Foreman/commit/ac0ebe79a42a6c02f5b858ff068c4aa59b625cac))
+* **front:** onglet Intégrations dans l'administration ([e210f8b](https://github.com/AristideWafo/Foreman/commit/e210f8bebc368f903df84b3471b9104a8704d2c6)), closes [#261](https://github.com/AristideWafo/Foreman/issues/261)
+* **gateway:** diagnostic typé des échecs d'outil (couche 1) ([b30630b](https://github.com/AristideWafo/Foreman/commit/b30630b8faedf61ac59487a8e4ca79cc5c5832e7))
+* **gateway:** diagnostic typé des échecs d'outil, expects et strip_from_results appliqués ([a94c18e](https://github.com/AristideWafo/Foreman/commit/a94c18ea611c3937bbeafb587100f77cd4c268e0)), closes [#275](https://github.com/AristideWafo/Foreman/issues/275)
+* **gateway:** extrait ciblé masqué et borné (couche 2) ([d39a4d5](https://github.com/AristideWafo/Foreman/commit/d39a4d5688f2dc54d79e8cca13cbdd36e8231833))
+* **gateway:** extrait ciblé masqué et borné en cas d'échec ([0cc9353](https://github.com/AristideWafo/Foreman/commit/0cc9353ab037c2f5b3e4ab36399551bc0a2c8dab)), closes [#276](https://github.com/AristideWafo/Foreman/issues/276)
+* **gateway:** liste d'autorisation et aliasing stable des hôtes et valeurs ([32b07f4](https://github.com/AristideWafo/Foreman/commit/32b07f4b7a845e679479f6f03001422c2baa82af))
+* **gateway:** liste d'autorisation et aliasing stable des hôtes et valeurs ([b0aa991](https://github.com/AristideWafo/Foreman/commit/b0aa991519c2fa16070b15c964017f230a21bf3a)), closes [#279](https://github.com/AristideWafo/Foreman/issues/279)
+* **infra:** paire SSH ed25519 par serveur, clé privée dans le magasin de secrets ([0209e0a](https://github.com/AristideWafo/Foreman/commit/0209e0ac8554ded1cb2888c24aeafea94dd2ac97)), closes [#51](https://github.com/AristideWafo/Foreman/issues/51)
+* **integrations:** aide « Comment configurer ? » et libellés de jetons explicites ([f35d318](https://github.com/AristideWafo/Foreman/commit/f35d3182db9abc2f8730794c01f30059ad423d04))
+* **integrations:** aide « Comment configurer ? » et libellés de jetons explicites ([931df09](https://github.com/AristideWafo/Foreman/commit/931df0981120f8e585f49256dbfff29e1278875b)), closes [#287](https://github.com/AristideWafo/Foreman/issues/287)
+* **integrations:** serveur et DNS « Bientôt disponible » ([974a64d](https://github.com/AristideWafo/Foreman/commit/974a64dba34f3d3b6cb150a09cfbb660c7736a27))
+* **integrations:** serveur et DNS affichés « Bientôt disponible » ([a810d44](https://github.com/AristideWafo/Foreman/commit/a810d44cf219743c43d005fef9acd073180e31c9)), closes [#288](https://github.com/AristideWafo/Foreman/issues/288)
+* modèle déclaratif de connecteur et Gateway.probe ([1256b0d](https://github.com/AristideWafo/Foreman/commit/1256b0d3b2e77f3fb5136ad215db8587ceef2ae6)), closes [#259](https://github.com/AristideWafo/Foreman/issues/259)
+* modèle déclaratif de connecteur et Gateway.probe (T7a) ([a6c372c](https://github.com/AristideWafo/Foreman/commit/a6c372c948cef16964068d50f40f14bf04c60fe2))
+* paire SSH ed25519 par serveur ([#51](https://github.com/AristideWafo/Foreman/issues/51)) ([b07aa34](https://github.com/AristideWafo/Foreman/commit/b07aa3481616f807cf0cfd1f492295018625cfa9))
+* port SecretStore et chiffrement AES-256-GCM (1/2) ([415f2ca](https://github.com/AristideWafo/Foreman/commit/415f2caafc8b6f8131181fe56218a0ae893d64e5))
+* port SecretStore et chiffrement AES-256-GCM des secrets ([adde198](https://github.com/AristideWafo/Foreman/commit/adde19808ab554a33a49b230288e4bff04875cdf)), closes [#256](https://github.com/AristideWafo/Foreman/issues/256)
+* secrets chiffrés en PostgreSQL, clé maître auto-générée et rotation ([9ea4b1d](https://github.com/AristideWafo/Foreman/commit/9ea4b1d71fefacd52447b43ef1559f28dadc5381)), closes [#256](https://github.com/AristideWafo/Foreman/issues/256)
+* secrets chiffrés en PostgreSQL, clé maître auto-générée, rotation (2/2) ([160548d](https://github.com/AristideWafo/Foreman/commit/160548d553ec4ca0236860be738bb6a995adcb68))
+
+
+### Bug Fixes
+
+* **api:** types régénérés après le libellé de RawLogView ([51f5de3](https://github.com/AristideWafo/Foreman/commit/51f5de3613be77a73c43256dd489857675cfc888)), closes [#277](https://github.com/AristideWafo/Foreman/issues/277)
+* **deps:** certifi 2026.10.19 (PYSEC-2026-4320) ([f968885](https://github.com/AristideWafo/Foreman/commit/f968885bb1b67b6c55a2646f676acfd5ff466a6b))
+* **deps:** mise à jour de certifi en 2026.10.19 (PYSEC-2026-4320) ([dabdccb](https://github.com/AristideWafo/Foreman/commit/dabdccbb756ce7c96d5b2516db625165ba81ec4c))
+
 ## [0.19.0](https://github.com/AristideWafo/Foreman/compare/v0.18.0...v0.19.0) (2026-10-20)
 
 
