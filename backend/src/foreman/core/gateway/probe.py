@@ -11,13 +11,14 @@ redémarrage, à revoir si on passe à plusieurs instances.
 
 import asyncio
 import logging
+import operator
 import time
 from collections import deque
 from collections.abc import Callable, Mapping
 from typing import Final, Literal, cast
 from uuid import UUID
 
-from foreman.core.catalog import Catalog, ConnectorDefinition, ToolDefinition
+from foreman.core.catalog import EXPECTS_RE, Catalog, ConnectorDefinition, ToolDefinition
 from foreman.core.connector_state import ConnectorStatus, ConnectorStore
 from foreman.core.gateway.errors import CallFailed, FailureCode, ProbeDenialCode, ProbeDenied
 from foreman.core.gateway.port import ProbeReport, RightVerdict
@@ -142,7 +143,8 @@ class ConnectorProbes:
         for probe in definition.probes:
             outcome = await _run_one(prober, probe.token, probe.name, probe.call)
             seen[probe.token] |= outcome.scopes
-            rights.append(RightVerdict(probe.token, probe.name, "ok" if outcome.ok else "missing"))
+            ok = outcome.ok and expectation_met(probe.expects, outcome.observed)
+            rights.append(RightVerdict(probe.token, probe.name, "ok" if ok else "missing"))
         for token, declaration in definition.tokens.items():
             rights.extend(
                 RightVerdict(token, scope, "excess")
@@ -180,6 +182,26 @@ class ConnectorProbes:
                 raise CallFailed("storage_unavailable") from None
 
 
+_COMPARE: Final = {
+    ">=": operator.ge,
+    "<=": operator.le,
+    "==": operator.eq,
+    ">": operator.gt,
+    "<": operator.lt,
+}
+
+
+def expectation_met(expects: str | None, observed: Mapping[str, int] | None) -> bool:
+    """`expects` absent : vrai. Sinon la valeur observée doit exister et satisfaire la condition
+    (fermé par défaut : une sonde qui n'observe rien ne prouve pas le droit)."""
+    if expects is None:
+        return True
+    match = EXPECTS_RE.fullmatch(expects)
+    if match is None or observed is None or match.group(1) not in observed:
+        return False
+    return bool(_COMPARE[match.group(2)](observed[match.group(1)], int(match.group(3))))
+
+
 async def _run_one(prober: ConnectorProber, token: str, name: str, call: str) -> ProbeOutcome:
     code: FailureCode
     try:
@@ -195,7 +217,13 @@ async def _run_one(prober: ConnectorProber, token: str, name: str, call: str) ->
     else:
         if isinstance(outcome, ProbeOutcome) and isinstance(outcome.ok, bool):
             scopes = frozenset(s for s in outcome.scopes if isinstance(s, str))
-            return ProbeOutcome(outcome.ok, scopes)
+            seen = outcome.observed
+            observed = (
+                {k: v for k, v in seen.items() if isinstance(k, str) and type(v) is int}
+                if isinstance(seen, Mapping)
+                else None
+            )
+            return ProbeOutcome(outcome.ok, scopes, observed)
         code = "invalid_output"
     raise CallFailed(code)
 

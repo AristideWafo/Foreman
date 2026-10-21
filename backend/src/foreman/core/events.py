@@ -18,7 +18,8 @@ Ordre et portée (Semaine 2) :
 - `execution_step.card_id` et `execution_log.card_id` désignent la carte d'EXÉCUTION
   (jamais la carte plan) ;
   un `execution_step` ou un `execution_log` dont la carte est inconnue est ignoré ;
-- les lignes de journal (`execution_log`) sont déjà filtrées par la Tool Gateway.
+- les lignes de journal (`execution_log`) sont déjà filtrées par la Tool Gateway ;
+- un échec d'étape émet `execution_diagnostic` (code normalisé, attendu/observé, sonde) : ajout.
 """
 
 from datetime import UTC, datetime
@@ -287,6 +288,39 @@ class ExecutionLogData(_Model):
     lines: Annotated[list[Annotated[str, Field(max_length=500)]], Field(max_length=50)]
 
 
+DiagnosticCode = Literal[
+    "port_in_use",
+    "permission_missing",
+    "image_not_found",
+    "foreign_resource",
+    "timeout",
+    "invalid_output",
+    "adapter_error",
+    "unknown",  # aucun code connu : le modèle ne devine pas, l'humain décide (ADR 0002, couche 5)
+]
+DiagnosticValue = Annotated[str, Field(max_length=100)] | int | bool
+
+
+class ToolDiagnostic(_Model):
+    """Diagnostic typé d'un outil en échec (ADR 0002, couche 1) : le modèle raisonne sur ces champs,
+    jamais sur du texte libre. `expected` / `observed` : états comparables (valeurs courtes,
+    masquées par la gateway). `probe` : résultat de la sonde de vérification après action."""
+
+    code: DiagnosticCode
+    expected: DiagnosticValue | None = None
+    observed: DiagnosticValue | None = None
+    probe: Literal["ok", "failed", "not_run"] = "not_run"
+
+
+class ExecutionDiagnosticData(_Model):
+    """Échec d'une étape : diagnostic typé, transmis au modèle à son prochain tour."""
+
+    card_id: Annotated[str, Field(max_length=64)]
+    step: Annotated[int, Field(ge=1)]
+    tool: Annotated[str, Field(max_length=100)]
+    diagnostic: ToolDiagnostic
+
+
 class TurnStatusData(_Model):
     status: Literal["running", "completed", "failed"]
 
@@ -330,6 +364,11 @@ class ExecutionLogEvent(_EventBase):
     data: ExecutionLogData
 
 
+class ExecutionDiagnosticEvent(_EventBase):
+    type: Literal["execution_diagnostic"] = "execution_diagnostic"
+    data: ExecutionDiagnosticData
+
+
 class TurnStatusEvent(_EventBase):
     type: Literal["turn_status"] = "turn_status"
     data: TurnStatusData
@@ -345,6 +384,7 @@ Event = Annotated[
     | CardEvent
     | ExecutionStepEvent
     | ExecutionLogEvent
+    | ExecutionDiagnosticEvent
     | TurnStatusEvent
     | ErrorEvent,
     Field(discriminator="type"),
@@ -359,11 +399,18 @@ EventData = (
     | ApprovalCardData
     | ExecutionStepData
     | ExecutionLogData
+    | ExecutionDiagnosticData
     | TurnStatusData
     | ErrorData
 )
 AnyEvent = (
-    MessageEvent | CardEvent | ExecutionStepEvent | ExecutionLogEvent | TurnStatusEvent | ErrorEvent
+    MessageEvent
+    | CardEvent
+    | ExecutionStepEvent
+    | ExecutionLogEvent
+    | ExecutionDiagnosticEvent
+    | TurnStatusEvent
+    | ErrorEvent
 )
 
 
@@ -381,6 +428,10 @@ def make_event(seq: int, project_id: UUID, turn_id: UUID, data: EventData) -> An
             )
         case ExecutionStepData():
             return ExecutionStepEvent(
+                seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data
+            )
+        case ExecutionDiagnosticData():
+            return ExecutionDiagnosticEvent(
                 seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data
             )
         case TurnStatusData():

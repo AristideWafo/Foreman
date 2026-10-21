@@ -121,6 +121,20 @@ NEW_EXAMPLES = {
         "execution_log",
         {"card_id": "exec-1", "step": 7, "lines": ["TASK [compose up] changed"]},
     ),
+    "execution_diagnostic": (
+        "execution_diagnostic",
+        {
+            "card_id": "exec-1",
+            "step": 2,
+            "tool": "server.apply_playbook",
+            "diagnostic": {
+                "code": "port_in_use",
+                "expected": "free",
+                "observed": "in_use",
+                "probe": "failed",
+            },
+        },
+    ),
     "error (plan invalide)": (
         "error",
         {"code": "invalid_plan", "message": ERROR_MESSAGES["invalid_plan"]},
@@ -231,6 +245,7 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
             "CardEvent",
             "ExecutionStepEvent",
             "ExecutionLogEvent",
+            "ExecutionDiagnosticEvent",
             "TurnStatusEvent",
             "ErrorEvent",
         )

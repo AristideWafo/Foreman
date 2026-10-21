@@ -20,9 +20,15 @@ from uuid import UUID, uuid4
 from pydantic import JsonValue
 
 from foreman.core.catalog import Catalog
-from foreman.core.events import EventData, ExecutionLogData, ExecutionStepData, StepStatus
+from foreman.core.events import (
+    EventData,
+    ExecutionDiagnosticData,
+    ExecutionLogData,
+    ExecutionStepData,
+    StepStatus,
+)
 from foreman.core.execution.cards import execution_card, execution_card_id
-from foreman.core.gateway.errors import CallDenied, GatewayError
+from foreman.core.gateway.errors import CallDenied, CallFailed, GatewayError
 from foreman.core.gateway.port import Gateway, GatewayCall, GatewayResult
 from foreman.core.ports import EventLog
 from foreman.core.references import UnresolvedReference, resolve_params
@@ -266,6 +272,18 @@ class ExecutionEngine:
             log.warning(
                 "execution %s : étape %d refusée (%s)", lease.execution_id, step.seq, error.code
             )
+            if isinstance(error, CallFailed) and error.diagnostic is not None:
+                # Le modèle lira ce diagnostic typé à son prochain tour (jamais un log brut).
+                await self._emit(
+                    project_id,
+                    lease.execution_id,
+                    ExecutionDiagnosticData(
+                        card_id=execution_card_id(lease.execution_id),
+                        step=step.seq,
+                        tool=step.tool,
+                        diagnostic=error.diagnostic,
+                    ),
+                )
             if isinstance(error, CallDenied) and error.code != "call_in_progress":
                 # Refus avant effet : la clé ne doit pas rester orpheline pour un plan identique.
                 await self._release(lease, step.seq, keep_lease=True)

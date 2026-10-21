@@ -31,7 +31,9 @@ class NamedProber:
         self.calls.append((token, name, call))
         if not call.startswith(("GET ", "HEAD ")):
             self.writes += 1
-        return ProbeOutcome(ok=name not in self.missing, scopes=self.excess)
+        return ProbeOutcome(
+            ok=name not in self.missing, scopes=self.excess, observed={"access_level": 50}
+        )
 
 
 def world_with(prober: NamedProber) -> World:
