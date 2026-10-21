@@ -257,6 +257,9 @@ serveur refuse de toute façon). Une ligne par connecteur (GitLab, Docker, serve
   non rejoué affiche une `Alert` : « Évaluations non rejouées sur ce modèle » avec lien vers #61.
 - **États** : chargement (`Skeleton` par ligne), vide (« Aucun connecteur déclaré. »), erreur (`Alert` + « Réessayer »).
   Erreurs 403/4xx traduites en messages clairs, jamais le détail serveur.
+- **Bientôt disponible** (#288) : un connecteur dont l'API déclare `availability: "soon"` (serveur, DNS : simulés)
+  n'affiche que logo, nom et `Badge` « Bientôt disponible » : ni champ, ni Configurer/Tester/Révoquer. Le serveur
+  refuse aussi toute écriture ou test sur ce connecteur (404 opaque).
 - **Mobile** : les lignes s'empilent (logo et nom, puis statut, puis champs en pleine largeur). Clair et sombre
   par tokens de thème ; aucune couleur codée en dur.
 

@@ -1,5 +1,6 @@
 connector: server
 version: 1
+availability: soon  # simulé : l'onglet Intégrations affiche « Bientôt disponible »
 # Scopes SIMULÉS (faux serveur). Le connecteur réel (SSH / Ansible) déclarera les siens.
 tokens:
   read:

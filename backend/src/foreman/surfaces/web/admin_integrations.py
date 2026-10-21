@@ -95,7 +95,10 @@ def add_integration_routes(
         return dict(app.catalog.connectors) if app.catalog is not None else {}
 
     def known(connector: str) -> None:
-        if connector != LLM and connector not in definitions():
+        """Inconnu ou « bientôt disponible » : 404 opaque (rien n'est configurable par l'API)."""
+        if connector != LLM and (
+            connector not in definitions() or definitions()[connector].availability != "available"
+        ):
             raise ApiError(404, "not_found")
 
     def declared(connector: str) -> dict[str, list[str]]:
@@ -143,6 +146,7 @@ def add_integration_routes(
             kind="llm" if connector == LLM else "connector",
             status="unprobed" if state is _ABSENT else state.status,
             configured=all(t.configured for t in tokens),
+            availability="available" if connector == LLM else definitions()[connector].availability,
             tokens=tokens,
             rights=rights_of(state),
             last_probe_at=state.last_probe_at,

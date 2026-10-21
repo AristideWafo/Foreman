@@ -99,8 +99,22 @@ function ModelPicker({ integration }: { integration: IntegrationView }) {
   );
 }
 
-/** Une ligne par connecteur : statut, droits, jeton (écriture seule), test et révocation. */
+/** Une ligne par connecteur : « Bientôt disponible » (déclaré par l'API) ou configurable. */
 export function IntegrationRow({ integration }: { integration: IntegrationView }) {
+  if (integration.availability === "soon") {
+    return (
+      <li className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border p-4">
+        <BrandLogo provider={integration.connector} resourceType="" />
+        <h3 className="text-sm font-medium capitalize">{integration.connector}</h3>
+        <Badge variant="secondary">Bientôt disponible</Badge>
+      </li>
+    );
+  }
+  return <ConfigurableRow integration={integration} />;
+}
+
+/** Statut, droits, jeton (écriture seule), test et révocation. */
+function ConfigurableRow({ integration }: { integration: IntegrationView }) {
   const { connector } = integration;
   const credentials = useSetCredentials();
   const revoke = useRevokeCredentials();

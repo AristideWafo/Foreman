@@ -81,3 +81,24 @@ async def test_set_test_configured_never_leaks_token(world: World) -> None:  # n
         [r.text + str(r.headers) for r in seen] + [row[1] for row in audit] + [r[0] for r in stored]
     )
     assert not any(SECRET[i : i + 4] in haystack for i in range(len(SECRET) - 3))
+
+
+async def test_soon_connectors_are_listed_but_refuse_writes(world: World) -> None:  # noqa: F811
+    root = await world.account("root", "org_admin")
+    client = await world.client(root.email)
+    base = "/api/admin/integrations"
+    listing = {i["connector"]: i for i in (await client.get(base)).json()}
+    assert {c: listing[c]["availability"] for c in ("server", "dns", "gitlab", "anthropic")} == {
+        "server": "soon",
+        "dns": "soon",
+        "gitlab": "available",
+        "anthropic": "available",
+    }
+    for method, path, body in [
+        ("PUT", "/server/credentials", {"token": SECRET, "name": "read"}),
+        ("DELETE", "/dns/credentials", None),
+        ("POST", "/server/test", None),
+    ]:
+        response = await client.request(method, base + path, json=body)
+        assert (response.status_code, response.json()) == (404, {"error": "not_found"})
+    assert not await world.state.secrets.exists("connector.server.read")

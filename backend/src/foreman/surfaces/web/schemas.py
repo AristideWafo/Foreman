@@ -337,6 +337,7 @@ class IntegrationView(BaseModel):
     kind: Literal["llm", "connector"]
     status: Literal["ok", "incomplete", "revoked", "unprobed"]
     configured: bool  # tous les jetons déclarés sont enregistrés
+    availability: Literal["available", "soon"] = "available"  # « soon » : ni saisie ni test
     tokens: list[TokenView]
     rights: list[RightView]  # droits vérifiés par la dernière sonde
     last_probe_at: AwareDatetime | None = None

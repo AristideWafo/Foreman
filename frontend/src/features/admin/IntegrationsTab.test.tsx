@@ -10,10 +10,22 @@ const GITLAB = {
   kind: "connector",
   status: "incomplete",
   configured: true,
+  availability: "available",
   tokens: [{ name: "api", scopes: ["api"], boundary: null, configured: true }],
   rights: [],
   last_probe_at: null,
 };
+
+const SOON = ["server", "dns"].map((connector) => ({
+  connector,
+  kind: "connector",
+  status: "unprobed",
+  configured: false,
+  availability: "soon",
+  tokens: [{ name: "read", scopes: ["simulated.read"], boundary: null, configured: false }],
+  rights: [],
+  last_probe_at: null,
+}));
 
 /** Faux serveur nommé : un caller du rôle voulu, un connecteur GitLab, test et dépôt du jeton. */
 class FakeServer {
@@ -31,7 +43,7 @@ class FakeServer {
       const teams = this.role === "team_admin" ? [{ id: "t1", name: "P", role: "team_admin" }] : [];
       return Response.json({ name: "Moi", role: this.role, user_id: "u0", teams });
     }
-    if (url === "/api/admin/integrations") return Response.json([GITLAB]);
+    if (url === "/api/admin/integrations") return Response.json([GITLAB, ...SOON]);
     if (url === "/api/admin/integrations/gitlab/test") {
       return Response.json({
         connector: "gitlab",
@@ -112,6 +124,16 @@ test("le jeton est vidé à l'envoi et ne reste dans aucun cache", async () => {
       .map((q) => q.state.data),
   ]);
   expect(cached).not.toContain("glpat-SECRET");
+});
+
+test("serveur et DNS sont « Bientôt disponible », sans saisie ; GitLab reste configurable", async () => {
+  new FakeServer("org_admin").install();
+  renderPage();
+  await openIntegrations();
+  expect(await screen.findAllByText("Bientôt disponible")).toHaveLength(2);
+  expect(screen.getAllByRole("button", { name: /Configurer|Remplacer le jeton/ })).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: /Remplacer le jeton/ }));
+  expect(screen.getAllByLabelText(/^Jeton /)).toHaveLength(1);
 });
 
 /** Base UI active un onglet au `mousedown`, pas au seul `click`. */

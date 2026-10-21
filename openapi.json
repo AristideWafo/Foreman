@@ -1477,6 +1477,15 @@
       },
       "IntegrationView": {
         "properties": {
+          "availability": {
+            "default": "available",
+            "enum": [
+              "available",
+              "soon"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
           "configured": {
             "title": "Configured",
             "type": "boolean"
