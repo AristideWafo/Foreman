@@ -394,6 +394,22 @@ _CONNECTOR_NAME_RE: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 _PROBE_CALL_RE: Final = re.compile(r"^(GET|HEAD) /[^\s]*$")
 
 
+class PermissionHelp(_Strict):
+    """Un droit RÉEL à cocher à la création du jeton, avec son explication (aide à l'écran)."""
+
+    name: str = Field(min_length=1, max_length=80)
+    explanation: str = Field(min_length=1, max_length=300)
+
+
+class ConnectorHelp(_Strict):
+    """Aide « Comment configurer ? » : étapes ordonnées, page de création, sources citées."""
+
+    steps: list[str] = Field(min_length=1, max_length=12)
+    url: str | None = Field(default=None, pattern=r"^https://\S+$", max_length=300)
+    sources: list[str] = Field(default_factory=list, max_length=10)
+    note: str | None = Field(default=None, max_length=500)
+
+
 class TokenDeclaration(_Strict):
     """Un jeton du connecteur (`read`, `write`...) : ses scopes déclarés et son périmètre.
 
@@ -403,6 +419,8 @@ class TokenDeclaration(_Strict):
 
     scopes: list[str] = Field(min_length=1, max_length=20)
     boundary: str | None = Field(default=None, max_length=200)
+    label: str = Field(min_length=1, max_length=120)  # libellé explicite affiché à l'écran
+    permissions: list["PermissionHelp"] = Field(default_factory=list, max_length=20)
 
 
 EXPECTS_RE: Final = re.compile(r"\s*([A-Za-z_][\w.]{0,63})\s*(>=|<=|==|>|<)\s*(-?\d{1,15})\s*")
@@ -441,6 +459,7 @@ class ConnectorDefinition(_Strict):
     connector: str = Field(pattern=_CONNECTOR_NAME_RE.pattern, max_length=64)
     version: int = Field(ge=1)
     availability: Literal["available", "soon"] = "available"  # « soon » : simulé, non configurable
+    help: ConnectorHelp | None = None
     tokens: dict[str, TokenDeclaration] = Field(min_length=1)
     tools_enabled_when: dict[str, list[str]] = Field(default_factory=dict)
     probes: list[ProbeDefinition] = Field(min_length=1, max_length=50)

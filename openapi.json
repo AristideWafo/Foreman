@@ -1444,6 +1444,53 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "HelpView": {
+        "description": "Aide \u00ab Comment configurer ? \u00bb d\u00e9clar\u00e9e dans `connector.yaml`, jamais \u00e9crite dans la page.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "title": "HelpView",
+        "type": "object"
+      },
       "IntegrationTestResult": {
         "properties": {
           "connector": {
@@ -1493,6 +1540,16 @@
           "connector": {
             "title": "Connector",
             "type": "string"
+          },
+          "help": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HelpView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "kind": {
             "enum": [
@@ -2073,6 +2130,24 @@
           "team_id"
         ],
         "title": "MoveProjectRequest",
+        "type": "object"
+      },
+      "PermissionView": {
+        "properties": {
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "explanation"
+        ],
+        "title": "PermissionView",
         "type": "object"
       },
       "PlanCardData": {
@@ -2757,9 +2832,21 @@
             "title": "Configured",
             "type": "boolean"
           },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "permissions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PermissionView"
+            },
+            "title": "Permissions",
+            "type": "array"
           },
           "scopes": {
             "items": {
@@ -2771,6 +2858,7 @@
         },
         "required": [
           "name",
+          "label",
           "scopes",
           "configured"
         ],

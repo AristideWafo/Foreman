@@ -11,7 +11,30 @@ const GITLAB = {
   status: "incomplete",
   configured: true,
   availability: "available",
-  tokens: [{ name: "api", scopes: ["api"], boundary: null, configured: true }],
+  tokens: [
+    {
+      name: "read",
+      label: "Lecture : inspecter groupes et projets",
+      scopes: ["simulated.read"],
+      boundary: null,
+      configured: true,
+      permissions: [{ name: "read_api", explanation: "Lecture de l'API." }],
+    },
+    {
+      name: "write",
+      label: "Écriture : créer groupes et projets",
+      scopes: ["simulated.write"],
+      boundary: null,
+      configured: true,
+      permissions: [{ name: "api", explanation: "Lecture et écriture de l'API." }],
+    },
+  ],
+  help: {
+    steps: ["Ouvrez votre avatar.", "Générez le jeton."],
+    url: "https://gitlab.com/-/user_settings/personal_access_tokens",
+    sources: ["https://docs.gitlab.com/security/tokens/access_token_scopes/"],
+    note: null,
+  },
   rights: [],
   last_probe_at: null,
 };
@@ -22,7 +45,16 @@ const SOON = ["server", "dns"].map((connector) => ({
   status: "unprobed",
   configured: false,
   availability: "soon",
-  tokens: [{ name: "read", scopes: ["simulated.read"], boundary: null, configured: false }],
+  tokens: [
+    {
+      name: "read",
+      label: "Lecture",
+      scopes: ["simulated.read"],
+      boundary: null,
+      configured: false,
+      permissions: [],
+    },
+  ],
   rights: [],
   last_probe_at: null,
 }));
@@ -49,9 +81,9 @@ class FakeServer {
         connector: "gitlab",
         status: "incomplete",
         rights: [
-          { token: "api", right: "read_repository", verdict: "ok" },
-          { token: "api", right: "write_repository", verdict: "missing" },
-          { token: "api", right: "sudo", verdict: "excess" },
+          { token: "read", right: "read_repository", verdict: "ok" },
+          { token: "read", right: "write_repository", verdict: "missing" },
+          { token: "read", right: "sudo", verdict: "excess" },
         ],
       });
     }
@@ -92,7 +124,9 @@ test("le test affiche un verdict par droit", async () => {
   renderPage();
   await openIntegrations();
   fireEvent.click(await screen.findByRole("button", { name: /Tester/ }));
-  expect(await screen.findByText("api : write_repository")).toBeInTheDocument();
+  expect(
+    await screen.findByText("Lecture : inspecter groupes et projets : write_repository"),
+  ).toBeInTheDocument();
   expect(screen.getByText("(manquant)")).toBeInTheDocument();
   expect(screen.getByText("(en trop)")).toBeInTheDocument();
   expect(screen.getByText("(ok)")).toBeInTheDocument();
@@ -104,6 +138,7 @@ test("le jeton est vidé à l'envoi et ne reste dans aucun cache", async () => {
   const client = renderPage();
   await openIntegrations();
   fireEvent.click(await screen.findByRole("button", { name: /Remplacer le jeton/ }));
+  fireEvent.change(screen.getByLabelText("Jeton à enregistrer"), { target: { value: "write" } });
   const field = screen.getByLabelText("Jeton gitlab");
   expect(field).toHaveAttribute("type", "password");
   expect(field).toHaveAttribute("autocomplete", "new-password");
@@ -133,7 +168,26 @@ test("serveur et DNS sont « Bientôt disponible », sans saisie ; GitLab reste 
   expect(await screen.findAllByText("Bientôt disponible")).toHaveLength(2);
   expect(screen.getAllByRole("button", { name: /Configurer|Remplacer le jeton/ })).toHaveLength(1);
   fireEvent.click(screen.getByRole("button", { name: /Remplacer le jeton/ }));
-  expect(screen.getAllByLabelText(/^Jeton /)).toHaveLength(1);
+  expect(screen.getAllByLabelText(/^Jeton (gitlab|server|dns)$/)).toHaveLength(1);
+});
+
+test("« Comment configurer ? » affiche étapes et droits lus de l'API, sans read/write bruts", async () => {
+  new FakeServer("org_admin").install();
+  renderPage();
+  await openIntegrations();
+  fireEvent.click(await screen.findByRole("button", { name: /Comment configurer/ }));
+  expect(screen.getByText("Générez le jeton.")).toBeInTheDocument();
+  expect(screen.getByText("read_api")).toBeInTheDocument();
+  expect(screen.getByText("api")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /page de création/ })).toHaveAttribute(
+    "href",
+    "https://gitlab.com/-/user_settings/personal_access_tokens",
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Remplacer le jeton/ }));
+  const options = screen.getAllByRole("option").map((o) => o.textContent);
+  expect(options).toContain("Écriture : créer groupes et projets");
+  expect(options).not.toContain("read");
+  expect(options).not.toContain("write");
 });
 
 /** Base UI active un onglet au `mousedown`, pas au seul `click`. */

@@ -260,6 +260,11 @@ serveur refuse de toute façon). Une ligne par connecteur (GitLab, Docker, serve
 - **Bientôt disponible** (#288) : un connecteur dont l'API déclare `availability: "soon"` (serveur, DNS : simulés)
   n'affiche que logo, nom et `Badge` « Bientôt disponible » : ni champ, ni Configurer/Tester/Révoquer. Le serveur
   refuse aussi toute écriture ou test sur ce connecteur (404 opaque).
+- **Aide « Comment configurer ? »** (#287) : bouton `ghost` par connecteur configurable ; ouvre en ligne (pas de modale) une
+  zone `bg-muted` : étapes ordonnées, lien vers la page de création du jeton, droits réels à cocher avec leur
+  explication, note et sources. Tout vient de l'API (`help`, `tokens[].permissions`), déclaré dans `connector.yaml`.
+- **Libellés de jeton** : l'écran affiche `tokens[].label` (déclaré), jamais le nom technique `read` / `write`. Le menu
+  « Jeton à enregistrer » n'apparaît qu'avec plusieurs jetons ; avec un seul, le champ porte son libellé.
 - **Mobile** : les lignes s'empilent (logo et nom, puis statut, puis champs en pleine largeur). Clair et sombre
   par tokens de thème ; aucune couleur codée en dur.
 

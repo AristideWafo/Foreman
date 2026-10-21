@@ -4,8 +4,10 @@ availability: soon  # simulé : l'onglet Intégrations affiche « Bientôt dispo
 # Scopes SIMULÉS (faux serveur). Le connecteur réel (SSH / Ansible) déclarera les siens.
 tokens:
   read:
+    label: "Lecture : consulter l'état du serveur"
     scopes: [simulated.read]
   write:
+    label: "Écriture : appliquer sur le serveur"
     scopes: [simulated.write]
     boundary: "serveur de staging"
 tools_enabled_when:

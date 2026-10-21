@@ -1,13 +1,45 @@
 connector: gitlab
 version: 1
-# Scopes SIMULÉS (faux GitLab). Les scopes GitLab réels (jetons lecture/écriture, niveau d'accès sur
-# le groupe racine) sont à vérifier dans la doc GitLab avant d'être déclarés : voir #47 (T7b).
+# Aide « Comment configurer ? » : sources consultées le 2026-10-21 (rien n'est écrit de mémoire).
+#  - https://docs.gitlab.com/user/profile/personal_access_tokens/ (création du jeton, gitlab.com pris en charge)
+#  - https://docs.gitlab.com/security/tokens/access_token_scopes/ (descriptions officielles des scopes)
+#  - https://docs.gitlab.com/api/groups/ (création de sous-groupe : « parent_id », réservée aux utilisateurs
+#    autorisés ; rôle Owner ou Maintainer selon `subgroup_creation_level`)
+# Scopes déduits : `read_api` = « read access to the API » (sondes GET /groups) ; `api` = « complete read and
+# write access to the API » (POST de création de groupe et de dépôt). `read_repository`/`write_repository` ne
+# donnent PAS accès à l'API REST. NON confirmé dans la doc : le rôle minimal pour créer un dépôt dans un groupe
+# (la sonde ecrire_dans_racine exige Owner, access_level >= 40).
+help:
+  url: https://gitlab.com/-/user_settings/personal_access_tokens
+  sources:
+    - https://docs.gitlab.com/user/profile/personal_access_tokens/
+    - https://docs.gitlab.com/security/tokens/access_token_scopes/
+    - https://docs.gitlab.com/api/groups/
+  note: >-
+    Foreman utilise gitlab.com. Créez les deux jetons avec un compte qui a le rôle Owner sur le groupe racine
+    de la plateforme. Le rôle minimal exact pour créer des dépôts n'est pas confirmé par la documentation.
+    Ne cochez aucun autre droit.
+  steps:
+    - "Connectez-vous à gitlab.com avec le compte qui gère le groupe racine de la plateforme."
+    - "Ouvrez votre avatar > Modifier le profil > Accès > Jetons d'accès personnels (lien ci-dessous)."
+    - "Dans « Générer un jeton », choisissez « Jeton hérité », puis donnez-lui un nom (par exemple foreman-lecture)."
+    - "Définissez une date d'expiration, puis cochez uniquement le droit indiqué pour ce jeton."
+    - "Cliquez sur « Générer le jeton » et copiez-le tout de suite : GitLab ne l'affichera plus."
+    - "Collez-le ici dans le champ du jeton correspondant, puis enregistrez. Répétez pour le second jeton."
 tokens:
   read:
+    label: "Lecture : inspecter groupes et projets"
     scopes: [simulated.read]
+    permissions:
+      - name: read_api
+        explanation: "Accès en lecture à l'API (GitLab : « Grants read access to the API for the token's scope »). Sert aux sondes qui listent les groupes."
   write:
+    label: "Écriture : créer groupes et projets"
     scopes: [simulated.write]
     boundary: "groupe racine de la plateforme"
+    permissions:
+      - name: api
+        explanation: "Accès complet en lecture et écriture à l'API (GitLab : « Grants complete read and write access to the API »). Nécessaire pour créer groupes et projets ; read_repository et write_repository ne couvrent que git."
 tools_enabled_when:
   gitlab.create_group: [write]
   gitlab.create_project: [write]

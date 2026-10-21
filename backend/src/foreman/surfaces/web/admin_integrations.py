@@ -35,10 +35,12 @@ from foreman.core.secrets import SecretError
 from foreman.core.store import StoreError
 from foreman.surfaces.web.errors import ApiError
 from foreman.surfaces.web.schemas import (
+    HelpView,
     IntegrationTestResult,
     IntegrationView,
     LlmView,
     ModelOption,
+    PermissionView,
     RightView,
     SetCredentialRequest,
     SetModelRequest,
@@ -51,6 +53,17 @@ LLM = "anthropic"
 LLM_TOKEN = "api_key"  # noqa: S105 - nom du jeton, pas une valeur
 LLM_DECLARED = {LLM_TOKEN: ["models.retrieve"]}
 CONNECTOR_TOKEN_KIND = "connector_token"  # noqa: S105 - type de secret, pas une valeur
+# Aide d'Anthropic : pas de connector.yaml (clé gérée par le fournisseur LLM).
+LLM_LABEL = "Clé API Anthropic"
+LLM_HELP = HelpView(
+    steps=[
+        "Connectez-vous à la Console Claude avec le compte de l'organisation.",
+        "Ouvrez Paramètres > Clés API, puis créez une clé (de préférence dédiée à Foreman).",
+        "Copiez la clé tout de suite : elle ne sera plus affichée. Collez-la ici.",
+    ],
+    url="https://platform.claude.com/settings/keys",
+    sources=["https://platform.claude.com/docs/en/api/overview"],
+)
 _ABSENT = ConnectorState("incomplete", (), None)
 
 
@@ -117,12 +130,16 @@ def add_integration_routes(
         state = state or _ABSENT
         tokens: list[TokenView] = []
         for name, scopes in declared(connector).items():
-            boundary = None if connector == LLM else definitions()[connector].tokens[name].boundary
+            decl = None if connector == LLM else definitions()[connector].tokens[name]
             tokens.append(
                 TokenView(
                     name=name,
+                    label=LLM_LABEL if decl is None else decl.label,
+                    permissions=[]
+                    if decl is None
+                    else [PermissionView(**p.model_dump()) for p in decl.permissions],
                     scopes=scopes,
-                    boundary=boundary,
+                    boundary=None if decl is None else decl.boundary,
                     configured=await app.secrets.exists(_secret_id(connector, name)),
                 )
             )
@@ -148,6 +165,9 @@ def add_integration_routes(
             configured=all(t.configured for t in tokens),
             availability="available" if connector == LLM else definitions()[connector].availability,
             tokens=tokens,
+            help=LLM_HELP
+            if connector == LLM
+            else (HelpView(**h.model_dump()) if (h := definitions()[connector].help) else None),
             rights=rights_of(state),
             last_probe_at=state.last_probe_at,
             llm=llm,

@@ -4,6 +4,7 @@ availability: soon  # simulé : l'onglet Intégrations affiche « Bientôt dispo
 # Scopes SIMULÉS (faux DNS, lecture seule : le wildcard est géré en externe).
 tokens:
   read:
+    label: "Lecture : lister les enregistrements"
     scopes: [simulated.read]
 tools_enabled_when:
   dns.list_records: [read]

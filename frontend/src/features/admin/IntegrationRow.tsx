@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { IntegrationHelp } from "./IntegrationHelp";
 import { ConfirmDialog, type Confirmation } from "./ConfirmDialog";
 import { ActionError } from "./QueryStatus";
 import {
@@ -36,7 +37,15 @@ function StatusBadge({ integration: i }: { integration: IntegrationView }) {
 }
 
 /** Droits lus de l'API, un par ligne, avec leur verdict (icône + texte, jamais la couleur seule). */
-function Rights({ rights, label }: { rights: RightView[]; label: string }) {
+function Rights({
+  rights,
+  label,
+  tokenLabels,
+}: {
+  rights: RightView[];
+  label: string;
+  tokenLabels: Record<string, string>;
+}) {
   if (rights.length === 0) return null;
   return (
     <ul className="flex flex-col gap-1 text-sm" aria-label={label}>
@@ -46,7 +55,7 @@ function Rights({ rights, label }: { rights: RightView[]; label: string }) {
           <li key={`${r.token}/${r.right}`} className="flex items-center gap-2">
             <Icon aria-hidden="true" className="size-4 shrink-0" />
             <span className="min-w-0 break-words">
-              {r.token} : {r.right}
+              {tokenLabels[r.token] ?? r.token} : {r.right}
             </span>
             <span className="text-muted-foreground">({text})</span>
           </li>
@@ -120,11 +129,13 @@ function ConfigurableRow({ integration }: { integration: IntegrationView }) {
   const revoke = useRevokeCredentials();
   const test = useTestIntegration();
   const [open, setOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [token, setToken] = useState("");
   const [name, setName] = useState("");
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const tokenId = `token-${connector}`;
-  const tokenNames = integration.tokens.map((t) => t.name);
+  const tokenLabels = Object.fromEntries(integration.tokens.map((t) => [t.name, t.label]));
+  const single = integration.tokens.length === 1 ? integration.tokens[0] : undefined;
 
   return (
     <li className="flex flex-col gap-3 rounded-xl border p-4">
@@ -136,6 +147,16 @@ function ConfigurableRow({ integration }: { integration: IntegrationView }) {
           <span className="text-sm text-muted-foreground">Jeton enregistré</span>
         ) : null}
         <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
+          {integration.help ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={helpOpen}
+              onClick={() => setHelpOpen((o) => !o)}
+            >
+              Comment configurer ?<span className="sr-only"> {connector}</span>
+            </Button>
+          ) : null}
           <Button variant="outline" size="sm" onClick={() => setOpen((o) => !o)}>
             {integration.configured ? "Remplacer le jeton" : "Configurer"}
             <span className="sr-only"> {connector}</span>
@@ -174,8 +195,10 @@ function ConfigurableRow({ integration }: { integration: IntegrationView }) {
         <Rights
           rights={test.data?.rights ?? integration.rights}
           label={`Droits requis pour ${connector}`}
+          tokenLabels={tokenLabels}
         />
       </div>
+      {helpOpen ? <IntegrationHelp integration={integration} /> : null}
       {open ? (
         <form
           className="flex flex-wrap items-end gap-3"
@@ -188,26 +211,26 @@ function ConfigurableRow({ integration }: { integration: IntegrationView }) {
               .then((ok) => ok && setOpen(false));
           }}
         >
-          {tokenNames.length > 1 ? (
+          {integration.tokens.length > 1 ? (
             <div className="flex min-w-40 flex-col gap-1.5">
-              <Label htmlFor={`${tokenId}-name`}>Jeton à remplacer</Label>
+              <Label htmlFor={`${tokenId}-name`}>Jeton à enregistrer</Label>
               <NativeSelect
                 id={`${tokenId}-name`}
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               >
-                <option value="">Choisir…</option>
-                {tokenNames.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
+                <option value="">Choisir un jeton…</option>
+                {integration.tokens.map((t) => (
+                  <option key={t.name} value={t.name}>
+                    {t.label}
                   </option>
                 ))}
               </NativeSelect>
             </div>
           ) : null}
           <div className="flex min-w-0 flex-1 basis-64 flex-col gap-1.5">
-            <Label htmlFor={tokenId}>Jeton {connector}</Label>
+            <Label htmlFor={tokenId}>{single ? single.label : `Jeton ${connector}`}</Label>
             <Input
               id={tokenId}
               type="password"
