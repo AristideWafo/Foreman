@@ -6,6 +6,7 @@ Peu de tests, à fort signal. Voir `AGENTS.md`.
 | --- | --- |
 | `test_structure.py` | Garde-fous de structure (dossiers fourre-tout, exceptions de couche figées) |
 | `test_*.py` | Unitaires avec fakes nommés |
+| `diagnostic_metric.py` | Indicateur « le modèle corrige avec le seul extrait filtré » sur S3-S9 (`make eval-diagnostic`, rapporté en CI) |
 | `e2e/` | Scénarios `S1`…`S12` avec adaptateurs simulés et réponses de modèle rejouées (à venir) |
 
 Convention : `e2e/test_s<NN>_<sujet>.py`, un scénario par fichier, fakes en classes nommées.

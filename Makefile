@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install check check-full check-imports test fmt api-types check-api-types s01-fixture s02-fixture s10-fixture s11-fixture s12-fixture
+.PHONY: help install check check-full check-imports test eval-diagnostic fmt api-types check-api-types s01-fixture s02-fixture s10-fixture s11-fixture s12-fixture
 
 BACKEND := cd backend && uv run
 
@@ -28,6 +28,9 @@ check-full: check ## Contrôles complets
 
 check-imports: ## Contrats de couches
 	$(BACKEND) lint-imports
+
+eval-diagnostic: ## Indicateur de diagnostic S3-S9 (rejoué, informatif)
+	$(BACKEND) python tests/diagnostic_metric.py
 
 test: ## Tests
 	$(BACKEND) pytest
