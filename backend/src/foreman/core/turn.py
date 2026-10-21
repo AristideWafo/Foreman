@@ -9,12 +9,13 @@ import json
 import logging
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
-from typing import Annotated, Literal
+from dataclasses import dataclass, replace
+from typing import Annotated, Final, Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
+from foreman.core.aliasing import Aliases
 from foreman.core.catalog import TOOL_NAME_PATTERN
 from foreman.core.clarification import (
     ASK_USER,
@@ -39,7 +40,14 @@ from foreman.core.events import (
 )
 from foreman.core.gateway.redact import PRE_MASK_CHARS, mask_text
 from foreman.core.planning import Draft, DraftStep, InvalidPlan, Planner
-from foreman.core.ports import ConversationMessage, EventLog, ProjectStore, Provider, ToolCall
+from foreman.core.ports import (
+    ConversationMessage,
+    EventLog,
+    ModelReply,
+    ProjectStore,
+    Provider,
+    ToolCall,
+)
 from foreman.core.pricing import ModelPrice
 from foreman.core.turn_budget import TurnLimit, TurnMeter
 
@@ -149,19 +157,43 @@ def bounded_history(messages: Sequence[ConversationMessage]) -> list[Conversatio
     return kept
 
 
-def model_history(events: Sequence[AnyEvent]) -> list[ConversationMessage]:
-    """Ce que le modèle lit du flux : les messages (masqués) et les diagnostics d'échec typés."""
+# Liste d'autorisation (ADR 0002, couche 3) : seuls ces champs d'un diagnostic partent au modèle.
+# Un champ ajouté plus tard au modèle de données reste côté serveur tant qu'il n'est pas ici.
+MODEL_DIAGNOSTIC_FIELDS: Final = ("code", "expected", "observed", "probe", "extract")
+
+
+def allowed_fields(values: Mapping[str, object]) -> dict[str, object]:
+    return {name: values[name] for name in MODEL_DIAGNOSTIC_FIELDS if name in values}
+
+
+def _aliased(value: object, aliases: Aliases) -> object:
+    if isinstance(value, str):
+        return aliases.apply(value)
+    if isinstance(value, list):
+        return [_aliased(item, aliases) for item in value]
+    return value
+
+
+def model_view(events: Sequence[AnyEvent]) -> tuple[list[ConversationMessage], Aliases]:
+    """Ce que le modèle lit du flux : messages masqués et diagnostics typés, hôtes et valeurs
+    internes remplacés par des alias stables ; les alias servent à `restore` (réponse)."""
+    aliases = Aliases()
     history: list[ConversationMessage] = []
     for e in events:
         if e.type == "message":
-            history.append(ConversationMessage(e.data.role, mask_for_model(e.data.text)))
+            text = aliases.apply(mask_for_model(e.data.text))
+            history.append(ConversationMessage(e.data.role, text))
         elif e.type == "execution_diagnostic":
-            # Champs typés seulement (liste fermée, valeurs masquées et bornées par la gateway).
+            fields = allowed_fields(e.data.diagnostic.model_dump(exclude_none=True))
             result: dict[str, object] = {"tool": e.data.tool, "step": e.data.step}
-            result |= e.data.diagnostic.model_dump(exclude_none=True)
+            result |= {name: _aliased(value, aliases) for name, value in fields.items()}
             text = json.dumps({"tool_result": result}, ensure_ascii=False)
             history.append(ConversationMessage("user", text))
-    return bounded_history(history)
+    return bounded_history(history), aliases
+
+
+def model_history(events: Sequence[AnyEvent]) -> list[ConversationMessage]:
+    return model_view(events)[0]
 
 
 class TurnService:
@@ -292,8 +324,18 @@ class TurnService:
         )
         await self._fail(project_id, turn_id, "budget_exceeded")
 
-    async def _history(self, project_id: UUID) -> list[ConversationMessage]:
-        return model_history(await self._events.read_after(project_id, 0))
+    async def _history(self, project_id: UUID) -> tuple[list[ConversationMessage], Aliases]:
+        return model_view(await self._events.read_after(project_id, 0))
+
+    @staticmethod
+    def _restored(reply: ModelReply, aliases: Aliases) -> ModelReply:
+        """Remet hôtes et valeurs d'origine dans la réponse (texte et arguments d'outils)."""
+        text = str(aliases.restore(reply.text))
+        calls = tuple(
+            ToolCall(c.name, cast(Mapping[str, object], aliases.restore(c.arguments)))
+            for c in reply.tool_calls
+        )
+        return replace(reply, text=text, tool_calls=calls)
 
     async def _run(self, request: TurnRequest, turn_id: UUID) -> None:
         project_id = request.project_id
@@ -318,7 +360,8 @@ class TurnService:
         try:
             # Délai explicite : sinon un fournisseur muet bloque le projet en 409 pour toujours.
             async with asyncio.timeout(min(self._provider_timeout_s, limits.max_seconds)):
-                reply = await self._provider.complete(await self._history(project_id))
+                history, aliases = await self._history(project_id)
+                reply = self._restored(await self._provider.complete(history), aliases)
             meter.record(reply.usage)
         except TimeoutError:
             if limits.max_seconds <= self._provider_timeout_s:

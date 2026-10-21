@@ -1367,6 +1367,31 @@ def test_masking_time_grows_linearly_with_the_input(name: str) -> None:
         redact_value({"a": large, "b": [large] * 2_000}, frozenset())
 
 
+# --- Formes non masquées jusqu'ici (#178) ---------------------------------------------------
+
+FORMS_178 = {
+    "google": ("AIza" + "SyA1234567890abcdefghijklmnopqrstuv", "AIzaSyA1234567890"),
+    "stripe": ("sk_" + "live_" + "Zq8" * 8, "Zq8Zq8Zq8"),
+    "npm": ("npm_abcdefghijklmnopqrstuvwxyz0123456789", "abcdefghijklmnopqrstuvwxyz"),
+    "aws_temporaire": ("ASIAIOSFODNN7EXAMPLE", "IOSFODNN7EXAMPLE"),
+    "sendgrid": ("SG.abcdefghijklmnop.qrstuvwxyz0123456789", "qrstuvwxyz0123456789"),
+    "digitalocean": ("dop_v1_" + "a" * 64, "a" * 64),
+    "vault": ("hvs.CAESIabcdefghijklmnopqrstuvwx", "CAESIabcdefghijklmnopqrstuvwx"),
+    "pypi": ("pypi-" + "A" * 50, "A" * 50),
+    "azure_compte": ("Account" + "Key=" + "abc123def456ghi789jkl012mno345pqr678==", "abc123def456"),
+    "azure_sas": (
+        "https://x.blob.core.windows.net/c?sv=2020&sig=abcDEF123%2Bxyz&se=2030",
+        "abcDEF123",
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(FORMS_178))
+def test_secret_forms_listed_in_178_are_masked(name: str) -> None:
+    form, secret = FORMS_178[name]
+    assert secret not in mask_text(f"échec avec {form} fin")
+
+
 # --- 7. Matrice minimale ----------------------------------------------------------------------
 
 

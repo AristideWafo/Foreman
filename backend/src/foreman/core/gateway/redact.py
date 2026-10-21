@@ -69,9 +69,20 @@ PATTERNS: Final = tuple(
         r"(?-i:\bgithub_pat_[A-Za-z0-9_]{20,}+)",
         r"(?-i:\bgl(?:pat|ptt|rt|rtr|cbt|dt|ft|imt|oas|soat|agent|ffct|wt)-[A-Za-z0-9_\-]{20,}+)",
         r"(?-i:\bgh[pousr]_[A-Za-z0-9]{20,}+)",  # jetons GitHub
-        r"(?-i:\bAKIA[0-9A-Z]{16}\b)",  # clé d'accès AWS
+        r"(?-i:\b(?:AKIA|ASIA)[0-9A-Z]{16}\b)",  # clé d'accès AWS (durable ou temporaire)
         r"(?-i:\bxox[abprs]-[A-Za-z0-9\-]{10,}+)",  # jetons Slack
         r"(?-i:\bsk-(?:(?:ant|proj|svcacct|admin)-[A-Za-z0-9_\-]{20,}+|[A-Za-z0-9_]{20,}+))",
+        # Autres formes à préfixe (#178) : Google, Stripe, npm, SendGrid, DigitalOcean, Vault, PyPI.
+        r"(?-i:\bAIza[0-9A-Za-z_\-]{30,}+)",
+        r"(?-i:\b[sr]k_(?:live|test)_[0-9A-Za-z]{16,}+)",
+        r"(?-i:\bnpm_[A-Za-z0-9]{30,}+)",
+        r"(?-i:\bSG\.[A-Za-z0-9_\-]{10,}+\.[A-Za-z0-9_\-]{10,}+)",
+        r"(?-i:\bdo[opr]_v1_[a-f0-9]{40,}+)",
+        r"(?-i:\bhv[sbr]\.[A-Za-z0-9_\-]{20,}+)",
+        r"(?-i:\bpypi-[A-Za-z0-9_\-]{40,}+)",
+        # Azure : clé de compte et signature d'URL SAS (`sig=` dans la requête).
+        r"\b(?:AccountKey|SharedAccessKey)[ \t]{0,5}=[^;\s\"']{1,300}+",
+        r"(?<=[?&;])sig=[^&\s\"']{1,300}+",
         r"\beyJ[A-Za-z0-9_\-]{5,256}\.[A-Za-z0-9_\-]{5,256}\.[A-Za-z0-9_\-]{5,}+",  # JWT
         r"\b(?:docker|podman|helm)(?: registry)?[ \t]{1,5}login\b[^\r\n]{0,500}+",
         r"(?<![\w\-])(?:-u|--user)[ \t=]{1,5}[^\s:]{1,100}:\S{1,200}",  # -u utilisateur:secret
@@ -238,18 +249,9 @@ def redact_value(
 MAX_EXTRACT_LINES: Final = 5
 MAX_EXTRACT_LINE_CHARS: Final = 200
 SCANNED_TAIL_LINES: Final = 200
-HOST_MASK: Final = "[hôte]"
 _ERROR_LINE: Final = re.compile(
     r"\b(?:error|fatal|failed|failure|denied|refused|forbidden|unauthori[sz]ed|not found|no such|"
     r"in use|timed? ?out|exception|panic)\b",
-    re.IGNORECASE,
-)
-# shortcut : hôtes d'URL, IPv4 et noms en `.internal|.local|.lan|.corp|.com|.org|.net|.io|.fr|.dev|
-# .cloud` ; l'aliasing stable (`host-1`, ADR 0002 couche 4) remplacera cette liste.
-_HOST: Final = re.compile(
-    r"(?<=://)[^\s/?#]{1,255}"
-    r"|\b\d{1,3}(?:\.\d{1,3}){3}\b"
-    r"|\b(?:[a-z0-9\-]{1,63}\.){1,5}(?:internal|local|lan|corp|com|org|net|io|fr|dev|cloud)\b",
     re.IGNORECASE,
 )
 
@@ -257,8 +259,9 @@ _HOST: Final = re.compile(
 def failure_extract(lines: Iterable[str]) -> list[str]:
     """Extrait ciblé d'un échec (ADR 0002, couche 2) : les dernières lignes (5 au plus) qui
     matchent un motif d'erreur connu, à défaut les dernières lignes. Tout passe par le masquage des
-    secrets (`_Masker`, état des blocs conservé), `filter_logs`, puis les hôtes sont retirés.
-    Borné : 5 lignes de 200 caractères.
+    secrets (`_Masker`, état des blocs conservé), `filter_logs`. Borné : 5 lignes de 200
+    caractères. Les hôtes restent : le modèle les voit remplacés par des alias stables
+    (`core/aliasing.py`, couche 4), l'humain les voit en clair.
 
     shortcut : seules les `SCANNED_TAIL_LINES` dernières lignes sont lues ; une clé privée dont le
     BEGIN est plus haut n'est pas reconnue comme bloc.
@@ -266,10 +269,7 @@ def failure_extract(lines: Iterable[str]) -> list[str]:
     masker = _Masker()
     tail = [masker.line(raw) for raw in list(lines)[-SCANNED_TAIL_LINES:]]
     chosen = [line for line in tail if _ERROR_LINE.search(line)] or tail
-    return [
-        _HOST.sub(HOST_MASK, line)[:MAX_EXTRACT_LINE_CHARS]
-        for line in filter_logs(chosen[-MAX_EXTRACT_LINES:])
-    ]
+    return [line[:MAX_EXTRACT_LINE_CHARS] for line in filter_logs(chosen[-MAX_EXTRACT_LINES:])]
 
 
 def strip_paths(output: dict[str, JsonValue], paths: Iterable[str]) -> dict[str, JsonValue]:
