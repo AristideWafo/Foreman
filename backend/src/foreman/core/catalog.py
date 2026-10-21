@@ -9,7 +9,7 @@ invalide fait échouer le démarrage, il n'est jamais corrigé silencieusement. 
 import hashlib
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated, Any, Final, Literal, get_args
 
 import yaml
@@ -388,6 +388,72 @@ def parse_tool(raw: bytes, source: str) -> ToolDefinition:
     return _validate(ToolDefinition, data, source)
 
 
+# --- Connecteurs -------------------------------------------------------------------------------
+
+_CONNECTOR_NAME_RE: Final = re.compile(r"^[a-z][a-z0-9_]*$")
+_PROBE_CALL_RE: Final = re.compile(r"^(GET|HEAD) /[^\s]*$")
+
+
+class TokenDeclaration(_Strict):
+    """Un jeton du connecteur (`read`, `write`...) : ses scopes déclarés et son périmètre.
+
+    Les scopes sont des noms (jamais une valeur de jeton). Un scope réel non confirmé reste marqué
+    « à vérifier » dans le YAML, il n'est pas inventé.
+    """
+
+    scopes: list[str] = Field(min_length=1, max_length=20)
+    boundary: str | None = Field(default=None, max_length=200)
+
+
+class ProbeDefinition(_Strict):
+    """Une sonde déclarée : un appel en LECTURE SEULE (GET ou HEAD) qui prouve un droit.
+
+    `expects` est une indication pour l'adaptateur réel (ex. « access_level >= 40 ») : la gateway
+    ne l'interprète pas.
+    """
+
+    name: str = Field(pattern=_CONNECTOR_NAME_RE.pattern, max_length=64)
+    token: str
+    call: str = Field(max_length=300)
+    expects: str | None = Field(default=None, max_length=200)
+
+    @field_validator("call")
+    @classmethod
+    def _read_only(cls, value: str) -> str:
+        if not _PROBE_CALL_RE.fullmatch(value):
+            raise ValueError("call: une sonde est un GET ou un HEAD")
+        return value
+
+
+class ConnectorDefinition(_Strict):
+    """`integrations/<c>/connector.yaml` : le modèle déclaratif d'un connecteur."""
+
+    connector: str = Field(pattern=_CONNECTOR_NAME_RE.pattern, max_length=64)
+    version: int = Field(ge=1)
+    tokens: dict[str, TokenDeclaration] = Field(min_length=1)
+    tools_enabled_when: dict[str, list[str]] = Field(default_factory=dict)
+    probes: list[ProbeDefinition] = Field(min_length=1, max_length=50)
+    strip_from_results: list[str] = Field(default_factory=list, max_length=50)
+
+    @model_validator(mode="after")
+    def _coherent(self) -> "ConnectorDefinition":
+        names = [p.name for p in self.probes]
+        if len(set(names)) != len(names):
+            raise ValueError("probes: nom en double")
+        if any(p.token not in self.tokens for p in self.probes):
+            raise ValueError("probes: jeton non déclaré")
+        for tool, needed in self.tools_enabled_when.items():
+            if not tool.startswith(f"{self.connector}.") or any(
+                t not in self.tokens for t in needed
+            ):
+                raise ValueError("tools_enabled_when: outil ou jeton inconnu")
+        return self
+
+
+def parse_connector(raw: bytes, source: str) -> ConnectorDefinition:
+    return _validate(ConnectorDefinition, parse_yaml_mapping(raw, source), source)
+
+
 # --- Skills ------------------------------------------------------------------------------------
 
 
@@ -595,6 +661,7 @@ class Catalog:
     referentiels: Mapping[str, Referentiel]
     policy: PolicyMatrix
     policy_sha256: str
+    connectors: Mapping[str, ConnectorDefinition] = field(default_factory=dict)
 
 
 def build_catalog(
@@ -605,6 +672,7 @@ def build_catalog(
     policy: PolicyMatrix,
     policy_sha256: str,
     environment: str,
+    connectors: Iterable[ConnectorDefinition] = (),
 ) -> Catalog:
     """Assemble le catalogue et applique les règles transverses.
 
@@ -630,4 +698,12 @@ def build_catalog(
         if ref.name in ref_map:
             raise CatalogError(f"référentiel en double : {ref.name}")
         ref_map[ref.name] = ref
-    return Catalog(tool_map, skill_map, ref_map, policy, policy_sha256)
+    connector_map: dict[str, ConnectorDefinition] = {}
+    for connector in connectors:
+        if connector.connector in connector_map:
+            raise CatalogError(f"connecteur en double : {connector.connector}")
+        unknown = [t for t in connector.tools_enabled_when if t not in tool_map]
+        if unknown:
+            raise CatalogError(f"connecteur {connector.connector} cite des outils inconnus")
+        connector_map[connector.connector] = connector
+    return Catalog(tool_map, skill_map, ref_map, policy, policy_sha256, connector_map)
