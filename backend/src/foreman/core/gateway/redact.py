@@ -71,7 +71,7 @@ PATTERNS: Final = tuple(
         r"(?-i:\bgh[pousr]_[A-Za-z0-9]{20,}+)",  # jetons GitHub
         r"(?-i:\bAKIA[0-9A-Z]{16}\b)",  # clé d'accès AWS
         r"(?-i:\bxox[abprs]-[A-Za-z0-9\-]{10,}+)",  # jetons Slack
-        r"(?-i:\bsk-(?:(?:proj|svcacct|admin)-[A-Za-z0-9_\-]{20,}+|[A-Za-z0-9_]{20,}+))",
+        r"(?-i:\bsk-(?:(?:ant|proj|svcacct|admin)-[A-Za-z0-9_\-]{20,}+|[A-Za-z0-9_]{20,}+))",
         r"\beyJ[A-Za-z0-9_\-]{5,256}\.[A-Za-z0-9_\-]{5,256}\.[A-Za-z0-9_\-]{5,}+",  # JWT
         r"\b(?:docker|podman|helm)(?: registry)?[ \t]{1,5}login\b[^\r\n]{0,500}+",
         r"(?<![\w\-])(?:-u|--user)[ \t=]{1,5}[^\s:]{1,100}:\S{1,200}",  # -u utilisateur:secret
