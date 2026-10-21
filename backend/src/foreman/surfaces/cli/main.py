@@ -4,7 +4,7 @@ import sys
 from datetime import UTC, datetime
 
 from foreman.bootstrap.configure import App, Profile, configure, invitation_link
-from foreman.bootstrap.llm import RecordRefused, record_llm_response
+from foreman.bootstrap.llm import RecordRefused, record_llm_response, set_llm_key, set_llm_model
 from foreman.bootstrap.secrets import rotate_master_key
 from foreman.core.accounts import AccountError
 from foreman.core.auth import create_admin_invitation
@@ -77,13 +77,34 @@ async def _llm_record(name: str, message: str) -> str:
         await app.lifecycle.stop()
 
 
+async def _llm_set(action: str, value: str) -> None:
+    app = configure(Profile.ADMIN)
+    await app.lifecycle.start()
+    try:
+        await (set_llm_key if action == "set-key" else set_llm_model)(app, value)
+    finally:
+        await app.lifecycle.stop()
+
+
 def _llm(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(prog="foreman llm")
-    parser.add_argument("action", choices=["record"])
-    parser.add_argument("--name", required=True, help="nom du fichier (a-z, 0-9, tirets)")
-    parser.add_argument("--message", required=True, help="message utilisateur à envoyer")
+    parser.add_argument("action", choices=["record", "set-key", "set-model"])
+    parser.add_argument("--name", help="record : nom du fichier (a-z, 0-9, tirets)")
+    parser.add_argument("--message", help="record : message utilisateur à envoyer")
+    parser.add_argument("--model", help="set-model : identifiant dans la liste déclarée")
     args = parser.parse_args(argv)
     try:
+        if args.action == "set-key":
+            # La clé vient de l'entrée standard : jamais d'argument (historique du shell, ps).
+            asyncio.run(_llm_set("set-key", sys.stdin.read()))
+            sys.stdout.write("clé enregistrée\n")
+            return
+        if args.action == "set-model":
+            asyncio.run(_llm_set("set-model", args.model or ""))
+            sys.stdout.write("modèle enregistré\n")
+            return
+        if not args.name or not args.message:
+            sys.exit("record exige --name et --message")
         path = asyncio.run(_llm_record(args.name, args.message))
     except RecordRefused as exc:
         sys.exit(f"enregistrement impossible : {exc}")

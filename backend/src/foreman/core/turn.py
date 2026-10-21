@@ -35,6 +35,7 @@ from foreman.core.events import (
     MessageData,
     TurnStatusData,
 )
+from foreman.core.gateway.redact import PRE_MASK_CHARS, mask_text
 from foreman.core.planning import Draft, DraftStep, InvalidPlan, Planner
 from foreman.core.ports import ConversationMessage, EventLog, ProjectStore, Provider, ToolCall
 from foreman.core.pricing import ModelPrice
@@ -116,6 +117,18 @@ class ProposePlanArguments(BaseModel):
         ]
         | None
     ) = Field(default=None, max_length=10)
+
+
+def mask_for_model(text: str) -> str:
+    """Masque les secrets avant l'envoi au modèle (ADR 0002). `mask_text` borne chaque appel à
+    `PRE_MASK_CHARS` : le texte est traité par tranches, sans rien tronquer.
+
+    shortcut: un secret à cheval sur deux tranches (plus de 2000 caractères d'un seul tenant)
+    n'est pas reconnu ; à revoir si les messages peuvent porter des blocs de clé entiers.
+    """
+    return "".join(
+        mask_text(text[i : i + PRE_MASK_CHARS]) for i in range(0, len(text), PRE_MASK_CHARS)
+    )
 
 
 def bounded_history(messages: Sequence[ConversationMessage]) -> list[ConversationMessage]:
@@ -265,7 +278,11 @@ class TurnService:
     async def _history(self, project_id: UUID) -> list[ConversationMessage]:
         events = await self._events.read_after(project_id, 0)
         return bounded_history(
-            [ConversationMessage(e.data.role, e.data.text) for e in events if e.type == "message"]
+            [
+                ConversationMessage(e.data.role, mask_for_model(e.data.text))
+                for e in events
+                if e.type == "message"
+            ]
         )
 
     async def _run(self, request: TurnRequest, turn_id: UUID) -> None:

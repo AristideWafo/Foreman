@@ -1,0 +1,11 @@
+# Modèles proposés à l'admin (liste fermée, déclarée dans le code : en ajouter un = PR relue).
+# Tarifs en USD par million de jetons, relevés dans la documentation Anthropic (à revérifier avant
+# la mise en production). Conversion en EUR : taux fixe de core/pricing.py.
+# Limites connues : le palier « prompt > 100K jetons » de Haiku 5.5 (0,50 / 2,50) n'est pas modélisé ;
+# le tarif d'écriture de cache est supposé à 1,25 x l'entrée.
+version: 1
+probe: models.retrieve   # sonde : le modèle choisi existe pour cette clé
+models:
+  - {id: claude-haiku-5-5,  label: "Claude Haiku 5.5",  input_usd: 0.10, output_usd: 0.50,  cache_read_usd: 0.01, cache_write_usd: 0.125}
+  - {id: claude-sonnet-5-5, label: "Claude Sonnet 5.5", input_usd: 2.00, output_usd: 10.00, cache_read_usd: 0.20, cache_write_usd: 2.50}
+  - {id: claude-opus-5-5,   label: "Claude Opus 5.5",   input_usd: 4.00, output_usd: 20.00, cache_read_usd: 0.20, cache_write_usd: 5.00}
