@@ -1550,6 +1550,19 @@ async def test_read_returns_filtered_output_and_audits_without_content() -> None
     assert row.result_redacted is not None and set(row.result_redacted) == {"bytes"}
 
 
+@pytest.mark.asyncio
+async def test_read_refuses_a_tool_of_a_soon_connector_without_calling_the_adapter() -> None:
+    world = make_world()
+    project = (await world.projects.create("p")).id
+    for tool, params in (
+        ("server.healthcheck", {"environment": "staging", "project": "safe-eat"}),
+    ):
+        with pytest.raises(CallDenied) as denied:
+            await world.gateway.read(ReadCall(project, DEV_USER_ID, tool, params))
+        assert denied.value.code == "policy_denied"
+    assert world.server.calls == 0
+
+
 def test_catalog_loads_the_eight_gitlab_read_tools_with_description() -> None:
     tools = base_catalog().tools
     for name in READ_TOOLS:
