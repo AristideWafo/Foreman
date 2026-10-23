@@ -14,6 +14,12 @@ from foreman.core.gateway.port import RightVerdict
 
 ConnectorStatus = Literal["ok", "incomplete", "revoked"]
 CredentialAction = Literal["credential.set", "credential.revoke", "credential.test", "model.set"]
+CONNECTOR_TOKEN_KIND = "connector_token"  # noqa: S105 - type de secret, pas une valeur
+
+
+def connector_secret_id(connector: str, token: str) -> str:
+    """Identifiant, dans le magasin de secrets, du jeton `token` d'un connecteur."""
+    return f"connector.{connector}.{token}"
 
 
 @dataclass(frozen=True, slots=True)

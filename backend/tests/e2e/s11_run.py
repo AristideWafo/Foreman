@@ -65,9 +65,10 @@ class S11Run:
 def snapshot_fakes(state: App) -> dict[str, Any]:
     """Contenu des faux (groupes, dépôts, projets serveur) : de quoi prouver « rien de plus »."""
     adapters = state.gateway._adapters  # type: ignore[union-attr]
+    gitlab = getattr(adapters["gitlab"], "_fake", adapters["gitlab"])  # ConfiguredGitLab hors CI
     return {
-        "groups": sorted(adapters["gitlab"].groups),
-        "projects": sorted(adapters["gitlab"].projects),
+        "groups": sorted(gitlab.groups),
+        "projects": sorted(gitlab.projects),
         "server_projects": sorted(adapters["server"].projects),
         "runs": list(adapters["server"].runs),
     }
