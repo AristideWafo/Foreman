@@ -7,12 +7,54 @@ erreur du vrai provider n'y retombe pas : pas de repli silencieux.
 
 import os
 from collections.abc import Sequence
+from typing import Any
 
+from foreman.core.catalog import Catalog, ToolDefinition
 from foreman.core.llm import LLM_KEY_ID, LLM_MODEL_ID, LlmSettings
 from foreman.core.ports import ConversationMessage, ModelReply, Provider
 from foreman.core.secrets import SecretStore
 from foreman.infra.llm_settings import SecretLlmSettings
-from foreman.integrations.anthropic.provider import AnthropicProvider
+from foreman.integrations.anthropic.provider import (
+    SYSTEM_PROMPT,
+    WRITE_TOOLS_HEADING,
+    AnthropicProvider,
+    to_wire,
+)
+
+
+def _available(catalog: Catalog) -> list[ToolDefinition]:
+    """Outils des connecteurs `available` (les « bientôt disponibles » restent cachés du modèle)."""
+    live = {n for n, c in catalog.connectors.items() if c.availability == "available"}
+    return [t for t in catalog.tools.values() if t.connector in live]
+
+
+def read_tool_definitions(catalog: Catalog) -> list[dict[str, Any]]:
+    """Seuls les outils `read` deviennent des outils du modèle ; la gateway valide les paramètres
+    (`strict: false`), les écritures ne passent que par `propose_plan`."""
+    return [
+        {
+            "name": to_wire(t.name),
+            "description": t.description or t.name,
+            "strict": False,
+            "input_schema": t.input,
+        }
+        for t in _available(catalog)
+        if t.tool_class == "read"
+    ]
+
+
+def build_prompt(catalog: Catalog) -> str:
+    """Prompt système + écritures possibles (nom, paramètres, requis*) lues du catalogue."""
+    lines = []
+    for t in _available(catalog):
+        if t.tool_class == "read":
+            continue
+        props = t.input.get("properties")
+        required = t.input.get("required")
+        names = sorted(props) if isinstance(props, dict) else []
+        req = set(required) if isinstance(required, list) else set()
+        lines.append(f"- {t.name}({', '.join(n + '*' if n in req else n for n in names)})")
+    return SYSTEM_PROMPT + "\n\n" + WRITE_TOOLS_HEADING + "\n" + "\n".join(lines)
 
 
 class ConfiguredProvider:
@@ -34,10 +76,15 @@ def choose_provider(
     secrets: SecretStore,
     *,
     force_replay: bool,
+    catalog: Catalog,
     settings: LlmSettings | None = None,
 ) -> Provider:
     """`force_replay` : profil EVAL. La variable `CI` force aussi le rejeu."""
     if force_replay or os.environ.get("CI"):
         return replay
-    real = AnthropicProvider(settings or SecretLlmSettings(secrets))
+    real = AnthropicProvider(
+        settings or SecretLlmSettings(secrets),
+        read_tools=read_tool_definitions(catalog),
+        prompt=build_prompt(catalog),
+    )
     return ConfiguredProvider(replay, real, secrets)

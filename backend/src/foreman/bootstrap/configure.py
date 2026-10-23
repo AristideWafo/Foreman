@@ -199,7 +199,9 @@ def configure(profile: Profile) -> App:
         lifecycle = NoLifecycle()
     if (auth_mode is AuthMode.SESSION or profile is Profile.ADMIN) and auth is None:
         raise ValueError(f"{ENV_DATABASE_URL} est obligatoire en mode {AuthMode.SESSION}")
-    provider = choose_provider(replay, secrets, force_replay=profile is Profile.EVAL)
+    provider = choose_provider(
+        replay, secrets, force_replay=profile is Profile.EVAL, catalog=catalog
+    )
     raw_logs = InMemoryRawLogStore()
     # 4. Services du cœur
     gateway = build_gateway(
