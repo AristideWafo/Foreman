@@ -1,6 +1,7 @@
 """Adaptateurs simulés : idempotence, concurrence, état inspectable, conformité au catalogue."""
 
 import asyncio
+import os
 from typing import Any
 
 import pytest
@@ -13,12 +14,14 @@ from foreman.core.references import resolve_params
 from foreman.core.turn import ProposePlanArguments
 from foreman.infra.file_catalog import catalog_dir_from_env, load_catalog
 from foreman.infra.replay_provider import ReplayProvider
+from foreman.infra.secrets import InMemorySecretStore, Keyring
 from foreman.integrations.dns.simulated import SimulatedDns
 from foreman.integrations.gitlab.simulated import SimulatedGitLab
 from foreman.integrations.server.simulated import SimulatedServer
 from support import user
 
 ROOT_PARENT = 1000
+NO_SECRETS = InMemorySecretStore(Keyring.of(os.urandom(32)))
 GROUP: dict[str, JsonValue] = {
     "parent_group_id": ROOT_PARENT,
     "name": "Safe Eat",
@@ -304,7 +307,7 @@ async def test_gitlab_two_server_starts_never_reuse_the_same_identifiers() -> No
     catalog = load_catalog(catalog_dir_from_env(), environment="staging")
     ids = []
     for _ in range(2):
-        gitlab = build_adapters(catalog, durable_registry=True)["gitlab"]
+        gitlab = build_adapters(catalog, NO_SECRETS, durable_registry=True)["gitlab"]
         group = await gitlab.execute("gitlab.create_group", GROUP, "k1")
         ids.append(group.output["group_id"])
     assert ids[0] != ids[1]

@@ -2,17 +2,31 @@
 
 Seul endroit où `integrations` est importé : le cœur et le moteur ne connaissent que le port
 `ToolAdapter`, et n'atteignent un adaptateur que par la `Gateway`. Cette semaine, ce sont les
-faux (GitLab, serveur, DNS) ; les vrais connecteurs les remplaceront ici et nulle part ailleurs.
+faux (serveur, DNS) ; GitLab est le vrai (`ConfiguredGitLab`), sauf en CI, EVAL ou `force_fake`.
 """
 
+import os
 import secrets
+from collections.abc import Mapping
+
+from pydantic import JsonValue
 
 from foreman.core.catalog import Catalog
-from foreman.core.connector_state import ConnectorStore
+from foreman.core.connector_state import ConnectorStore, connector_secret_id
 from foreman.core.gateway.pipeline import ToolGateway
-from foreman.core.ports import ConnectorProber, MemberStore, ToolAdapter
+from foreman.core.ports import (
+    AdapterResult,
+    ConnectorProber,
+    MemberStore,
+    PermissionMissing,
+    ProbeOutcome,
+    ToolAdapter,
+)
+from foreman.core.secrets import SecretStore
 from foreman.core.store import Stores
 from foreman.integrations.dns.simulated import SimulatedDns
+from foreman.integrations.gitlab.adapter import RealGitLab
+from foreman.integrations.gitlab.client import GitLabClient
 from foreman.integrations.gitlab.simulated import (
     FIRST_GROUP_ID,
     FIRST_PROJECT_ID,
@@ -26,16 +40,56 @@ from foreman.integrations.server.simulated import SimulatedServer
 ID_SPACE = 2_000_000_000
 
 
-def build_adapters(catalog: Catalog, *, durable_registry: bool = False) -> dict[str, ToolAdapter]:
-    """Un adaptateur par connecteur, configuré depuis les référentiels du catalogue."""
+WRITE_TOOLS = frozenset({"gitlab.create_group", "gitlab.create_project"})
+
+
+class ConfiguredGitLab:
+    """Le vrai GitLab, sans repli : le faux ne sert que pour la CI, EVAL ou `force_fake`.
+
+    Sans jeton, les lectures et les sondes échouent en `PermissionMissing` (le jeton est relu à
+    chaque appel, la page d'admin peut le changer en vol). Une écriture sans jeton d'écriture est
+    refusée de même. Une erreur du vrai ne retombe jamais sur le faux.
+    """
+
+    def __init__(self, real: RealGitLab, store: SecretStore) -> None:
+        self._real = real
+        self._secrets = store
+
+    async def execute(
+        self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str
+    ) -> AdapterResult:
+        if tool in WRITE_TOOLS and not await self._secrets.exists(
+            connector_secret_id("gitlab", "write")
+        ):
+            raise PermissionMissing("gitlab", "write")
+        return await self._real.execute(tool, params, idempotency_key)
+
+    async def probe(self, token: str, name: str, call: str) -> ProbeOutcome:
+        return await self._real.probe(token, name, call)  # jeton absent : droit manquant
+
+
+def build_adapters(
+    catalog: Catalog,
+    store: SecretStore,
+    *,
+    durable_registry: bool = False,
+    force_fake: bool = False,
+) -> dict[str, ToolAdapter]:
+    """Un adaptateur par connecteur, configuré depuis les référentiels du catalogue.
+
+    `force_fake` (profil EVAL) et la variable `CI` imposent toujours le faux GitLab."""
+    fake = SimulatedGitLab.from_referentiel(
+        catalog.referentiels["gitlab-groups"].data,
+        first_group_id=FIRST_GROUP_ID + (secrets.randbelow(ID_SPACE) if durable_registry else 0),
+        first_project_id=FIRST_PROJECT_ID
+        + (secrets.randbelow(ID_SPACE) if durable_registry else 0),
+    )
+    gitlab: ToolAdapter = fake
+    if not (force_fake or os.environ.get("CI")):
+        real = RealGitLab(GitLabClient(store))
+        gitlab = ConfiguredGitLab(real, store)
     return {
-        "gitlab": SimulatedGitLab.from_referentiel(
-            catalog.referentiels["gitlab-groups"].data,
-            first_group_id=FIRST_GROUP_ID
-            + (secrets.randbelow(ID_SPACE) if durable_registry else 0),
-            first_project_id=FIRST_PROJECT_ID
-            + (secrets.randbelow(ID_SPACE) if durable_registry else 0),
-        ),
+        "gitlab": gitlab,
         "server": SimulatedServer(),
         "dns": SimulatedDns.from_referentiel(catalog.referentiels["infra-staging"].data),
     }
@@ -45,11 +99,15 @@ def build_gateway(
     catalog: Catalog,
     stores: Stores,
     members: MemberStore,
+    store: SecretStore,
     *,
     durable_registry: bool = False,
     connector_store: ConnectorStore | None = None,
+    force_fake: bool = False,
 ) -> ToolGateway:
-    adapters = build_adapters(catalog, durable_registry=durable_registry)
+    adapters = build_adapters(
+        catalog, store, durable_registry=durable_registry, force_fake=force_fake
+    )
     return ToolGateway(
         catalog=catalog,
         stores=stores,

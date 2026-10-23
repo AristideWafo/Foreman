@@ -208,8 +208,10 @@ def configure(profile: Profile) -> App:
         catalog,
         stores,
         members,
+        secrets,
         durable_registry=persistence == "postgres",
         connector_store=connectors,
+        force_fake=profile is Profile.EVAL,
     )
     return App(
         profile=profile,

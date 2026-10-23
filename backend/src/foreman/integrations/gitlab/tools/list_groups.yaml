@@ -3,7 +3,7 @@ version: 1.0.0
 class: read
 reversibility: not_applicable
 connector: gitlab
-description: "Liste les groupes GitLab (sous un groupe parent, ou ceux de la plateforme), 20 par page."
+description: "Liste les groupes GitLab (sous un groupe parent, ou ceux de la plateforme), 10 par page."
 input:
   type: object
   properties:

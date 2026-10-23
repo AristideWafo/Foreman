@@ -335,6 +335,11 @@ class ToolGateway:
             raise _Refusal("unknown_tool")
         if tool.tool_class != "read":  # AVANT la matrice : le chat ne lance aucune écriture
             raise _Refusal("policy_denied")
+        connector = self._catalog.connectors.get(tool.connector)
+        if (
+            connector is None or connector.availability != "available"
+        ):  # `soon` : invisible du modèle
+            raise _Refusal("policy_denied")
         if await self._probes.blocks(tool):
             raise _Refusal("permission_missing")
         if not self._validators[tool.tool].is_valid(call.params):

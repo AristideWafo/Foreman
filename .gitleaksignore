@@ -1,2 +1,4 @@
 # Faux jeton de test (glpat- + x*20) dans un test, commit 0f11a4f ; aucun secret reel
 0f11a4fc3a6023dbe3c0f6a2e45d54272f72a949:backend/tests/test_llm_provider.py:gitlab-pat:146
+# Faux PEM de test (commit a84e364, depuis scindé en deux morceaux)
+a84e3649f110e3954106d2890206e0e1eabc0b40:backend/tests/test_gitlab_real.py:private-key:141

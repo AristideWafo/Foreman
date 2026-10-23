@@ -3,7 +3,7 @@ version: 1.0.0
 class: read
 reversibility: not_applicable
 connector: gitlab
-description: "Liste les pipelines d'un projet GitLab, filtrables par branche et statut, 20 par page."
+description: "Liste les pipelines d'un projet GitLab, filtrables par branche et statut, 10 par page."
 input:
   type: object
   required: [project_id]
