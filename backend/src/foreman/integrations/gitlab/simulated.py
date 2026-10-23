@@ -142,7 +142,7 @@ class SimulatedGitLab:
     async def probe(self, token: str, name: str, call: str) -> ProbeOutcome:
         """Faux : tous les droits déclarés sont présents (et seulement eux), aucun état touché."""
         scopes = {"read": frozenset({"read_api"}), "write": frozenset({"api"})}.get(token)
-        return ProbeOutcome(ok=True, scopes=scopes or frozenset(), observed={"access_level": 50})
+        return ProbeOutcome(ok=True, scopes=scopes or frozenset(), observed={"usable": 1})
 
     async def execute(
         self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str

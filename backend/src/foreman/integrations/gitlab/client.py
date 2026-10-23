@@ -52,6 +52,21 @@ class GitLabClient:
         tokens: Sequence[str] = TOKEN_NAMES,
     ) -> tuple[JsonValue, int | None]:
         """GET JSON avec le premier jeton présent parmi `tokens` ; renvoie (corps, suite)."""
+        return await self._request("GET", path, params, None, tokens)
+
+    async def post(self, path: str, body: Mapping[str, JsonValue]) -> JsonValue:
+        """POST JSON, jeton `write` SEUL (jamais de repli sur `read`) ; 200/201 attendus."""
+        data, _ = await self._request("POST", path, None, body, ("write",))
+        return data
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        params: Mapping[str, str | int] | None,
+        body_in: Mapping[str, JsonValue] | None,
+        tokens: Sequence[str],
+    ) -> tuple[JsonValue, int | None]:
         token = await self._token(tokens)
         body = bytearray()
         try:
@@ -60,9 +75,10 @@ class GitLabClient:
                     transport=self._transport, follow_redirects=False, timeout=TIMEOUT_S
                 ) as http,
                 http.stream(
-                    "GET",
+                    method,
                     BASE_URL + path,
                     params=dict(params or {}),
+                    json=None if body_in is None else dict(body_in),
                     headers={"PRIVATE-TOKEN": token, "Accept": "application/json"},
                 ) as response,
             ):
@@ -73,7 +89,7 @@ class GitLabClient:
                     raise gitlab_error("not_found")
                 if status == 429:
                     raise gitlab_error("rate_limited")
-                if status != 200:
+                if status not in (200, 201):
                     raise gitlab_error("gitlab_error")
                 async for chunk in response.aiter_bytes():
                     body += chunk

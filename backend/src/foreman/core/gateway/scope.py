@@ -1,7 +1,7 @@
 """Périmètre d'un appel : où l'outil a le droit d'agir.
 
 - création : le parent est une racine déclarée par un référentiel, ou une ressource du registre
-  DU PROJET ;
+  DU PROJET ; exception GitLab : tout groupe (entier > 0), l'adaptateur vérifiant le rôle Owner ;
 - mise à jour : la cible est une ressource du registre du projet (de la même famille que l'outil) ;
 - lecture : pas de contrainte de registre.
 
@@ -20,28 +20,27 @@ from foreman.core.catalog import Catalog, ToolDefinition
 from foreman.core.store import ResourceRegistry
 
 
-def _gitlab_roots(catalog: Catalog) -> frozenset[str]:
-    ref = catalog.referentiels.get("gitlab-groups")
-    root = ref.data.get("root_group") if ref is not None else None
-    root_id = root.get("id") if isinstance(root, dict) else None
-    return frozenset({str(root_id)}) if isinstance(root_id, int) else frozenset()
-
-
 def _environment_roots(catalog: Catalog) -> frozenset[str]:
     ref = catalog.referentiels.get("environments")
     environments = ref.data.get("environments") if ref is not None else None
     return frozenset(environments) if isinstance(environments, dict) else frozenset()
 
 
+def _no_roots(catalog: Catalog) -> frozenset[str]:
+    return frozenset()
+
+
 @dataclass(frozen=True, slots=True)
 class ParentKind:
     resource_type: str | None  # famille de registre des parents ; None : seules les racines
     roots: Callable[[Catalog], frozenset[str]]
+    any_id: bool = False  # tout entier > 0 ; le droit est contrôlé par l'adaptateur
 
 
 # (connecteur, paramètre parent) -> d'où vient le parent
 PARENTS: Final[Mapping[tuple[str, str], ParentKind]] = {
-    ("gitlab", "parent_group_id"): ParentKind("gitlab_group", _gitlab_roots),
+    # Décision propriétaire : plus de racine fixe ; l'adaptateur exige Owner du parent à l'appel.
+    ("gitlab", "parent_group_id"): ParentKind("gitlab_group", _no_roots, any_id=True),
     ("server", "environment"): ParentKind(None, _environment_roots),
 }
 
@@ -94,6 +93,10 @@ async def in_scope(
         parent = _identifier(params.get(scope.parent or ""))
         if kind is None or parent is None:
             return False
+        if kind.any_id:
+            if not (parent.isdigit() and int(parent) > 0):
+                return False
+            return not await _owned_by_another_project(registry, project_id, tool, params)
         in_roots = parent in kind.roots(catalog)
         if not in_roots and not (
             kind.resource_type is not None
