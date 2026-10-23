@@ -7,6 +7,7 @@ variables, ...) est ignoré. Pagination imposée : `per_page=20`, `page` de 1 à
 import base64
 import binascii
 import fnmatch
+import json
 import re
 from collections.abc import Callable, Mapping
 from typing import Final
@@ -14,15 +15,32 @@ from urllib.parse import parse_qsl, quote, urlsplit
 
 from pydantic import JsonValue
 
-from foreman.core.gateway.redact import mask_text
 from foreman.core.ports import AdapterError, AdapterResult, PermissionMissing, ProbeOutcome
 from foreman.integrations.gitlab.client import GitLabClient, gitlab_error
 
-PER_PAGE: Final = 20
+PER_PAGE: Final = 10  # la gateway borne une sortie à 4 Kio
 MAX_PAGE: Final = 10
 MAX_FILE_BYTES: Final = 64 * 1024
-MAX_CONTENT_CHARS: Final = 3000
-_FORBIDDEN_FILES: Final = (".env", ".env.*", "*.pem", "*.key", "id_rsa*")
+MAX_CONTENT_CHARS: Final = 480  # la gateway coupe toute chaîne à 500 caractères
+MAX_TITLE: Final = 80
+MAX_LIST_BYTES: Final = 3500  # sous les 4 Kio de la gateway (`MAX_OUTPUT_BYTES`)
+_FORBIDDEN_FILES: Final = (
+    ".env",
+    ".env.*",
+    "*.pem",
+    "*.key",
+    "id_rsa*",
+    "id_ed25519*",
+    "id_ecdsa*",
+    "*.p12",
+    "*.pfx",
+    ".npmrc",
+    ".pypirc",
+    ".netrc",
+    ".git-credentials",
+    "*.tfstate",
+    "*.tfvars",
+)
 _STATES: Final = ("opened", "closed", "merged", "all")
 _PLACEHOLDER: Final = re.compile(r"\{(root_id|user_id)\}")
 
@@ -82,18 +100,18 @@ def _text(value: JsonValue, limit: int) -> str:
 
 def _author(item: Obj) -> str:
     author = item.get("author")
-    return _text(author.get("username"), 100) if isinstance(author, dict) else ""
+    return _text(author.get("username"), 40) if isinstance(author, dict) else ""
 
 
 def _labels(item: Obj) -> list[JsonValue]:
     labels = item.get("labels")
-    return [_text(x, 50) for x in labels[:20]] if isinstance(labels, list) else []
+    return [_text(x, 20) for x in labels[:5]] if isinstance(labels, list) else []
 
 
 def _issue(item: Obj) -> dict[str, JsonValue]:
     return {
         "iid": item.get("iid"),
-        "title": _text(item.get("title"), 200),
+        "title": _text(item.get("title"), MAX_TITLE),
         "state": item.get("state"),
         "author": _author(item),
         "labels": _labels(item),
@@ -104,7 +122,7 @@ def _issue(item: Obj) -> dict[str, JsonValue]:
 def _mr(item: Obj) -> dict[str, JsonValue]:
     return {
         **_pick(item, ("iid",)),
-        "title": _text(item.get("title"), 200),
+        "title": _text(item.get("title"), MAX_TITLE),
         **_pick(item, ("state", "source_branch", "target_branch")),
         "author": _author(item),
         "web_url": item.get("web_url"),
@@ -220,6 +238,10 @@ class RealGitLab:
 
     @staticmethod
     def _wrap(key: str, items: list[dict[str, JsonValue]], next_page: int | None) -> AdapterResult:
+        # shortcut: filet de sécurité, les derniers éléments sont écartés (sans le dire) si la
+        # page dépasse le budget ; à revoir si le schéma de sortie gagne un indicateur.
+        while len(items) > 1 and len(json.dumps(items)) > MAX_LIST_BYTES:
+            items = items[:-1]
         output: dict[str, JsonValue] = {key: list(items)}
         if next_page is not None:  # absent en dernière page, comme dans le faux
             output["next_page"] = next_page
@@ -255,16 +277,15 @@ class RealGitLab:
             text = raw.decode("utf-8")
         except (binascii.Error, ValueError):
             raise AdapterError("fichier binaire ou trop volumineux") from None
-        # mask_text borne ses entrées (2000 car.) : on masque ligne par ligne, puis on coupe.
-        masked = "\n".join(mask_text(line) for line in text.splitlines())
+        # Pas de masquage ligne à ligne ici : il effacerait le marqueur `BEGIN ... PRIVATE KEY`
+        # dont la gateway a besoin pour masquer le corps de la clé. La gateway masque la chaîne.
         return AdapterResult(
             output={
                 "path": path,
                 "ref": ref,
                 "size": size,
-                "content": masked[:MAX_CONTENT_CHARS],
-                "truncated": len(text)
-                > MAX_CONTENT_CHARS,  # mask_text coupe aussi les longues lignes
+                "content": text[:MAX_CONTENT_CHARS],
+                "truncated": len(text) > MAX_CONTENT_CHARS,
             }
         )
 

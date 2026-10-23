@@ -2,7 +2,7 @@
 
 Seul endroit où `integrations` est importé : le cœur et le moteur ne connaissent que le port
 `ToolAdapter`, et n'atteignent un adaptateur que par la `Gateway`. Cette semaine, ce sont les
-faux (serveur, DNS) ; GitLab bascule sur le vrai dès qu'un jeton est saisi (`ConfiguredGitLab`).
+faux (serveur, DNS) ; GitLab est le vrai (`ConfiguredGitLab`), sauf en CI, EVAL ou `force_fake`.
 """
 
 import os
@@ -45,39 +45,28 @@ WRITE_TOOLS = frozenset({"gitlab.create_group", "gitlab.create_project"})
 
 
 class ConfiguredGitLab:
-    """Relit à CHAQUE appel si un jeton GitLab existe (la page d'admin peut le changer en vol).
+    """Le vrai GitLab, sans repli : le faux ne sert que pour la CI, EVAL ou `force_fake`.
 
-    Au moins un jeton : le vrai, pour les lectures ET les écritures (une écriture sans jeton
-    d'écriture est refusée, jamais confiée au faux). Aucun jeton : le faux. Une erreur du vrai ne
-    retombe jamais sur le faux.
+    Sans jeton, les lectures et les sondes échouent en `PermissionMissing` (le jeton est relu à
+    chaque appel, la page d'admin peut le changer en vol). Une écriture sans jeton d'écriture est
+    refusée de même. Une erreur du vrai ne retombe jamais sur le faux.
     """
 
-    def __init__(self, fake: SimulatedGitLab, real: RealGitLab, store: SecretStore) -> None:
-        self._fake = fake
+    def __init__(self, real: RealGitLab, store: SecretStore) -> None:
         self._real = real
         self._secrets = store
-        self.epoch = fake.epoch
-
-    async def _tokens(self) -> tuple[bool, bool]:
-        read = await self._secrets.exists(connector_secret_id("gitlab", "read"))
-        write = await self._secrets.exists(connector_secret_id("gitlab", "write"))
-        return read, write
 
     async def execute(
         self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str
     ) -> AdapterResult:
-        read, write = await self._tokens()
-        if not (read or write):
-            return await self._fake.execute(tool, params, idempotency_key)
-        if tool in WRITE_TOOLS and not write:
+        if tool in WRITE_TOOLS and not await self._secrets.exists(
+            connector_secret_id("gitlab", "write")
+        ):
             raise PermissionMissing("gitlab", "write")
         return await self._real.execute(tool, params, idempotency_key)
 
     async def probe(self, token: str, name: str, call: str) -> ProbeOutcome:
-        read, write = await self._tokens()
-        if not (read or write):
-            return await self._fake.probe(token, name, call)
-        return await self._real.probe(token, name, call)  # jeton manquant : droit manquant
+        return await self._real.probe(token, name, call)  # jeton absent : droit manquant
 
 
 def _root_group_id(catalog: Catalog) -> int:
@@ -107,7 +96,7 @@ def build_adapters(
     gitlab: ToolAdapter = fake
     if not (force_fake or os.environ.get("CI")):
         real = RealGitLab(GitLabClient(store), _root_group_id(catalog))
-        gitlab = ConfiguredGitLab(fake, real, store)
+        gitlab = ConfiguredGitLab(real, store)
     return {
         "gitlab": gitlab,
         "server": SimulatedServer(),
