@@ -22,7 +22,7 @@ RECORDINGS_DIR: Final = "recordings"
 S01_RECORDING: Final = "s01.yaml"
 # Enregistrements chargés par `from_dir`, dans l'ordre. Le premier est obligatoire ; les suivants
 # sont facultatifs tant que leur scénario n'est pas livré (S2 : semaine 3, PR suivante).
-SCENARIO_RECORDINGS: Final = (S01_RECORDING, "s02.yaml", "s10.yaml")
+SCENARIO_RECORDINGS: Final = (S01_RECORDING, "s02.yaml", "s10.yaml", "s13.yaml")
 
 
 class RecordingNotFound(Exception):

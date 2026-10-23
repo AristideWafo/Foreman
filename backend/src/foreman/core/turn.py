@@ -38,8 +38,10 @@ from foreman.core.events import (
     MessageData,
     TurnStatusData,
 )
+from foreman.core.gateway.errors import CallDenied, CallFailed
+from foreman.core.gateway.port import Gateway, ReadCall
 from foreman.core.gateway.redact import PRE_MASK_CHARS, mask_text
-from foreman.core.planning import Draft, DraftStep, InvalidPlan, Planner
+from foreman.core.planning import Draft, DraftStep, InvalidPlan, Planner, canonical_json
 from foreman.core.ports import (
     ConversationMessage,
     EventLog,
@@ -47,9 +49,10 @@ from foreman.core.ports import (
     ProjectStore,
     Provider,
     ToolCall,
+    ToolResult,
 )
 from foreman.core.pricing import ModelPrice
-from foreman.core.turn_budget import TurnLimit, TurnMeter
+from foreman.core.turn_budget import MAX_TOOL_ROUNDS, TurnLimit, TurnMeter
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,7 @@ FailureCode = Literal["internal_error", "unknown_tool", "invalid_plan", "budget_
 
 PROPOSE_PLAN = "propose_plan"
 DEFAULT_PROVIDER_TIMEOUT_S = 60.0
+MAX_READS_PER_ROUND = 3
 MAX_HISTORY_MESSAGES = 20
 MAX_HISTORY_BYTES = 16 * 1024
 
@@ -209,6 +213,7 @@ class TurnService:
         events: EventLog,
         planner: Planner,
         projects: ProjectStore,
+        gateway: Gateway,
         provider_timeout_s: float = DEFAULT_PROVIDER_TIMEOUT_S,
         prices: Mapping[str, ModelPrice] | None = None,
         clock: Callable[[], float] = time.monotonic,
@@ -217,6 +222,7 @@ class TurnService:
         self._events = events
         self._planner = planner
         self._projects = projects
+        self._gateway = gateway
         self._rules = ClarificationRules.from_catalog(planner.catalog)
         self._provider_timeout_s = provider_timeout_s
         self._prices = prices or {}
@@ -332,7 +338,7 @@ class TurnService:
         """Remet hôtes et valeurs d'origine dans la réponse (texte et arguments d'outils)."""
         text = str(aliases.restore(reply.text))
         calls = tuple(
-            ToolCall(c.name, cast(Mapping[str, object], aliases.restore(c.arguments)))
+            ToolCall(c.name, cast(Mapping[str, object], aliases.restore(c.arguments)), c.id)
             for c in reply.tool_calls
         )
         return replace(reply, text=text, tool_calls=calls)
@@ -354,39 +360,76 @@ class TurnService:
             await self._emit(project_id, turn_id, card_of(round_of(answer.question_id), updated))
         limits = self._planner.catalog.policy.budgets.per_turn
         meter = TurnMeter(limits, self._prices, self._clock)
-        if (limit := meter.admit()) is not None:
-            await self._stop(project_id, turn_id, meter, limit)
-            return
-        try:
-            # Délai explicite : sinon un fournisseur muet bloque le projet en 409 pour toujours.
-            async with asyncio.timeout(min(self._provider_timeout_s, limits.max_seconds)):
-                history, aliases = await self._history(project_id)
-                reply = self._restored(await self._provider.complete(history), aliases)
-            meter.record(reply.usage)
-        except TimeoutError:
-            if limits.max_seconds <= self._provider_timeout_s:
-                await self._stop(project_id, turn_id, meter, "duration")
+        history: list[ConversationMessage] | None = None
+        aliases = Aliases()
+        while True:
+            if (limit := meter.admit()) is not None:
+                await self._stop(project_id, turn_id, meter, limit)
                 return
-            logger.exception("provider_failed project=%s turn=%s", project_id, turn_id)
-            await self._fail(project_id, turn_id, "internal_error")
-            return
-        except Exception:
-            logger.exception("provider_failed project=%s turn=%s", project_id, turn_id)
-            await self._fail(project_id, turn_id, "internal_error")
-            return
-        # Coût visible dans les logs serveur : nombres et identifiants seulement, aucun contenu.
-        logger.info(
-            "turn_cost project=%s turn=%s model=%s tokens=%d cost_eur=%.6f",
-            project_id,
-            turn_id,
-            reply.usage.model if reply.usage else "replay",
-            meter.tokens,
-            meter.cost,
-        )
-        if (limit := meter.over()) is not None:
-            # Le coût est engagé mais rien de ce que la réponse demande n'est exécuté.
-            await self._stop(project_id, turn_id, meter, limit)
-            return
+            try:
+                # Délai explicite : sinon un fournisseur muet bloque le projet en 409 pour toujours.
+                async with asyncio.timeout(min(self._provider_timeout_s, limits.max_seconds)):
+                    if history is None:
+                        history, aliases = await self._history(project_id)
+                    raw = await self._provider.complete(history)
+                    raw = replace(
+                        raw,
+                        tool_calls=tuple(
+                            c if c.id else replace(c, id=f"call_{meter.tool_rounds}_{i}")
+                            for i, c in enumerate(raw.tool_calls)
+                        ),
+                    )
+                    reply = self._restored(raw, aliases)
+                meter.record(reply.usage)
+            except TimeoutError:
+                if limits.max_seconds <= self._provider_timeout_s:
+                    await self._stop(project_id, turn_id, meter, "duration")
+                    return
+                logger.exception("provider_failed project=%s turn=%s", project_id, turn_id)
+                await self._fail(project_id, turn_id, "internal_error")
+                return
+            except Exception:
+                logger.exception("provider_failed project=%s turn=%s", project_id, turn_id)
+                await self._fail(project_id, turn_id, "internal_error")
+                return
+            # Coût visible dans les logs serveur : nombres et identifiants seulement, aucun contenu.
+            logger.info(
+                "turn_cost project=%s turn=%s model=%s tokens=%d cost_eur=%.6f",
+                project_id,
+                turn_id,
+                reply.usage.model if reply.usage else "replay",
+                meter.tokens,
+                meter.cost,
+            )
+            if (limit := meter.over()) is not None:
+                # Le coût est engagé mais rien de ce que la réponse demande n'est exécuté.
+                await self._stop(project_id, turn_id, meter, limit)
+                return
+            if not self._only_reads(reply.tool_calls):
+                break
+            if meter.tool_rounds >= MAX_TOOL_ROUNDS:
+                await self._stop(project_id, turn_id, meter, "tool_rounds")
+                return
+            meter.tool_rounds += 1
+            results = await self._read(
+                request.user_id, project_id, turn_id, reply.tool_calls, aliases
+            )
+            # En mémoire seulement : le journal d'événements ne voit ni appels ni résultats.
+            history.append(
+                ConversationMessage(
+                    "assistant",
+                    aliases.apply(mask_for_model(raw.text)),
+                    tool_calls=raw.tool_calls,
+                )
+            )
+            payload = [
+                {"call_id": r.call_id, "is_error": r.is_error, "text": r.text} for r in results
+            ]
+            history.append(
+                ConversationMessage(
+                    "user", canonical_json(payload).decode("utf-8"), tool_results=results
+                )
+            )
         await self._emit(project_id, turn_id, MessageData(role="assistant", text=reply.text))
         for call in reply.tool_calls:
             failure = await self._apply(request.user_id, project_id, turn_id, call)
@@ -394,6 +437,45 @@ class TurnService:
                 await self._fail(project_id, turn_id, failure)
                 return
         await self._emit(project_id, turn_id, TurnStatusData(status="completed"))
+
+    def _only_reads(self, calls: Sequence[ToolCall]) -> bool:
+        tools = self._planner.catalog.tools
+        return bool(calls) and all(
+            (t := tools.get(c.name)) is not None and t.tool_class == "read" for c in calls
+        )
+
+    async def _read(
+        self,
+        user_id: UUID,
+        project_id: UUID,
+        turn_id: UUID,
+        calls: Sequence[ToolCall],
+        aliases: Aliases,
+    ) -> tuple[ToolResult, ...]:
+        """Lectures via la gateway (seule voie) ; un refus ou un échec devient un résultat d'erreur
+        à code fermé, le tour continue. Le contenu lu est non fiable : masqué puis aliasé."""
+        results: list[ToolResult] = []
+        for i, call in enumerate(calls):
+            error: str | None = None
+            output: object = None
+            if i >= MAX_READS_PER_ROUND:
+                error = "limit_reached"
+            else:
+                try:
+                    params = cast(Mapping[str, JsonValue], call.arguments)
+                    output = await self._gateway.read(
+                        ReadCall(project_id, user_id, call.name, params)
+                    )
+                except (CallDenied, CallFailed) as refused:
+                    error = refused.code
+                    logger.warning(
+                        "read_refused project=%s turn=%s code=%s", project_id, turn_id, error
+                    )
+            raw = canonical_json({"error": error} if error else output).decode("utf-8")
+            results.append(
+                ToolResult(call.id, aliases.apply(mask_for_model(raw)), error is not None)
+            )
+        return tuple(results)
 
     async def _apply(
         self, user_id: UUID, project_id: UUID, turn_id: UUID, call: ToolCall

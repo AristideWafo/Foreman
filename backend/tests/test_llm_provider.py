@@ -20,7 +20,7 @@ from foreman.infra.llm_settings import SecretLlmSettings
 from foreman.infra.secrets import InMemorySecretStore, Keyring
 from foreman.integrations.anthropic.models import load_connector
 from foreman.integrations.anthropic.provider import AnthropicProvider
-from support import make_planner
+from support import NoReads, make_planner
 
 API_KEY = "sk-ant-api03-cle-de-test-0123456789abcdef"
 PASSWORD = "hunter2-tres-secret"  # noqa: S105
@@ -53,7 +53,7 @@ async def configured_store() -> InMemorySecretStore:
 
 async def run_turn(provider: object, message: str) -> list[dict[str, object]]:
     log, project_id = InMemoryEventLog(), uuid4()
-    service = TurnService(provider, log, make_planner(), InMemoryProjectStore())  # type: ignore[arg-type]
+    service = TurnService(provider, log, make_planner(), InMemoryProjectStore(), NoReads())  # type: ignore[arg-type]
     await service.run(TurnRequest(DEV_USER_ID, project_id, message), service.begin(project_id))
     return [e.model_dump(mode="json") for e in await log.read_after(project_id, 0)]
 

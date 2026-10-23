@@ -23,6 +23,7 @@ from foreman.core.store import DEV_USER_ID
 from foreman.core.turn import TurnRequest, TurnService
 from foreman.infra.file_catalog import load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
+from support import NoReads
 
 CATALOG_ROOT = Path(__file__).resolve().parents[2] / "catalog"
 PROJECT = UUID("00000000-0000-4000-8000-000000000001")
@@ -131,6 +132,7 @@ async def turn(arguments: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[UU
         log,
         Planner(catalog, stores.plans, stores.registry),
         InMemoryProjectStore(),
+        NoReads(),
     )
     project_id = uuid4()
     await service.run(TurnRequest(DEV_USER_ID, project_id, "salut"), service.begin(project_id))

@@ -13,7 +13,8 @@ from typing import Literal
 from foreman.core.catalog import TurnBudget
 from foreman.core.pricing import ModelPrice, Usage, cost_eur
 
-TurnLimit = Literal["calls", "tokens", "cost", "duration"]
+TurnLimit = Literal["calls", "tokens", "cost", "duration", "tool_rounds"]
+MAX_TOOL_ROUNDS = 5  # tours d'outils de lecture par tour de l'utilisateur
 
 
 class UnpricedModel(Exception):
@@ -32,6 +33,7 @@ class TurnMeter:
         self._clock = clock
         self._started = clock()
         self.calls = 0
+        self.tool_rounds = 0
         self.tokens = 0
         self.cost = Decimal(0)
 
@@ -71,6 +73,7 @@ class TurnMeter:
             "calls": f"appels au modèle {self.calls} sur {limits.max_model_calls}",
             "tokens": f"jetons {self.tokens} sur {limits.max_tokens}",
             "cost": f"coût {self.cost:.4f} € sur {limits.max_cost_eur} €",
+            "tool_rounds": f"appels d'outils {self.tool_rounds} sur {MAX_TOOL_ROUNDS}",
             "duration": f"durée dépassée ({limits.max_seconds} s)",
         }[limit]
         return f"Budget du tour dépassé ({used}). L'agent s'arrête sans autre action."

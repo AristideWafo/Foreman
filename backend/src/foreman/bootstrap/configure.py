@@ -218,6 +218,7 @@ def configure(profile: Profile) -> App:
             events,
             Planner(catalog, stores.plans, stores.registry),
             projects,
+            gateway,
             prices=model_prices(),
         ),
         stores=stores,

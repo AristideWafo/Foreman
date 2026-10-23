@@ -16,6 +16,7 @@ from foreman.core.turn import TurnRequest, TurnService
 from foreman.core.turn_budget import TurnMeter
 from foreman.infra.file_catalog import load_catalog
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore, in_memory_stores
+from support import NoReads
 
 MODEL = "modele-test"
 PRICES = {MODEL: ModelPrice(input_usd=Decimal(3), output_usd=Decimal(10))}
@@ -53,7 +54,7 @@ async def play(provider: CostlyProvider, clock: ManualClock, limits: TurnBudget)
     planner = Planner(catalog, stores.plans, stores.registry)
     log, project_id = InMemoryEventLog(), uuid4()
     service = TurnService(
-        provider, log, planner, InMemoryProjectStore(), prices=PRICES, clock=clock
+        provider, log, planner, InMemoryProjectStore(), NoReads(), prices=PRICES, clock=clock
     )
     await service.run(
         TurnRequest(user_id=DEV_USER_ID, project_id=project_id, message="salut"),

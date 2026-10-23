@@ -20,7 +20,7 @@ from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
 from foreman.infra.replay_provider import ReplayProvider
 from foreman.surfaces.web.app import create_app
-from support import make_planner
+from support import NoReads, make_planner
 
 TIMEOUT = 10  # filet de sécurité : jamais atteint quand tout fonctionne
 
@@ -54,7 +54,7 @@ async def serve(
         queue_size=queue_size or 100, max_subscribers_per_project=max_subscribers_per_project
     )
     projects = InMemoryProjectStore()
-    turns = TurnService(provider, log, make_planner(), projects)
+    turns = TurnService(provider, log, make_planner(), projects, NoReads())
     app = create_app(App(profile=Profile.WEB, projects=projects, events=log, turns=turns))
     # Socket réservé avant le démarrage : les connexions attendent dans le backlog, sans sondage.
     sock = socket.socket()
