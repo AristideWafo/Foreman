@@ -21,6 +21,12 @@ def catalog_dir_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def ci_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Comme en CI : GitLab est le faux (aucun appel réseau, aucun jeton requis)."""
+    monkeypatch.setenv("CI", "1")
+
+
+@pytest.fixture(autouse=True)
 def secrets_key_file_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """La clé maître est créée au démarrage : jamais dans le chemin système par défaut."""
     monkeypatch.setenv(ENV_SECRETS_KEY_FILE, os.fspath(tmp_path / "secrets" / "master.key"))

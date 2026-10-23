@@ -15,7 +15,7 @@ DenialCode = Literal[
     "plan_hash_mismatch",
     "call_differs_from_step",  # l'appel n'est pas celui de l'étape `seq` du plan approuvé
     "environment_mismatch",  # params.environment != environnement du plan
-    "scope_violation",  # cible hors du registre du projet, parent hors racines/registre (GitLab : id non entier > 0)
+    "scope_violation",  # cible ou parent hors du registre du projet (ou d'un autre projet)
     "budget_exceeded",
     "stale_lease",  # le bail n'est plus celui de l'appelant
     "step_not_ready",  # étape non réservée (`running`) ou étape antérieure non réussie

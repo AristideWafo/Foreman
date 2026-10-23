@@ -8,7 +8,7 @@ version: 1
 # Scopes déduits : `read_api` = « read access to the API » (sondes GET /groups) ; `api` = « complete read and
 # write access to the API » (POST de création de groupe et de dépôt). `read_repository`/`write_repository` ne
 # donnent PAS accès à l'API REST. NON confirmé dans la doc : le rôle minimal pour créer un dépôt dans un groupe
-# (l'adaptateur exige Owner, access_level >= 40, sur le groupe parent À CHAQUE création).
+# (l'adaptateur exige Owner, access_level >= 50, sur le groupe parent À CHAQUE création).
 # Sondeur (RealGitLab.probe) : les scopes viennent de GET /personal_access_tokens/self (réponse : champs
 # `scopes` et `user_id`, https://docs.gitlab.com/api/personal_access_tokens/) ; la sonde d'écriture
 # n'a pas de groupe racine : elle valide le jeton (`usable` = 1 si actif, non révoqué, scope `api` présent).
