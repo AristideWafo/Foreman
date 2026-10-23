@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.21.0](https://github.com/AristideWafo/Foreman/compare/v0.20.0...v0.21.0) (2026-10-23)
+
+
+### Features
+
+* **chat:** boucle d'outils de lecture dans le tour (5 tours max, S13 rejoué) ([23124d8](https://github.com/AristideWafo/Foreman/commit/23124d8e5ad55d7f7ce4e07cb97138e3258f999a))
+* **chat:** boucle d'outils de lecture GitLab (PR3/7) ([ec4084e](https://github.com/AristideWafo/Foreman/commit/ec4084e748925e15947af32df4ae68fb5d810678))
+* **chat:** événement tool_call dans la trace du tour ([6185931](https://github.com/AristideWafo/Foreman/commit/6185931faeb0d44251d590b28bcf6431170bba96))
+* **chat:** événement tool_call dans la trace du tour (lecture sans paramètres ni contenu) ([f1f5773](https://github.com/AristideWafo/Foreman/commit/f1f57739f9d06a60345f7c9d7f953e23850040c2))
+* **chat:** le vrai modèle voit les outils de lecture du catalogue ([0f11a4f](https://github.com/AristideWafo/Foreman/commit/0f11a4fc3a6023dbe3c0f6a2e45d54272f72a949))
+* **chat:** provider Anthropic avec outils de lecture du catalogue (4/7) ([55e64d0](https://github.com/AristideWafo/Foreman/commit/55e64d0bc517fbdd50ae9cea1114af5e02fd808b))
+* **gateway:** lectures GitLab directes depuis le chat (PR1/7) ([ca7fc7d](https://github.com/AristideWafo/Foreman/commit/ca7fc7d89c39c4431e23426601c74fa84329e1f5))
+* **gateway:** lectures GitLab directes depuis le chat via Gateway.read ([4e9fbc3](https://github.com/AristideWafo/Foreman/commit/4e9fbc3fdc961e8bcf8e8876a419ce838d8c8a49))
+* **gitlab:** client et adaptateur réels en lecture, sondeur et choix faux/vrai ([981f44c](https://github.com/AristideWafo/Foreman/commit/981f44c69bbbb3f14be6056a48d4e6cb69bf7531))
+* **gitlab:** créations de groupes et dépôts sans racine fixe (PR5/7 Chat GitLab) ([9b0eca6](https://github.com/AristideWafo/Foreman/commit/9b0eca6b175cf798b68bde8bb2fe65cf1d46b73c))
+* **gitlab:** créations de groupes et dépôts sans racine fixe, Owner vérifié à l'appel ([4b6f7fb](https://github.com/AristideWafo/Foreman/commit/4b6f7fb93096604941adfc874b99ad56fa43a90c))
+* **gitlab:** vrai backend GitLab en lecture (PR2/7 Chat GitLab) ([dcbffd9](https://github.com/AristideWafo/Foreman/commit/dcbffd9f4b2c5181de65b7f0de47fb41803c65e2))
+
+
+### Bug Fixes
+
+* **chat:** échéance du tour partagée par les appels au modèle et les lectures ([ef49fe6](https://github.com/AristideWafo/Foreman/commit/ef49fe6ddad5f2a43ad2b3bc1438b4817388e9f9))
+* **chat:** parent désigné par l'utilisateur, jeton de test non détectable ([388de7a](https://github.com/AristideWafo/Foreman/commit/388de7aee40c4b59021fed568bbb7dd69065b502))
+* **gateway:** Gateway.read refuse les connecteurs « soon » ([2878e41](https://github.com/AristideWafo/Foreman/commit/2878e4151593bddab6af57c592e0e07f58931d5c))
+* **gateway:** parent GitLab d'un autre projet refusé, seuil Owner à 50 ([5dc90c7](https://github.com/AristideWafo/Foreman/commit/5dc90c7a8a86b8dbdc3b6808d17f17ec6c6d5d75))
+* **gitlab:** aligne l'adaptateur réel sur les schémas des outils de lecture ([fe0ff2e](https://github.com/AristideWafo/Foreman/commit/fe0ff2eb391b5a28fdc1f55b83b519a0dbf1e3ce))
+* **gitlab:** lecture de fichier masquée par la gateway, pages de 10, plus de repli sur le faux ([a84e364](https://github.com/AristideWafo/Foreman/commit/a84e3649f110e3954106d2890206e0e1eabc0b40))
+
 ## [0.20.0](https://github.com/AristideWafo/Foreman/compare/v0.19.0...v0.20.0) (2026-10-21)
 
 
