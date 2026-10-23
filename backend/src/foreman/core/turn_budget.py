@@ -47,6 +47,10 @@ class TurnMeter:
             return "duration"
         return None
 
+    def remaining(self) -> float:
+        """Secondes restantes au tour (jamais négatif)."""
+        return max(0.0, self._limits.max_seconds - (self._clock() - self._started))
+
     def admit(self) -> TurnLimit | None:
         """Autorise (et compte) un appel au modèle, ou renvoie la limite qui l'interdit."""
         if (limit := self.over()) is not None:
