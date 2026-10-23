@@ -45,6 +45,21 @@ def _page(params: Mapping[str, JsonValue]) -> dict[str, str | int]:
     return {"per_page": PER_PAGE, "page": page}
 
 
+def _filters(params: Mapping[str, JsonValue], *names: str) -> dict[str, str | int]:
+    """Filtres facultatifs du schéma de l'outil, transmis tels quels (chaînes bornées)."""
+    found: dict[str, str | int] = {}
+    for name in names:
+        value = params.get(name)
+        if value is None:
+            continue
+        if not isinstance(value, str) or len(value) > 255:
+            raise AdapterError("paramètre invalide")
+        if name == "state" and value not in _STATES:
+            raise AdapterError("paramètre invalide")
+        found[name] = value
+    return found
+
+
 def _list(data: JsonValue) -> list[Obj]:
     if not isinstance(data, list) or not all(isinstance(i, dict) for i in data):
         raise gitlab_error("bad_response")
@@ -133,12 +148,16 @@ class RealGitLab:
         # Lectures seules : idempotentes par nature, la clé est inutile.
         match tool:
             case "gitlab.list_groups":
+                parent = params.get("parent_group_id")
+                path = "/groups"
+                if parent is not None:
+                    path = f"/groups/{_int(params, 'parent_group_id')}/subgroups"
                 return await self._collection(
-                    "/groups",
+                    path,
                     params,
                     "groups",
                     ("id", "name", "full_path", "web_url"),
-                    {"min_access_level": 10},
+                    _filters(params, "search"),
                 )
             case "gitlab.list_projects":
                 fields = (
@@ -149,39 +168,32 @@ class RealGitLab:
                     "default_branch",
                     "last_activity_at",
                 )
-                if "group_id" in params:
-                    path = f"/groups/{_int(params, 'group_id')}/projects"
-                    return await self._collection(path, params, "projects", fields)
+                path = f"/groups/{_int(params, 'group_id')}/projects"
                 return await self._collection(
-                    "/projects", params, "projects", fields, {"membership": "true"}
+                    path, params, "projects", fields, _filters(params, "search")
                 )
             case "gitlab.get_project":
                 data, _ = await self._client.get(f"/projects/{_int(params, 'project_id')}")
                 return AdapterResult(output=_project_detail(_obj(data)))
             case "gitlab.list_branches":
-                return await self._project_list(params, "repository/branches", "branches", _branch)
+                return await self._project_list(
+                    params, "repository/branches", "branches", _branch, _filters(params, "search")
+                )
             case "gitlab.list_pipelines":
-                return await self._project_list(params, "pipelines", "pipelines", _pipeline)
+                return await self._project_list(
+                    params, "pipelines", "pipelines", _pipeline, _filters(params, "ref", "status")
+                )
             case "gitlab.list_issues":
                 return await self._project_list(
-                    params, "issues", "issues", _issue, self._state(params)
+                    params, "issues", "issues", _issue, _filters(params, "search", "state")
                 )
             case "gitlab.list_merge_requests":
                 return await self._project_list(
-                    params, "merge_requests", "merge_requests", _mr, self._state(params)
+                    params, "merge_requests", "merge_requests", _mr, _filters(params, "state")
                 )
             case "gitlab.read_file":
                 return await self._read_file(params)
         raise gitlab_error("unsupported")
-
-    @staticmethod
-    def _state(params: Mapping[str, JsonValue]) -> dict[str, str | int]:
-        state = params.get("state")
-        if state is None:
-            return {}
-        if state not in _STATES:
-            raise AdapterError("paramètre invalide")
-        return {"state": str(state)}
 
     async def _collection(
         self,
@@ -208,7 +220,10 @@ class RealGitLab:
 
     @staticmethod
     def _wrap(key: str, items: list[dict[str, JsonValue]], next_page: int | None) -> AdapterResult:
-        return AdapterResult(output={key: list(items), "next_page": next_page})
+        output: dict[str, JsonValue] = {key: list(items)}
+        if next_page is not None:  # absent en dernière page, comme dans le faux
+            output["next_page"] = next_page
+        return AdapterResult(output=output)
 
     async def _read_file(self, params: Mapping[str, JsonValue]) -> AdapterResult:
         project_id = _int(params, "project_id")
