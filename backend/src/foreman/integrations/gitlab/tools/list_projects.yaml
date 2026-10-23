@@ -3,7 +3,7 @@ version: 1.0.0
 class: read
 reversibility: not_applicable
 connector: gitlab
-description: "Liste les projets d'un groupe GitLab, 20 par page."
+description: "Liste les projets d'un groupe GitLab, 10 par page."
 input:
   type: object
   required: [group_id]

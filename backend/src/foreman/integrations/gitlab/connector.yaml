@@ -9,6 +9,11 @@ version: 1
 # write access to the API » (POST de création de groupe et de dépôt). `read_repository`/`write_repository` ne
 # donnent PAS accès à l'API REST. NON confirmé dans la doc : le rôle minimal pour créer un dépôt dans un groupe
 # (la sonde ecrire_dans_racine exige Owner, access_level >= 40).
+# Sondeur (RealGitLab.probe) : les scopes viennent de GET /personal_access_tokens/self (réponse : champs
+# `scopes` et `user_id`, https://docs.gitlab.com/api/personal_access_tokens/) ; la sonde d'écriture est
+# GET /groups/:id/members/all/:user_id (réponse : `access_level`, 50 = Owner,
+# https://docs.gitlab.com/api/group_members/). `{root_id}` = groupe racine du référentiel, `{user_id}`
+# = propriétaire du jeton. Un 404 (non membre) vaut droit manquant.
 help:
   url: https://gitlab.com/-/user_settings/personal_access_tokens
   sources:
@@ -29,13 +34,13 @@ help:
 tokens:
   read:
     label: "Lecture : inspecter groupes et projets"
-    scopes: [simulated.read]
+    scopes: [read_api]
     permissions:
       - name: read_api
         explanation: "Accès en lecture à l'API (GitLab : « Grants read access to the API for the token's scope »). Sert aux sondes qui listent les groupes."
   write:
     label: "Écriture : créer groupes et projets"
-    scopes: [simulated.write]
+    scopes: [api]
     boundary: "groupe racine de la plateforme"
     permissions:
       - name: api
@@ -53,6 +58,6 @@ tools_enabled_when:
   gitlab.read_file: [read]
 probes:
   - {name: lire_groupes, token: read, call: "GET /groups?per_page=1"}
-  - {name: ecrire_dans_racine, token: write, call: "GET /groups/{root_id}", expects: "access_level >= 40"}
+  - {name: ecrire_dans_racine, token: write, call: "GET /groups/{root_id}/members/all/{user_id}", expects: "access_level >= 40"}
 strip_from_results:
   - "variables[*].value"

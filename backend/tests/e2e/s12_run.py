@@ -49,7 +49,7 @@ class Clock:
 
 def redeploy(state: App, catalog: Catalog, clock: Callable[[], datetime]) -> App:
     """Services reconstruits sur le catalogue donné ; dépôts, journal et membres sont conservés."""
-    gateway = build_gateway(catalog, state.stores, state.members)
+    gateway = build_gateway(catalog, state.stores, state.members, state.secrets)
     provider = ReplayProvider.from_dir(catalog_dir_from_env())
     planner = Planner(catalog, state.stores.plans, state.stores.registry, clock)
     return replace(

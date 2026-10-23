@@ -3,7 +3,7 @@ version: 1.0.0
 class: read
 reversibility: not_applicable
 connector: gitlab
-description: "Lit un fichier texte d'un projet GitLab (3000 caractères au plus, tronqué au-delà). Refuse les fichiers sensibles ou binaires."
+description: "Lit un fichier texte d'un projet GitLab (480 caractères au plus, tronqué au-delà). Refuse les fichiers sensibles ou binaires."
 input:
   type: object
   required: [project_id, path]

@@ -19,7 +19,13 @@ from foreman.bootstrap.configure import App
 from foreman.bootstrap.llm import chosen_model, declared_models, probe_llm
 from foreman.core.accounts import AdminScope
 from foreman.core.catalog import ConnectorDefinition
-from foreman.core.connector_state import ConnectorState, ConnectorStatus, ConnectorStore
+from foreman.core.connector_state import (
+    CONNECTOR_TOKEN_KIND,
+    ConnectorState,
+    ConnectorStatus,
+    ConnectorStore,
+    connector_secret_id,
+)
 from foreman.core.gateway.errors import CallFailed, ProbeDenied
 from foreman.core.gateway.port import RightVerdict
 from foreman.core.gateway.probe import ProbeLimiter
@@ -52,7 +58,6 @@ log = logging.getLogger(__name__)
 LLM = "anthropic"
 LLM_TOKEN = "api_key"  # noqa: S105 - nom du jeton, pas une valeur
 LLM_DECLARED = {LLM_TOKEN: ["models.retrieve"]}
-CONNECTOR_TOKEN_KIND = "connector_token"  # noqa: S105 - type de secret, pas une valeur
 # Aide d'Anthropic : pas de connector.yaml (clé gérée par le fournisseur LLM).
 LLM_LABEL = "Clé API Anthropic"
 LLM_HELP = HelpView(
@@ -68,7 +73,7 @@ _ABSENT = ConnectorState("incomplete", (), None)
 
 
 def _secret_id(connector: str, token: str) -> str:
-    return LLM_KEY_ID if connector == LLM else f"connector.{connector}.{token}"
+    return LLM_KEY_ID if connector == LLM else connector_secret_id(connector, token)
 
 
 def _kind(connector: str) -> str:

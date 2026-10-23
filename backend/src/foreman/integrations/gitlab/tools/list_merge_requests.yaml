@@ -3,7 +3,7 @@ version: 1.0.0
 class: read
 reversibility: not_applicable
 connector: gitlab
-description: "Liste les merge requests d'un projet GitLab selon leur état, 20 par page."
+description: "Liste les merge requests d'un projet GitLab selon leur état, 10 par page, titres coupés à 80 caractères."
 input:
   type: object
   required: [project_id, state]

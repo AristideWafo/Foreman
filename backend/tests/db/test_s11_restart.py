@@ -27,9 +27,11 @@ async def test_the_same_request_after_a_restart_reuses_the_six_resources(
     real_build = adapters.build_adapters
     shared: dict[str, object] = {}
 
-    def same_adapters(catalog, *, durable_registry=False):  # type: ignore[no-untyped-def]
+    def same_adapters(catalog, store, *, durable_registry=False, force_fake=False):  # type: ignore[no-untyped-def]
         if not shared:
-            shared.update(real_build(catalog, durable_registry=durable_registry))
+            shared.update(
+                real_build(catalog, store, durable_registry=durable_registry, force_fake=force_fake)
+            )
         return dict(shared)
 
     monkeypatch.setattr(adapters, "build_adapters", same_adapters)
