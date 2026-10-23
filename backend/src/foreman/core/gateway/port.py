@@ -48,6 +48,17 @@ class GatewayResult:
     audit: AuditEntry
 
 
+@dataclass(frozen=True, slots=True)
+class ReadCall:
+    """Une lecture directe demandée depuis le chat par `actor` (utilisateur), hors plan et hors
+    exécution : la gateway relit le rôle de `actor` dans l'équipe du projet."""
+
+    project_id: UUID
+    actor: UUID
+    tool: str
+    params: Mapping[str, JsonValue]
+
+
 ProbeVerdict = Literal["ok", "missing", "excess"]
 
 
@@ -96,5 +107,15 @@ class Gateway(Protocol):
         inconnu) ou `CallFailed` (échec d'une sonde) ; tout est audité (`tool="<c>.probe"`), sans
         jeton ni détail. Le statut du connecteur est mémorisé : un outil dépendant d'un droit
         manquant est ensuite refusé par `call` (`permission_missing`).
+        """
+        ...
+
+    async def read(self, call: ReadCall) -> dict[str, JsonValue]:
+        """Exécute un outil de classe `read` pour `actor` et rend sa sortie filtrée.
+
+        Refuse (`CallDenied`) tout outil d'une autre classe, un acteur hors de l'équipe du projet
+        et une lecture que la matrice (règle R1, niveau 1) n'autorise pas dans CHAQUE
+        environnement. Une ligne d'audit par lecture (sans contenu) ; si elle ne s'écrit pas, la
+        lecture n'est pas rendue (`CallFailed`).
         """
         ...

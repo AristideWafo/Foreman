@@ -43,6 +43,14 @@ tokens:
 tools_enabled_when:
   gitlab.create_group: [write]
   gitlab.create_project: [write]
+  gitlab.list_groups: [read]
+  gitlab.list_projects: [read]
+  gitlab.get_project: [read]
+  gitlab.list_branches: [read]
+  gitlab.list_pipelines: [read]
+  gitlab.list_issues: [read]
+  gitlab.list_merge_requests: [read]
+  gitlab.read_file: [read]
 probes:
   - {name: lire_groupes, token: read, call: "GET /groups?per_page=1"}
   - {name: ecrire_dans_racine, token: write, call: "GET /groups/{root_id}", expects: "access_level >= 40"}

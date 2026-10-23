@@ -1,0 +1,21 @@
+tool: gitlab.list_projects
+version: 1.0.0
+class: read
+reversibility: not_applicable
+connector: gitlab
+description: "Liste les projets d'un groupe GitLab, 20 par page."
+input:
+  type: object
+  required: [group_id]
+  properties:
+    group_id: {type: integer, minimum: 1}
+    search: {type: string, minLength: 1, maxLength: 100}
+    page: {type: integer, minimum: 1, maximum: 10}
+  additionalProperties: false
+output:
+  projects:
+    - {id: integer, name: string, path_with_namespace: string, web_url: string, default_branch: string, last_activity_at: string}
+  next_page: integer
+scope: {kind: read}
+redact: []
+timeout_s: 15

@@ -1,8 +1,9 @@
 """Faux GitLab déterministe : « lecture puis création », état inspectable par les tests."""
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from typing import ClassVar
 from uuid import uuid4
 
 from pydantic import JsonValue
@@ -150,7 +151,157 @@ class SimulatedGitLab:
             return await self._create_group(params)
         if tool == "gitlab.create_project":
             return await self._create_project(params)
+        reader = self._READS.get(tool)
+        if reader is not None:
+            return AdapterResult(output=reader(self, params), logs=[])
         raise AdapterError("outil non fourni par ce connecteur")
+
+    # --- Lectures (chat) : listes courtes et déterministes, sans état modifié ------------------
+
+    def _project(self, params: Mapping[str, JsonValue]) -> SimulatedProject:
+        project = self.projects.get(_int(params, "project_id"))
+        if project is None:
+            raise AdapterError("projet introuvable")
+        return project
+
+    def _list_groups(self, params: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+        parent = params.get("parent_group_id", self._root_id)
+        search = str(params.get("search", "")).lower()
+        found: list[JsonValue] = [
+            {"id": g.id, "name": g.name, "full_path": g.full_path, "web_url": g.web_url}
+            for g in self.groups.values()
+            if g.parent_id == parent and search in g.name.lower()
+        ]
+        return {"groups": found}
+
+    def _list_projects(self, params: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+        group_id, search = _int(params, "group_id"), str(params.get("search", "")).lower()
+        group = self.groups.get(group_id)
+        found: list[JsonValue] = [
+            self._project_summary(p, group.full_path)
+            for p in self.projects.values()
+            if group is not None and p.group_id == group_id and search in p.name.lower()
+        ]
+        return {"projects": found}
+
+    def _project_summary(self, project: SimulatedProject, group_path: str) -> dict[str, JsonValue]:
+        return {
+            "id": project.id,
+            "name": project.name,
+            "path_with_namespace": f"{group_path}/{project.path}",
+            "web_url": project.web_url,
+            "default_branch": "main",
+            "last_activity_at": "2026-01-01T00:00:00Z",
+        }
+
+    def _get_project(self, params: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+        project = self._project(params)
+        summary = self._project_summary(project, self.groups[project.group_id].full_path)
+        return {
+            **{k: summary[k] for k in ("id", "name", "path_with_namespace", "web_url")},
+            "default_branch": "main",
+            "visibility": "private",
+            "description": project.description[:300],
+            "open_issues_count": 2,
+        }
+
+    def _list_branches(self, params: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+        self._project(params)
+        search = str(params.get("search", "")).lower()
+        branches = [("main", True, True, "a1b2c3d"), ("feat/demo", False, False, "d4e5f6a")]
+        return {
+            "branches": [
+                {"name": n, "default": d, "protected": pr, "commit_short_id": c}
+                for n, d, pr, c in branches
+                if search in n
+            ]
+        }
+
+    def _list_pipelines(self, params: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+        project = self._project(params)
+        rows = [(9001, "success", "main"), (9002, "failed", "feat/demo")]
+        return {
+            "pipelines": [
+                {
+                    "id": i,
+                    "status": st,
+                    "ref": ref,
+                    "web_url": f"{project.web_url}/-/pipelines/{i}",
+                    "created_at": "2026-01-01T00:00:00Z",
+                }
+                for i, st, ref in rows
+                if params.get("ref", ref) == ref and params.get("status", st) == st
+            ]
+        }
+
+    def _list_issues(self, params: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+        project = self._project(params)
+        state, search = params["state"], str(params.get("search", "")).lower()
+        rows = [(1, "Ajouter l'authentification", "opened"), (2, "Corriger le logo", "closed")]
+        return {
+            "issues": [
+                {
+                    "iid": i,
+                    "title": t,
+                    "state": st,
+                    "author": "demo",
+                    "labels": ["demo"],
+                    "web_url": f"{project.web_url}/-/issues/{i}",
+                }
+                for i, t, st in rows
+                if state in ("all", st) and search in t.lower()
+            ]
+        }
+
+    def _list_merge_requests(self, params: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+        project = self._project(params)
+        state = params["state"]
+        rows = [
+            (1, "Ajouter la page d'accueil", "opened"),
+            (2, "Mettre à jour le README", "merged"),
+        ]
+        return {
+            "merge_requests": [
+                {
+                    "iid": i,
+                    "title": t,
+                    "state": st,
+                    "source_branch": "feat/demo",
+                    "target_branch": "main",
+                    "author": "demo",
+                    "web_url": f"{project.web_url}/-/merge_requests/{i}",
+                }
+                for i, t, st in rows
+                if state in ("all", st)
+            ]
+        }
+
+    def _read_file(self, params: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+        project = self._project(params)
+        path = _str(params, "path")
+        if path != "README.md":
+            raise AdapterError("fichier introuvable")
+        content = f"# {project.name}\n\n{project.description}\n"
+        return {
+            "path": path,
+            "ref": str(params.get("ref", "main")),
+            "size": len(content),
+            "content": content[:3000],
+            "truncated": False,
+        }
+
+    _READS: ClassVar[
+        dict[str, Callable[["SimulatedGitLab", Mapping[str, JsonValue]], dict[str, JsonValue]]]
+    ] = {
+        "gitlab.list_groups": _list_groups,
+        "gitlab.list_projects": _list_projects,
+        "gitlab.get_project": _get_project,
+        "gitlab.list_branches": _list_branches,
+        "gitlab.list_pipelines": _list_pipelines,
+        "gitlab.list_issues": _list_issues,
+        "gitlab.list_merge_requests": _list_merge_requests,
+        "gitlab.read_file": _read_file,
+    }
 
     def _parent_path(self, parent_id: int) -> str:
         if parent_id == self._root_id:

@@ -1,0 +1,22 @@
+tool: gitlab.list_issues
+version: 1.0.0
+class: read
+reversibility: not_applicable
+connector: gitlab
+description: "Liste les tickets d'un projet GitLab selon leur état, 20 par page."
+input:
+  type: object
+  required: [project_id, state]
+  properties:
+    project_id: {type: integer, minimum: 1}
+    state: {enum: [opened, closed, all]}
+    search: {type: string, minLength: 1, maxLength: 100}
+    page: {type: integer, minimum: 1, maximum: 10}
+  additionalProperties: false
+output:
+  issues:
+    - {iid: integer, title: string, state: string, author: string, labels: [string], web_url: string}
+  next_page: integer
+scope: {kind: read}
+redact: []
+timeout_s: 15

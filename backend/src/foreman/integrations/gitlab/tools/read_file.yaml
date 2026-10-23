@@ -1,0 +1,18 @@
+tool: gitlab.read_file
+version: 1.0.0
+class: read
+reversibility: not_applicable
+connector: gitlab
+description: "Lit un fichier texte d'un projet GitLab (3000 caractères au plus, tronqué au-delà). Refuse les fichiers sensibles ou binaires."
+input:
+  type: object
+  required: [project_id, path]
+  properties:
+    project_id: {type: integer, minimum: 1}
+    path: {type: string, minLength: 1, maxLength: 500, pattern: "^(?!.*\\.\\.)[^\\x00]+$"}
+    ref: {type: string, minLength: 1, maxLength: 255}
+  additionalProperties: false
+output: {path: string, ref: string, size: integer, content: string, truncated: boolean}
+scope: {kind: read}
+redact: []
+timeout_s: 15

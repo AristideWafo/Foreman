@@ -21,7 +21,7 @@ import foreman.core.gateway.redact as redact_module
 from foreman.core.catalog import Catalog, PolicyMatrix, ToolClass, parse_policy
 from foreman.core.gateway.errors import DENIED_MESSAGE, FAILED_MESSAGE, CallDenied, CallFailed
 from foreman.core.gateway.pipeline import ToolGateway
-from foreman.core.gateway.port import GatewayCall
+from foreman.core.gateway.port import GatewayCall, ReadCall
 from foreman.core.gateway.redact import (
     ALL_PATTERNS,
     MASK,
@@ -1515,3 +1515,56 @@ def test_requirements_add_the_admin_approval_an_environment_demands() -> None:
         ADMIN,
     )
     assert requirements(matrix, Allow("R1-lecture"), "production") == ()
+
+
+# --- Lectures directes (chat) : `Gateway.read` -------------------------------------------------
+
+READ_TOOLS = [
+    *("list_groups", "list_projects", "get_project", "list_branches"),
+    *("list_pipelines", "list_issues", "list_merge_requests", "read_file"),
+]
+
+
+@pytest.mark.asyncio
+async def test_read_refuses_writes_and_outsiders_without_calling_the_adapter() -> None:
+    world = make_world()
+    project = (await world.projects.create("p")).id
+    write = ReadCall(project, DEV_USER_ID, "gitlab.create_group", {"parent_group_id": 1000})
+    outsider = ReadCall(project, uuid4(), "gitlab.list_groups", {})
+    for call in (write, outsider):
+        with pytest.raises(CallDenied) as denied:
+            await world.gateway.read(call)
+        assert denied.value.code == "policy_denied"
+    assert world.gitlab.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_read_returns_filtered_output_and_audits_without_content() -> None:
+    world = make_world()
+    project = (await world.projects.create("p")).id
+    out = await world.gateway.read(ReadCall(project, DEV_USER_ID, "gitlab.list_groups", {}))
+    assert [g["name"] for g in out["groups"]] == ["Legacy"]  # type: ignore[union-attr,call-overload]
+    rows = await world.stores.audit.list_for_project(project)
+    row = next(r for r in rows if r.decision == "executed")
+    assert (row.actor_kind, row.rule_id) == ("user", "R1-lecture")
+    assert row.result_redacted is not None and set(row.result_redacted) == {"bytes"}
+
+
+@pytest.mark.asyncio
+async def test_read_refuses_a_tool_of_a_soon_connector_without_calling_the_adapter() -> None:
+    world = make_world()
+    project = (await world.projects.create("p")).id
+    for tool, params in (
+        ("server.healthcheck", {"environment": "staging", "project": "safe-eat"}),
+    ):
+        with pytest.raises(CallDenied) as denied:
+            await world.gateway.read(ReadCall(project, DEV_USER_ID, tool, params))
+        assert denied.value.code == "policy_denied"
+    assert world.server.calls == 0
+
+
+def test_catalog_loads_the_eight_gitlab_read_tools_with_description() -> None:
+    tools = base_catalog().tools
+    for name in READ_TOOLS:
+        tool = tools[f"gitlab.{name}"]
+        assert tool.tool_class == "read" and tool.description
