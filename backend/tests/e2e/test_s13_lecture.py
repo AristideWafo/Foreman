@@ -5,6 +5,7 @@ le 6e tour d'outils arrête le tour proprement.
 """
 
 from dataclasses import replace
+from typing import Any
 
 import pytest
 from s13_run import run_s13
@@ -40,32 +41,53 @@ class ScriptedProvider:
         return self.reply
 
 
-async def play(reply: ModelReply) -> tuple[list[str], list[int]]:
+class SlowReads:
+    """Gateway dont chaque lecture consomme `cost_s` secondes de l'horloge (fausse) du tour."""
+
+    def __init__(self, inner: Any, clock: list[float], cost_s: float) -> None:
+        self.inner, self.clock, self.cost_s = inner, clock, cost_s
+
+    def __call__(self) -> float:
+        return self.clock[0]
+
+    async def read(self, call: Any) -> Any:
+        out = await self.inner.read(call)
+        self.clock[0] += self.cost_s
+        return out
+
+
+async def play(
+    reply: ModelReply, read_cost_s: float = 0.0
+) -> tuple[list[str], list[int], list[str]]:
     """Joue un tour sur la vraie gateway et le faux GitLab ; rend codes d'erreur et groupes."""
     state = (await run_s13()).state
     catalog = load_catalog(environment="staging")
     budget = catalog.policy.budgets.per_turn.model_copy(update={"max_model_calls": 6})
     budgets = catalog.policy.budgets.model_copy(update={"per_turn": budget})
     catalog = replace(catalog, policy=catalog.policy.model_copy(update={"budgets": budgets}))
-    stores = in_memory_stores()[1]
+    stores, clock = in_memory_stores()[1], [0.0]
+    slow = SlowReads(state.gateway, clock, read_cost_s)
     log, project_id = InMemoryEventLog(), (await state.projects.create("P")).id
     service = TurnService(
         ScriptedProvider(reply),
         log,
         Planner(catalog, stores.plans, stores.registry),
         InMemoryProjectStore(),
-        state.gateway,  # type: ignore[arg-type]
+        slow,  # type: ignore[arg-type]
+        clock=slow,
     )
     member = next(m for m in state.dev_members if m.name == "dev")
     request = TurnRequest(user_id=member.user_id, project_id=project_id, message="salut")
     await service.run(request, service.begin(project_id))
     events = await log.read_after(project_id, 0)
     codes = [e.data.code for e in events if e.type == "error"]  # type: ignore[union-attr]
-    return codes, sorted(state.gateway._adapters["gitlab"].groups)  # type: ignore[union-attr]
+    texts = [e.data.text for e in events if e.type == "message"]  # type: ignore[union-attr]
+    groups = sorted(state.gateway._adapters["gitlab"].groups)  # type: ignore[union-attr]
+    return codes, groups, texts
 
 
 async def test_a_sixth_tool_round_stops_with_budget_exceeded() -> None:
-    codes, _ = await play(ModelReply("", (ToolCall("gitlab.list_groups", {}),)))
+    codes, _, _ = await play(ModelReply("", (ToolCall("gitlab.list_groups", {}),)))
     assert codes == ["budget_exceeded"]
 
 
@@ -73,5 +95,11 @@ async def test_a_write_called_directly_in_chat_is_unknown_tool_and_creates_no_gr
     write = ModelReply(
         "", (ToolCall("gitlab.create_group", {"parent_group_id": 1000, "name": "x"}),)
     )
-    codes, groups = await play(write)
+    codes, groups, _ = await play(write)
     assert codes == ["unknown_tool"] and groups == (await play(ModelReply("ok")))[1]
+
+
+async def test_reads_that_use_up_the_turn_duration_stop_the_turn() -> None:
+    reply = ModelReply("", (ToolCall("gitlab.list_groups", {}),))
+    codes, _, texts = await play(reply, read_cost_s=121.0)
+    assert codes == ["budget_exceeded"] and "durée dépassée" in texts[-1]

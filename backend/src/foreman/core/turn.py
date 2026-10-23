@@ -367,9 +367,10 @@ class TurnService:
             if (limit := meter.admit()) is not None:
                 await self._stop(project_id, turn_id, meter, limit)
                 return
+            remaining = meter.remaining()
             try:
                 # Délai explicite : sinon un fournisseur muet bloque le projet en 409 pour toujours.
-                async with asyncio.timeout(min(self._provider_timeout_s, limits.max_seconds)):
+                async with asyncio.timeout(min(self._provider_timeout_s, remaining)):
                     if history is None:
                         history, aliases = await self._history(project_id)
                     raw = await self._provider.complete(history)
@@ -383,7 +384,7 @@ class TurnService:
                     reply = self._restored(raw, aliases)
                 meter.record(reply.usage)
             except TimeoutError:
-                if limits.max_seconds <= self._provider_timeout_s:
+                if remaining <= self._provider_timeout_s:
                     await self._stop(project_id, turn_id, meter, "duration")
                     return
                 logger.exception("provider_failed project=%s turn=%s", project_id, turn_id)
@@ -412,9 +413,15 @@ class TurnService:
                 await self._stop(project_id, turn_id, meter, "tool_rounds")
                 return
             meter.tool_rounds += 1
-            results = await self._read(
-                request.user_id, project_id, turn_id, reply.tool_calls, aliases
-            )
+            try:
+                # Les lectures partagent l'échéance du tour (le verrou du projet est tenu).
+                async with asyncio.timeout(meter.remaining()):
+                    results = await self._read(
+                        request.user_id, project_id, turn_id, reply.tool_calls, aliases
+                    )
+            except TimeoutError:
+                await self._stop(project_id, turn_id, meter, "duration")
+                return
             # En mémoire seulement : le journal d'événements ne voit ni appels ni résultats.
             history.append(
                 ConversationMessage(
@@ -440,9 +447,13 @@ class TurnService:
         await self._emit(project_id, turn_id, TurnStatusData(status="completed"))
 
     def _only_reads(self, calls: Sequence[ToolCall]) -> bool:
-        tools = self._planner.catalog.tools
+        tools, connectors = self._planner.catalog.tools, self._planner.catalog.connectors
         return bool(calls) and all(
-            (t := tools.get(c.name)) is not None and t.tool_class == "read" for c in calls
+            (t := tools.get(c.name)) is not None
+            and t.tool_class == "read"
+            and (k := connectors.get(t.connector)) is not None
+            and k.availability == "available"  # « bientôt » : caché du modèle, donc refusé
+            for c in calls
         )
 
     async def _read(
