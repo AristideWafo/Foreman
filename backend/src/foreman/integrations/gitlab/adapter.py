@@ -33,7 +33,7 @@ _FORBIDDEN_FILES: Final = (".env", ".env.*", "*.pem", "*.key", "id_rsa*")
 _STATES: Final = ("opened", "closed", "merged", "all")
 _PLACEHOLDER: Final = re.compile(r"\{user_id\}")
 MARKING: Final = "managed-by=foreman"
-OWNER: Final = 40
+OWNER: Final = 50  # GitLab : 50 = Owner (40 = Maintainer)
 _PAT_SELF: Final = "/personal_access_tokens/self"
 _GROUP_PATH: Final = re.compile(r"[a-z0-9][a-z0-9-]{1,40}")
 _PROJECT_PATH: Final = re.compile(r"[a-z0-9][a-z0-9-]{1,60}")

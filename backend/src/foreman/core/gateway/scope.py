@@ -96,6 +96,11 @@ async def in_scope(
         if kind.any_id:
             if not (parent.isdigit() and int(parent) > 0):
                 return False
+            # Isolation : un groupe enregistré par un autre projet n'est pas un parent permis.
+            if kind.resource_type is not None and await registry.exists_elsewhere(
+                project_id, tool.connector, kind.resource_type, parent
+            ):
+                return False
             return not await _owned_by_another_project(registry, project_id, tool, params)
         in_roots = parent in kind.roots(catalog)
         if not in_roots and not (

@@ -169,7 +169,7 @@ GROUP = {"parent_group_id": 7, "name": "Safe Eat", "path": "safe-eat"}
 
 
 async def test_creation_needs_owner_of_the_parent_and_posts_nothing_otherwise() -> None:
-    transport = WritableGitLab(level=30)  # Maintainer : refusé
+    transport = WritableGitLab(level=40)  # Maintainer : refusé
     with pytest.raises(PermissionMissing):
         await (await writer(transport)).execute("gitlab.create_group", GROUP, "k")
     assert transport.posts == []
