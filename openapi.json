@@ -821,6 +821,7 @@
             "execution_log": "#/components/schemas/ExecutionLogEvent",
             "execution_step": "#/components/schemas/ExecutionStepEvent",
             "message": "#/components/schemas/MessageEvent",
+            "tool_call": "#/components/schemas/ToolCallEvent",
             "turn_status": "#/components/schemas/TurnStatusEvent"
           },
           "propertyName": "type"
@@ -840,6 +841,9 @@
           },
           {
             "$ref": "#/components/schemas/ExecutionDiagnosticEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ToolCallEvent"
           },
           {
             "$ref": "#/components/schemas/TurnStatusEvent"
@@ -2863,6 +2867,82 @@
           "configured"
         ],
         "title": "TokenView",
+        "type": "object"
+      },
+      "ToolCallData": {
+        "additionalProperties": false,
+        "description": "Une lecture a eu lieu : le nom de l'outil et l'issue, jamais param\u00e8tres ni contenu lu.",
+        "properties": {
+          "outcome": {
+            "enum": [
+              "ok",
+              "error"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "tool": {
+            "maxLength": 100,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool",
+          "outcome"
+        ],
+        "title": "ToolCallData",
+        "type": "object"
+      },
+      "ToolCallEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "Horodatage avec fuseau (UTC)",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ToolCallData"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "seq": {
+            "description": "Strictement croissant, contigu \u00e0 partir de 1, par projet",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "turn_id": {
+            "format": "uuid",
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "tool_call",
+            "default": "tool_call",
+            "title": "Type",
+            "type": "string"
+          },
+          "v": {
+            "const": 1,
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "project_id",
+          "turn_id",
+          "at",
+          "data"
+        ],
+        "title": "ToolCallEvent",
         "type": "object"
       },
       "ToolDiagnostic": {

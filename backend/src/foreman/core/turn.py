@@ -36,6 +36,7 @@ from foreman.core.events import (
     EventData,
     MessageAuthor,
     MessageData,
+    ToolCallData,
     TurnStatusData,
 )
 from foreman.core.gateway.errors import CallDenied, CallFailed
@@ -482,6 +483,11 @@ class TurnService:
                     logger.warning(
                         "read_refused project=%s turn=%s code=%s", project_id, turn_id, error
                     )
+            await self._emit(
+                project_id,
+                turn_id,
+                ToolCallData(tool=call.name, outcome="error" if error else "ok"),
+            )
             raw = canonical_json({"error": error} if error else output).decode("utf-8")
             results.append(
                 ToolResult(call.id, aliases.apply(mask_for_model(raw)), error is not None)

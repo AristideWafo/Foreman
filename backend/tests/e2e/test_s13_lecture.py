@@ -24,7 +24,9 @@ def in_memory(monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def test_s13_one_question_one_read_one_text_answer() -> None:
     run = await run_s13()
-    assert {e.type for e in run.events} == {"message", "turn_status"}  # 0 carte
+    assert {e.type for e in run.events} == {"message", "tool_call", "turn_status"}  # 0 carte
+    calls = [e.data for e in run.events if e.type == "tool_call"]
+    assert [(c.tool, c.outcome) for c in calls] == [("gitlab.list_groups", "ok")]  # type: ignore[union-attr]
     messages = [e.data.text for e in run.events if e.type == "message"]  # type: ignore[union-attr]
     assert len(messages) == 2 and "Legacy" in messages[1]  # question, puis réponse finale seule
     audit = await run.state.stores.audit.list_for_project(run.project_id)

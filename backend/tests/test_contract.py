@@ -135,6 +135,7 @@ NEW_EXAMPLES = {
             },
         },
     ),
+    "tool_call": ("tool_call", {"tool": "gitlab.list_groups", "outcome": "ok"}),
     "error (plan invalide)": (
         "error",
         {"code": "invalid_plan", "message": ERROR_MESSAGES["invalid_plan"]},
@@ -246,6 +247,7 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
             "ExecutionStepEvent",
             "ExecutionLogEvent",
             "ExecutionDiagnosticEvent",
+            "ToolCallEvent",
             "TurnStatusEvent",
             "ErrorEvent",
         )

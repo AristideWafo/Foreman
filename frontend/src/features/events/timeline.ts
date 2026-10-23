@@ -23,7 +23,13 @@ export type TimelineItem =
       execution?: { card: ExecutionCardData; logs: StepLogs };
     }
   /** Activité d'un tour : réflexion en cours, puis outils utilisés (déduits des événements du contrat). */
-  | { key: string; kind: "trace"; status: "running" | "done" | "error"; tools: string[] }
+  | {
+      key: string;
+      kind: "trace";
+      status: "running" | "done" | "error";
+      tools: string[];
+      failed?: string[];
+    }
   | { key: string; kind: "error"; message: string };
 
 /** Lignes de journal par numéro d'étape (flux `execution_log`, filtré par la gateway côté serveur). */
@@ -96,12 +102,18 @@ function lastRunningTrace(items: TimelineItem[]): number {
   return -1;
 }
 
-function addTool(items: TimelineItem[], tool: string): TimelineItem[] {
+function addTool(items: TimelineItem[], tool: string, failed = false): TimelineItem[] {
   const index = lastRunningTrace(items);
   const trace = items[index];
-  if (trace?.kind !== "trace" || trace.tools.includes(tool)) return items;
+  if (trace?.kind !== "trace") return items;
+  const isFailed = failed && !trace.failed?.includes(tool);
+  if (trace.tools.includes(tool) && !isFailed) return items;
   const next = items.slice();
-  next[index] = { ...trace, tools: [...trace.tools, tool] };
+  next[index] = {
+    ...trace,
+    tools: trace.tools.includes(tool) ? trace.tools : [...trace.tools, tool],
+    ...(isFailed ? { failed: [...(trace.failed ?? []), tool] } : {}),
+  };
   return next;
 }
 
@@ -219,6 +231,11 @@ function applyContent(state: TimelineState, event: ProjectEvent): TimelineState 
       const items = state.items.slice();
       items[index] = { ...target, logs: { ...target.logs, [step]: merged } };
       return { ...state, items };
+    }
+    case "tool_call": {
+      const { tool, outcome } = event.data;
+      if (typeof tool !== "string") return state;
+      return { ...state, items: addTool(state.items, tool, outcome === "error") };
     }
     case "turn_status": {
       const { status } = event.data;
