@@ -37,6 +37,13 @@ S1_TOOLS = {
     "server.apply_playbook": ("write_registry", "per_playbook"),
     "server.healthcheck": ("read", "not_applicable"),
     "dns.list_records": ("read", "not_applicable"),
+    **{
+        f"gitlab.{name}": ("read", "not_applicable")
+        for name in (
+            *("list_groups", "list_projects", "get_project", "list_branches"),
+            *("list_pipelines", "list_issues", "list_merge_requests", "read_file"),
+        )
+    },
 }
 S1_SKILLS = {"gitlab-project-creation", "go-backend-standard", "docker-staging-deploy"}
 UNSAFE_YAML = "x: !!python/object/apply:pathlib.Path ['/tmp/foreman-unsafe']\n"

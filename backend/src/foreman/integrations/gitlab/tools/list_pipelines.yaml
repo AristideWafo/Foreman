@@ -1,0 +1,22 @@
+tool: gitlab.list_pipelines
+version: 1.0.0
+class: read
+reversibility: not_applicable
+connector: gitlab
+description: "Liste les pipelines d'un projet GitLab, filtrables par branche et statut, 20 par page."
+input:
+  type: object
+  required: [project_id]
+  properties:
+    project_id: {type: integer, minimum: 1}
+    ref: {type: string, minLength: 1, maxLength: 255}
+    status: {enum: [created, waiting_for_resource, preparing, pending, running, success, failed, canceled, skipped, manual, scheduled]}
+    page: {type: integer, minimum: 1, maximum: 10}
+  additionalProperties: false
+output:
+  pipelines:
+    - {id: integer, status: string, ref: string, web_url: string, created_at: string}
+  next_page: integer
+scope: {kind: read}
+redact: []
+timeout_s: 15

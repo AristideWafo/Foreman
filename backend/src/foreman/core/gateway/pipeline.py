@@ -31,7 +31,7 @@ from foreman.core.connector_state import ConnectorStore
 from foreman.core.events import DiagnosticCode, Requirement, ToolDiagnostic
 from foreman.core.gateway.budget import CallBudget
 from foreman.core.gateway.errors import CallDenied, CallFailed, DenialCode, FailureCode
-from foreman.core.gateway.port import GatewayCall, GatewayResult, ProbeReport
+from foreman.core.gateway.port import GatewayCall, GatewayResult, ProbeReport, ReadCall
 from foreman.core.gateway.probe import ConnectorProbes
 from foreman.core.gateway.redact import (
     MAX_OUTPUT_BYTES,
@@ -81,6 +81,8 @@ from foreman.core.store import (
 log = logging.getLogger(__name__)
 
 ACTOR_KIND: Final = "engine"
+READ_ACTOR_KIND: Final = "user"
+READ_LEVEL: Final = 1  # niveau minimal de R1-lecture, évalué dans chaque environnement
 MAX_TOOL_NAME_AUDIT: Final = 100
 MAX_EXTERNAL_ID: Final = 200
 # Un outil appelé avec `mode: check` ne crée rien : il n'inscrit aucune ressource au registre.
@@ -286,6 +288,105 @@ class ToolGateway:
     async def probe(self, connector: str, actor: UUID) -> ProbeReport:
         return await self._probes.probe(connector, actor)
 
+    async def read(self, call: ReadCall) -> dict[str, JsonValue]:
+        """Lecture directe (chat) : mêmes contrôles qu'`_authorize`, sans plan ni exécution."""
+        started = self._clock()
+        tool = self._catalog.tools.get(call.tool)
+        denial: DenialCode | None = None
+        failure: FailureCode = "internal_error"
+        rule_id: str | None = None
+        output: dict[str, JsonValue] = {}
+        try:
+            rule_id = await self._authorize_read(call, tool)
+            assert tool is not None  # noqa: S101 - `_authorize_read` refuse un outil inconnu
+            raw = await self._invoke(tool, call.params, "")
+            if isinstance(raw, _Failure):
+                failure = raw.code
+            else:
+                output = self._filtered(tool, raw)
+                # Audit AVANT de rendre : s'il échoue, le contenu lu n'est pas rendu.
+                await self._stores.audit.append(
+                    self._read_entry(
+                        call, tool, "executed", rule_id, started, {"bytes": json_size(output)}
+                    )
+                )
+                return output
+        except _Refusal as refusal:
+            denial, rule_id = refusal.code, refusal.rule_id
+        except StoreError:
+            log.warning("gateway : stockage indisponible (lecture)")
+            failure = "storage_unavailable"
+        except Exception as exc:
+            log.warning("gateway : exception inattendue en lecture (%s)", type(exc).__name__)
+        code = denial or failure
+        entry = self._read_entry(
+            call, tool, "denied" if denial else "error", rule_id, started, {"code": code}
+        )
+        try:
+            await self._stores.audit.append(entry)
+        except Exception as exc:
+            log.warning("gateway : audit non écrit (%s, %s)", code, type(exc).__name__)
+        if denial is not None:
+            raise CallDenied(denial)
+        raise CallFailed(failure)
+
+    async def _authorize_read(self, call: ReadCall, tool: ToolDefinition | None) -> str:
+        if tool is None:
+            raise _Refusal("unknown_tool")
+        if tool.tool_class != "read":  # AVANT la matrice : le chat ne lance aucune écriture
+            raise _Refusal("policy_denied")
+        if await self._probes.blocks(tool):
+            raise _Refusal("permission_missing")
+        if not self._validators[tool.tool].is_valid(call.params):
+            raise _Refusal("invalid_params")
+        role = await requester_role(
+            self._stores.projects, self._members, call.actor, call.project_id
+        )
+        if role is None:
+            raise _Refusal("policy_denied")
+        matrix = self._catalog.policy
+        allowed: Allow | None = None
+        for environment in matrix.autonomy.environments:
+            verdict = evaluate(
+                matrix,
+                PolicyRequest(
+                    tool_class=tool.tool_class,
+                    environment=environment,
+                    reversibility=tool.reversibility,
+                    role=role,
+                    level=READ_LEVEL,
+                ),
+            )
+            if not isinstance(verdict, Allow):
+                raise _Refusal("policy_denied", getattr(verdict, "rule_id", None))
+            allowed = verdict
+        if allowed is None:  # aucun environnement déclaré : fermé par défaut
+            raise _Refusal("policy_denied")
+        return allowed.rule_id
+
+    def _read_entry(
+        self,
+        call: ReadCall,
+        tool: ToolDefinition | None,
+        decision: str,
+        rule_id: str | None,
+        started: float,
+        result: dict[str, JsonValue],
+    ) -> AuditEntry:
+        elapsed = int((self._clock() - started) * 1000)
+        return AuditEntry(
+            actor_kind=READ_ACTOR_KIND,
+            project_id=call.project_id,
+            actor=str(call.actor),
+            tool=tool.tool if tool is not None else mask_text(call.tool)[:MAX_TOOL_NAME_AUDIT],
+            tool_class=tool.tool_class if tool is not None else None,
+            decision=decision,
+            rule_id=rule_id,
+            params_redacted=bounded_for_audit(call.params, frozenset(tool.redact if tool else ())),
+            result_redacted=result,
+            duration_ms=min(max(elapsed, 0), MAX_AUDIT_DURATION_MS),
+        )
+
     async def _run(self, call: GatewayCall, trace: _Trace, started: float) -> GatewayResult:
         denial: DenialCode | None = None
         failure: FailureCode = "internal_error"
@@ -476,17 +577,17 @@ class ToolGateway:
 
     # --- Étapes 8 et 9 : exécuter et filtrer --------------------------------------------------
 
-    async def _invoke(self, call: GatewayCall, tool: ToolDefinition) -> AdapterResult | _Failure:
+    async def _invoke(
+        self, tool: ToolDefinition, params: Mapping[str, JsonValue], idempotency_key: str
+    ) -> AdapterResult | _Failure:
         """Appelle l'adaptateur. Rend un code (jamais une exception) : le message d'origine ne
         survit pas."""
         adapter = self._adapters[tool.connector]
         try:
             async with asyncio.timeout(tool.timeout_s):
                 epoch = getattr(adapter, "epoch", None)
-                key = call.idempotency_key + (
-                    f"@{tool.connector}.{epoch}" if epoch is not None else ""
-                )
-                raw = await adapter.execute(tool.tool, call.params, key)
+                key = idempotency_key + (f"@{tool.connector}.{epoch}" if epoch is not None else "")
+                raw = await adapter.execute(tool.tool, params, key)
         except TimeoutError:
             return _Failure("timeout")
         except PermissionMissing as exc:
@@ -505,20 +606,12 @@ class ToolGateway:
         self, call: GatewayCall, trace: _Trace, authorized: _Authorized, started: float
     ) -> GatewayResult:
         tool = authorized.tool
-        raw = await self._invoke(call, tool)
+        raw = await self._invoke(tool, call.params, call.idempotency_key)
         if isinstance(raw, _Failure):
             raise CallFailed(raw.code, _diagnostic(raw.code, raw.raw), _raw_logs(raw.raw))
         fields = frozenset(tool.redact)
         resources, reused = await self._resources(call, tool, raw)
-        masked = redact_value(dict(raw.output), fields)
-        connector = self._catalog.connectors.get(tool.connector)
-        if connector is not None and isinstance(masked, dict):  # `strip_from_results` du connecteur
-            masked = strip_paths(masked, connector.strip_from_results)
-        output = (
-            masked
-            if isinstance(masked, dict) and json_size(masked) <= MAX_OUTPUT_BYTES
-            else truncated_output(masked if isinstance(masked, dict) else {})
-        )
+        output = self._filtered(tool, raw)
         if reused:  # après la troncature (jamais perdu) ; écrase une clé `reused` de l'adaptateur
             output = {**output, "reused": True}
         entry = self._entry(
@@ -532,6 +625,18 @@ class ToolGateway:
         )
         return GatewayResult(
             output=output, logs=filter_logs(raw.logs), resources=resources, audit=entry
+        )
+
+    def _filtered(self, tool: ToolDefinition, raw: AdapterResult) -> dict[str, JsonValue]:
+        """Étape 9 : masquage, `strip_from_results` du connecteur, taille bornée."""
+        masked = redact_value(dict(raw.output), frozenset(tool.redact))
+        connector = self._catalog.connectors.get(tool.connector)
+        if connector is not None and isinstance(masked, dict):
+            masked = strip_paths(masked, connector.strip_from_results)
+        return (
+            masked
+            if isinstance(masked, dict) and json_size(masked) <= MAX_OUTPUT_BYTES
+            else truncated_output(masked if isinstance(masked, dict) else {})
         )
 
     async def _resources(

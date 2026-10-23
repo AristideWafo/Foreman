@@ -1,0 +1,16 @@
+tool: gitlab.get_project
+version: 1.0.0
+class: read
+reversibility: not_applicable
+connector: gitlab
+description: "Donne les détails d'un projet GitLab (branche par défaut, visibilité, tickets ouverts)."
+input:
+  type: object
+  required: [project_id]
+  properties:
+    project_id: {type: integer, minimum: 1}
+  additionalProperties: false
+output: {id: integer, name: string, path_with_namespace: string, web_url: string, default_branch: string, visibility: string, description: string, open_issues_count: integer}
+scope: {kind: read}
+redact: []
+timeout_s: 15

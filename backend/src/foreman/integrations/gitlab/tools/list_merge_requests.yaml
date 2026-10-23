@@ -1,0 +1,21 @@
+tool: gitlab.list_merge_requests
+version: 1.0.0
+class: read
+reversibility: not_applicable
+connector: gitlab
+description: "Liste les merge requests d'un projet GitLab selon leur état, 20 par page."
+input:
+  type: object
+  required: [project_id, state]
+  properties:
+    project_id: {type: integer, minimum: 1}
+    state: {enum: [opened, closed, merged, all]}
+    page: {type: integer, minimum: 1, maximum: 10}
+  additionalProperties: false
+output:
+  merge_requests:
+    - {iid: integer, title: string, state: string, source_branch: string, target_branch: string, author: string, web_url: string}
+  next_page: integer
+scope: {kind: read}
+redact: []
+timeout_s: 15

@@ -270,6 +270,7 @@ class ToolDefinition(_Strict):
     playbooks: dict[str, PlaybookDefinition] | None = None
     redact: list[str] = Field(default_factory=list)
     timeout_s: Annotated[int, Field(gt=0, le=900)]
+    description: Annotated[str, Field(max_length=300)] | None = None  # destinée au modèle
 
     @property
     def name(self) -> str:
