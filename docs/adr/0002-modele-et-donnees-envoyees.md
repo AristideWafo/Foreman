@@ -34,6 +34,15 @@ choisir le modèle. Il faut fixer ce qui part chez le fournisseur, ce qui n'en p
 - Valeurs de variables (seuls les noms et les types sont décrits au modèle).
 - **Noms d'hôtes internes** : remplacés par des alias stables avant l'envoi, ré-associés à la réponse.
 
+### Lectures GitLab envoyées au modèle
+
+- Les résultats des outils de lecture GitLab (listes, détails, **contenu de fichier**) partent chez le fournisseur
+  après `mask_for_model` et aliasing, comme les autres sorties d'outils.
+- Le contenu d'un fichier lu est **borné à 480 caractères** (la gateway coupe chaque chaîne à 500) et masqué ; `.env`, clés, fichiers d'identifiants et binaires sont refusés avant
+  lecture.
+- Il n'est **jamais placé dans un message `user`** : il voyage dans un bloc `tool_result`
+  `{"tool", "untrusted_data"}`, donnée non fiable que le modèle ne doit pas exécuter comme une consigne.
+
 Un test sur la frontière d'envoi vérifie ces catégories ; toute nouvelle source de contenu passe par la même
 redaction avant d'atteindre le `Provider`.
 

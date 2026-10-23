@@ -324,6 +324,43 @@ sur le **volume Docker dédié `foreman_secrets`**. Aucune variable d'environnem
 le fichier. Une synchronisation automatique est possible plus tard ; elle donnerait à la CI le pouvoir de choisir
 le contenu du compose, ce qui est un choix de sécurité à prendre explicitement.
 
+## Déploiement du chat GitLab réel
+
+PR #300 à #305 (ticket #299). Détail fonctionnel : `docs/integrations/gitlab.md`.
+
+**Ordre de fusion** : cascade #300 (base `prod`), puis #301 et #305 **ensemble** (sans repli vers le faux, GitLab
+réel complet d'un coup), puis #302, #303, #304, chacune après la fusion de sa base. **Tant que la PR #305
+(écritures réelles) n'est pas fusionnée, les écritures réelles ne fonctionnent pas.** Déployer avec le jeton read
+**et** le jeton write déjà présents : sans jeton, les outils GitLab échouent (`PermissionMissing`).
+
+**Plans en attente** : la PR #302 change `budgets.per_turn` de `catalog/policy/matrix.yaml`, donc `policy_sha256` ;
+les plans en attente d'approbation sont invalidés au déploiement. Prévenir les admins.
+
+Vérifications :
+
+1. `https://<domaine>/healthz` répond `persistence: postgres`.
+2. Admin > Intégrations : les deux jetons GitLab (lecture `read_api`, écriture `api`) sont présents, puis cliquer
+   **Tester**. Le jeton lecture doit avoir `read_api`, le jeton écriture `api`, aucun droit en trop.
+   **Attention** : un état mémorisé avec les anciens scopes `simulated.*` est obsolète ; cliquer Tester pour le
+   rafraîchir.
+3. Le modèle Anthropic est choisi dans la même page.
+4. Scénario d'essai : poser des questions de lecture (groupes, projets, un fichier) ; puis demander une création,
+   vérifier la carte de plan (groupe parent), approuver avec un admin, constater le groupe créé (description
+   `managed-by=foreman`).
+5. Aucun jeton dans les logs : `docker logs <app> | grep -c glpat` doit afficher `0`.
+6. Audit des appels GitLab :
+
+   ```sql
+   SELECT at, actor_kind, tool, tool_class, decision, rule_id, result_redacted
+   FROM audit_events
+   WHERE tool LIKE 'gitlab.%'
+   ORDER BY at DESC LIMIT 50;
+   ```
+
+   Les lectures portent `rule_id = 'R1-lecture'` et `result_redacted` ne contient que la taille.
+
+**Retour arrière** : `Deploy` en manuel avec le SHA précédent (section ci-dessous).
+
 ## Retour arrière
 
 `Deploy` en manuel avec le SHA d'un commit précédent. Le script revient aussi seul à l'image
