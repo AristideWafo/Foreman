@@ -1,9 +1,10 @@
-"""`RealGitLab` : lectures (REST gitlab.com) et sondeur. Écritures : plus tard.
+"""`RealGitLab` : lectures et créations (REST gitlab.com) et sondeur.
 
 Sorties en LISTE D'AUTORISATION de champs : tout ce que GitLab renvoie en plus (runners_token,
 variables, ...) est ignoré. Pagination imposée : `per_page=20`, `page` de 1 à 10.
 """
 
+import asyncio
 import base64
 import binascii
 import fnmatch
@@ -15,7 +16,13 @@ from urllib.parse import parse_qsl, quote, urlsplit
 
 from pydantic import JsonValue
 
-from foreman.core.ports import AdapterError, AdapterResult, PermissionMissing, ProbeOutcome
+from foreman.core.ports import (
+    AdapterError,
+    AdapterResult,
+    ForeignResource,
+    PermissionMissing,
+    ProbeOutcome,
+)
 from foreman.integrations.gitlab.client import GitLabClient, gitlab_error
 
 PER_PAGE: Final = 10  # la gateway borne une sortie à 4 Kio
@@ -42,7 +49,12 @@ _FORBIDDEN_FILES: Final = (
     "*.tfvars",
 )
 _STATES: Final = ("opened", "closed", "merged", "all")
-_PLACEHOLDER: Final = re.compile(r"\{(root_id|user_id)\}")
+_PLACEHOLDER: Final = re.compile(r"\{user_id\}")
+MARKING: Final = "managed-by=foreman"
+OWNER: Final = 50  # GitLab : 50 = Owner (40 = Maintainer)
+_PAT_SELF: Final = "/personal_access_tokens/self"
+_GROUP_PATH: Final = re.compile(r"[a-z0-9][a-z0-9-]{1,40}")
+_PROJECT_PATH: Final = re.compile(r"[a-z0-9][a-z0-9-]{1,60}")
 
 Obj = Mapping[str, JsonValue]
 
@@ -156,15 +168,19 @@ def _forbidden(path: str) -> bool:
 class RealGitLab:
     """`ToolAdapter` + `ConnectorProber` sur gitlab.com. Jeton relu à chaque appel."""
 
-    def __init__(self, client: GitLabClient, root_group_id: int) -> None:
+    def __init__(self, client: GitLabClient) -> None:
         self._client = client
-        self._root_id = root_group_id
+        self._write_lock = asyncio.Lock()  # « lire puis créer » d'une instance, sans course
 
     async def execute(
         self, tool: str, params: Mapping[str, JsonValue], idempotency_key: str
     ) -> AdapterResult:
-        # Lectures seules : idempotentes par nature, la clé est inutile.
+        # Lectures sans effet ; créations en « lire puis créer » : la clé est inutile.
         match tool:
+            case "gitlab.create_group":
+                return await self._create(params, group=True)
+            case "gitlab.create_project":
+                return await self._create(params, group=False)
             case "gitlab.list_groups":
                 parent = params.get("parent_group_id")
                 path = "/groups"
@@ -212,6 +228,91 @@ class RealGitLab:
             case "gitlab.read_file":
                 return await self._read_file(params)
         raise gitlab_error("unsupported")
+
+    async def _owner_check(self, parent_id: int) -> None:
+        """Le jeton `write` doit être Owner du parent, vérifié À L'APPEL (pas de racine fixe)."""
+        me, _ = await self._client.get(_PAT_SELF, tokens=("write",))
+        user_id = _obj(me).get("user_id")
+        if type(user_id) is not int:
+            raise gitlab_error("bad_response")
+        try:
+            data, _ = await self._client.get(
+                f"/groups/{parent_id}/members/all/{user_id}", tokens=("write",)
+            )
+        except AdapterError as exc:
+            if exc.diagnostic is not None and exc.diagnostic.code == "not_found":
+                raise PermissionMissing("gitlab", "write") from None  # parent ou membre inconnu
+            raise
+        level = _obj(data).get("access_level")
+        if type(level) is not int or level < OWNER:
+            raise PermissionMissing("gitlab", "write")
+
+    async def _find(self, kind: str, full_path: str) -> Obj | None:
+        try:
+            data, _ = await self._client.get(
+                f"/{kind}/{quote(full_path, safe='')}", tokens=("write",)
+            )
+        except AdapterError as exc:
+            if exc.diagnostic is not None and exc.diagnostic.code == "not_found":
+                return None
+            raise
+        return _obj(data)
+
+    async def _create(self, params: Mapping[str, JsonValue], *, group: bool) -> AdapterResult:
+        parent_id = _int(params, "parent_group_id")
+        name, path = params.get("name"), params.get("path")
+        pattern = _GROUP_PATH if group else _PROJECT_PATH
+        if not isinstance(name, str) or not name or len(name) > 64:
+            raise AdapterError("paramètre invalide")
+        if not isinstance(path, str) or not pattern.fullmatch(path):
+            raise AdapterError("paramètre invalide")
+        boilerplate = params.get("boilerplate")
+        if not group and boilerplate not in ("go-api", "vue-web"):
+            raise AdapterError("paramètre invalide")
+        async with self._write_lock:
+            await self._owner_check(parent_id)
+            parent_raw, _ = await self._client.get(f"/groups/{parent_id}", tokens=("write",))
+            parent_path = _obj(parent_raw).get("full_path")
+            if not isinstance(parent_path, str) or not parent_path:
+                raise gitlab_error("bad_response")
+            existing = await self._find("groups" if group else "projects", f"{parent_path}/{path}")
+            created = existing is None
+            if existing is not None:
+                description = existing.get("description")
+                if not isinstance(description, str) or MARKING not in description:
+                    raise ForeignResource("ressource existante non gérée par Foreman")
+                item = existing
+            elif group:
+                body: dict[str, JsonValue] = {
+                    "parent_id": parent_id,
+                    "name": name,
+                    "path": path,
+                    "visibility": "private",
+                    "description": f"Groupe créé par Foreman ({MARKING})",
+                }
+                item = _obj(await self._client.post("/groups", body))
+            else:
+                # PoC : dépôt vide + README ; import du boilerplate : décision n°2 (ROADMAP).
+                body = {
+                    "namespace_id": parent_id,
+                    "name": name,
+                    "path": path,
+                    "visibility": "private",
+                    "initialize_with_readme": True,
+                    "description": f"Dépôt Foreman ({MARKING}) ; boilerplate {boilerplate}",
+                }
+                item = _obj(await self._client.post("/projects", body))
+        item_id, url = item.get("id"), item.get("web_url")
+        if type(item_id) is not int or not isinstance(url, str):
+            raise gitlab_error("bad_response")
+        output: dict[str, JsonValue] = {
+            ("group_id" if group else "project_id"): item_id,
+            "web_url": url,
+        }
+        verb = "créé" if created else "déjà présent"
+        return AdapterResult(
+            output=output, logs=[f"{'groupe' if group else 'dépôt'} {path} {verb}"], created=created
+        )
 
     async def _collection(
         self,
@@ -303,10 +404,12 @@ class RealGitLab:
             if isinstance(scopes, list)
             else frozenset()
         )
-        values = {"root_id": self._root_id, "user_id": me.get("user_id")}
-        target = _PLACEHOLDER.sub(lambda m: str(values[m.group(1)]), call.removeprefix("GET "))
+        target = _PLACEHOLDER.sub(str(me.get("user_id")), call.removeprefix("GET "))
         if not call.startswith("GET ") or "None" in target:
             raise gitlab_error("unsupported")
+        if target == _PAT_SELF:  # sonde de validité du jeton : déjà lu, rien d'autre à appeler
+            usable = me.get("active") is True and "api" in found and me.get("revoked") is not True
+            return ProbeOutcome(ok=True, scopes=found, observed={"usable": int(usable)})
         url = urlsplit(target)
         try:
             data, _ = await self._client.get(url.path, dict(parse_qsl(url.query)), tokens=tokens)

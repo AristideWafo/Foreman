@@ -147,7 +147,7 @@
           "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
-          "name": "safe-eat"
+          "name": "safe-eat (groupe parent 1000)"
         },
         {
           "step": 2,
@@ -311,7 +311,7 @@
           "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
-          "name": "safe-eat"
+          "name": "safe-eat (groupe parent 1000)"
         },
         {
           "step": 2,
@@ -2070,7 +2070,7 @@
           "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
-          "name": "safe-eat"
+          "name": "safe-eat (groupe parent 1000)"
         },
         {
           "step": 2,
@@ -2234,7 +2234,7 @@
           "step": 1,
           "provider": "gitlab",
           "resource_type": "gitlab_group",
-          "name": "safe-eat"
+          "name": "safe-eat (groupe parent 1000)"
         },
         {
           "step": 2,

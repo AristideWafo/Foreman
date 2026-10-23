@@ -547,6 +547,13 @@ async def parent_belongs_to_another_project() -> tuple[World, Refusal]:
     return world, Refusal(call_for(started), "scope_violation")
 
 
+async def parent_is_not_a_positive_group_id() -> tuple[World, Refusal]:
+    # GitLab : plus de racine fixe, tout groupe est permis (Owner vérifié par l'adaptateur) ; 0 non.
+    world = make_world()
+    started = await start(world, [group_step(1, 0, "backend")])
+    return world, Refusal(call_for(started), "scope_violation")
+
+
 async def slug_belongs_to_another_project() -> tuple[World, Refusal]:
     world = make_world()
     await register(
@@ -662,6 +669,7 @@ async def model_cost_is_spent() -> tuple[World, Refusal]:
         step_was_never_reserved,
         environment_differs_from_the_plan,
         parent_belongs_to_another_project,
+        parent_is_not_a_positive_group_id,
         slug_belongs_to_another_project,
         target_is_not_in_the_registry,
         production_write_without_admin_approval,
@@ -933,7 +941,7 @@ async def adapter_forgets_to_say_created() -> Failure:
 
 async def registry_is_down() -> Failure:
     world = make_world(registry=ExplodingRegistry())
-    started = await start(world, [group_step(1, 2000, "backend")])  # parent hors racine
+    started = await start(world, ONE_GROUP)
     return Failure(world, started, "internal_error", ("error",))
 
 

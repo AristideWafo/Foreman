@@ -15,7 +15,6 @@ from foreman.core.catalog import Catalog
 from foreman.core.connector_state import ConnectorStore, connector_secret_id
 from foreman.core.gateway.pipeline import ToolGateway
 from foreman.core.ports import (
-    AdapterError,
     AdapterResult,
     ConnectorProber,
     MemberStore,
@@ -69,14 +68,6 @@ class ConfiguredGitLab:
         return await self._real.probe(token, name, call)  # jeton absent : droit manquant
 
 
-def _root_group_id(catalog: Catalog) -> int:
-    root = catalog.referentiels["gitlab-groups"].data.get("root_group")
-    root_id = root.get("id") if isinstance(root, dict) else None
-    if isinstance(root_id, bool) or not isinstance(root_id, int):
-        raise AdapterError("référentiel GitLab invalide")
-    return root_id
-
-
 def build_adapters(
     catalog: Catalog,
     store: SecretStore,
@@ -95,7 +86,7 @@ def build_adapters(
     )
     gitlab: ToolAdapter = fake
     if not (force_fake or os.environ.get("CI")):
-        real = RealGitLab(GitLabClient(store), _root_group_id(catalog))
+        real = RealGitLab(GitLabClient(store))
         gitlab = ConfiguredGitLab(real, store)
     return {
         "gitlab": gitlab,

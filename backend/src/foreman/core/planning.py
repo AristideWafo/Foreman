@@ -274,7 +274,10 @@ def _expected_name(params: Mapping[str, JsonValue], title: str) -> str:
     for key in ("path", "project", "name"):
         value = params.get(key)
         if isinstance(value, str) and value:
-            return value[:200]
+            parent = params.get("parent_group_id")
+            # L'admin approbateur voit sous quel groupe GitLab la ressource sera créée.
+            suffix = f" (groupe parent {parent})" if type(parent) is int else ""
+            return f"{value[:150]}{suffix}"[:200]
     return title[:200]
 
 

@@ -8,12 +8,12 @@ version: 1
 # Scopes déduits : `read_api` = « read access to the API » (sondes GET /groups) ; `api` = « complete read and
 # write access to the API » (POST de création de groupe et de dépôt). `read_repository`/`write_repository` ne
 # donnent PAS accès à l'API REST. NON confirmé dans la doc : le rôle minimal pour créer un dépôt dans un groupe
-# (la sonde ecrire_dans_racine exige Owner, access_level >= 40).
+# (l'adaptateur exige Owner, access_level >= 50, sur le groupe parent À CHAQUE création).
 # Sondeur (RealGitLab.probe) : les scopes viennent de GET /personal_access_tokens/self (réponse : champs
-# `scopes` et `user_id`, https://docs.gitlab.com/api/personal_access_tokens/) ; la sonde d'écriture est
-# GET /groups/:id/members/all/:user_id (réponse : `access_level`, 50 = Owner,
-# https://docs.gitlab.com/api/group_members/). `{root_id}` = groupe racine du référentiel, `{user_id}`
-# = propriétaire du jeton. Un 404 (non membre) vaut droit manquant.
+# `scopes` et `user_id`, https://docs.gitlab.com/api/personal_access_tokens/) ; la sonde d'écriture
+# n'a pas de groupe racine : elle valide le jeton (`usable` = 1 si actif, non révoqué, scope `api` présent).
+# Le rôle Owner du parent est contrôlé à chaque création (GET /groups/:id/members/all/:user_id,
+# https://docs.gitlab.com/api/group_members/ ; `access_level` 50 = Owner).
 help:
   url: https://gitlab.com/-/user_settings/personal_access_tokens
   sources:
@@ -21,11 +21,11 @@ help:
     - https://docs.gitlab.com/security/tokens/access_token_scopes/
     - https://docs.gitlab.com/api/groups/
   note: >-
-    Foreman utilise gitlab.com. Créez les deux jetons avec un compte qui a le rôle Owner sur le groupe racine
-    de la plateforme. Le rôle minimal exact pour créer des dépôts n'est pas confirmé par la documentation.
+    Foreman utilise gitlab.com. Créez les deux jetons avec un compte Owner des groupes où Foreman doit créer
+    (le rôle est vérifié à chaque création). Le rôle minimal exact pour créer des dépôts n'est pas confirmé par la documentation.
     Ne cochez aucun autre droit.
   steps:
-    - "Connectez-vous à gitlab.com avec le compte qui gère le groupe racine de la plateforme."
+    - "Connectez-vous à gitlab.com avec un compte Owner des groupes que Foreman doit gérer."
     - "Ouvrez votre avatar > Modifier le profil > Accès > Jetons d'accès personnels (lien ci-dessous)."
     - "Dans « Générer un jeton », choisissez « Jeton hérité », puis donnez-lui un nom (par exemple foreman-lecture)."
     - "Définissez une date d'expiration, puis cochez uniquement le droit indiqué pour ce jeton."
@@ -41,7 +41,7 @@ tokens:
   write:
     label: "Écriture : créer groupes et projets"
     scopes: [api]
-    boundary: "groupe racine de la plateforme"
+    boundary: "groupes dont le compte est Owner"
     permissions:
       - name: api
         explanation: "Accès complet en lecture et écriture à l'API (GitLab : « Grants complete read and write access to the API »). Nécessaire pour créer groupes et projets ; read_repository et write_repository ne couvrent que git."
@@ -58,6 +58,6 @@ tools_enabled_when:
   gitlab.read_file: [read]
 probes:
   - {name: lire_groupes, token: read, call: "GET /groups?per_page=1"}
-  - {name: ecrire_dans_racine, token: write, call: "GET /groups/{root_id}/members/all/{user_id}", expects: "access_level >= 40"}
+  - {name: jeton_ecriture_valide, token: write, call: "GET /personal_access_tokens/self", expects: "usable >= 1"}
 strip_from_results:
   - "variables[*].value"

@@ -31,9 +31,7 @@ class NamedProber:
         self.calls.append((token, name, call))
         if not call.startswith(("GET ", "HEAD ")):
             self.writes += 1
-        return ProbeOutcome(
-            ok=name not in self.missing, scopes=self.excess, observed={"access_level": 50}
-        )
+        return ProbeOutcome(ok=name not in self.missing, scopes=self.excess, observed={"usable": 1})
 
 
 def world_with(prober: NamedProber) -> World:
@@ -70,13 +68,13 @@ async def test_only_an_org_admin_can_probe_and_the_refusal_is_audited() -> None:
 
 
 async def test_a_missing_right_makes_the_connector_incomplete_and_refuses_its_tool() -> None:
-    prober = NamedProber(missing=frozenset({"ecrire_dans_racine"}))
+    prober = NamedProber(missing=frozenset({"jeton_ecriture_valide"}))
     world = world_with(prober)
     started = await start(world, ONE_GROUP)
     report = await world.gateway.probe("gitlab", ADMIN_ID)
     assert report.status == "incomplete"
     verdicts = {r.right: r.verdict for r in report.rights}
-    assert verdicts == {"lire_groupes": "ok", "ecrire_dans_racine": "missing"}
+    assert verdicts == {"lire_groupes": "ok", "jeton_ecriture_valide": "missing"}
     with pytest.raises(CallDenied) as denied:
         await world.gateway.call(call_for(started))  # gitlab.create_group dépend du jeton write
     assert denied.value.code == "permission_missing"

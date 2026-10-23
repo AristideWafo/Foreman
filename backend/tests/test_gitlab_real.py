@@ -1,6 +1,7 @@
 """Vrai GitLab (transport simulé, aucun réseau) : fuite de jeton, faux ou vrai, fichiers."""
 
 import base64
+import json
 import logging
 import os
 
@@ -11,7 +12,7 @@ from pydantic import JsonValue, SecretStr
 from foreman.bootstrap.adapters import ConfiguredGitLab, build_adapters
 from foreman.core.connector_state import CONNECTOR_TOKEN_KIND, connector_secret_id
 from foreman.core.gateway.port import ReadCall
-from foreman.core.ports import AdapterError, PermissionMissing
+from foreman.core.ports import AdapterError, ForeignResource, PermissionMissing
 from foreman.core.store import DEV_USER_ID
 from foreman.infra.file_catalog import catalog_dir_from_env, load_catalog
 from foreman.infra.secrets import InMemorySecretStore, Keyring
@@ -52,7 +53,7 @@ async def store_with(*names: str) -> InMemorySecretStore:
 
 async def real_with(routes: dict[str, tuple[int, object]]) -> tuple[RealGitLab, GitLabTransport]:
     transport = GitLabTransport(routes)
-    return RealGitLab(GitLabClient(await store_with("read"), transport=transport), 1000), transport
+    return RealGitLab(GitLabClient(await store_with("read"), transport=transport)), transport
 
 
 async def test_a_500_quoting_the_token_leaks_nothing_and_secret_fields_are_dropped(
@@ -88,7 +89,7 @@ async def test_without_a_token_or_with_a_read_token_only_nothing_falls_back_to_t
         transport = GitLabTransport({"/api/v4/groups": (500, {})})
         store = await store_with(*tokens)
         return ConfiguredGitLab(
-            RealGitLab(GitLabClient(store, transport=transport), 1000), store
+            RealGitLab(GitLabClient(store, transport=transport)), store
         ), transport
 
     none, transport = await configured()
@@ -150,7 +151,7 @@ async def read_through_gateway(
     routes: dict[str, tuple[int, object]], tool: str, params: dict[str, JsonValue]
 ) -> dict[str, JsonValue]:
     store = await store_with("read")
-    real = RealGitLab(GitLabClient(store, transport=GitLabTransport(routes)), 1000)
+    real = RealGitLab(GitLabClient(store, transport=GitLabTransport(routes)))
     world = make_world(gitlab=real)
     project = (await world.projects.create("p")).id
     return await world.gateway.read(ReadCall(project, DEV_USER_ID, tool, params))
@@ -204,3 +205,59 @@ async def test_a_full_page_of_realistic_items_survives_the_gateway_size_limit() 
         routes, "gitlab.list_issues", {"project_id": 1, "state": "all"}
     )
     assert "truncated" not in found and len(found["issues"]) == 10  # type: ignore[arg-type]
+
+
+class WritableGitLab(httpx2.AsyncBaseTransport):
+    """gitlab.com minimal avec état : jeton `write` de niveau `level` sur le groupe parent 7."""
+
+    def __init__(self, level: int, existing: dict[str, str] | None = None) -> None:
+        self.level = level
+        self.groups = dict(existing or {})  # full_path -> description
+        self.posts: list[httpx2.Request] = []
+
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
+        path = request.url.path
+        if request.method == "POST":
+            self.posts.append(request)
+            body = json.loads(request.content)
+            full = f"team/{body['path']}"
+            self.groups[full] = body["description"]
+            return httpx2.Response(201, json={"id": 99, "web_url": "https://gitlab.com/" + full})
+        if path.endswith("/personal_access_tokens/self"):
+            return httpx2.Response(200, json={"user_id": 5, "scopes": ["api"], "active": True})
+        if path.endswith("/groups/7/members/all/5"):
+            return httpx2.Response(200, json={"access_level": self.level})
+        if path.endswith("/groups/7"):
+            return httpx2.Response(200, json={"full_path": "team"})
+        description = self.groups.get(path.removeprefix("/api/v4/groups/"))
+        if description is None:
+            return httpx2.Response(404, json={})
+        return httpx2.Response(
+            200, json={"id": 99, "web_url": "https://gitlab.com/x", "description": description}
+        )
+
+
+async def writer(transport: WritableGitLab) -> RealGitLab:
+    return RealGitLab(GitLabClient(await store_with("write"), transport=transport))
+
+
+GROUP = {"parent_group_id": 7, "name": "Safe Eat", "path": "safe-eat"}
+
+
+async def test_creation_needs_owner_of_the_parent_and_posts_nothing_otherwise() -> None:
+    transport = WritableGitLab(level=40)  # Maintainer : refusé
+    with pytest.raises(PermissionMissing):
+        await (await writer(transport)).execute("gitlab.create_group", GROUP, "k")
+    assert transport.posts == []
+
+
+async def test_create_group_is_idempotent_and_never_adopts_a_foreign_group() -> None:
+    transport = WritableGitLab(level=50, existing={"team/legacy": "groupe historique"})
+    real = await writer(transport)
+    first = await real.execute("gitlab.create_group", GROUP, "k")
+    second = await real.execute("gitlab.create_group", GROUP, "k")
+    assert (first.created, second.created) == (True, False)
+    assert len(transport.posts) == 1 and "managed-by=foreman" in transport.groups["team/safe-eat"]
+    with pytest.raises(ForeignResource):
+        await real.execute("gitlab.create_group", {**GROUP, "path": "legacy"}, "k")
+    assert len(transport.posts) == 1
