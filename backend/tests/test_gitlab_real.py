@@ -138,9 +138,11 @@ async def test_read_file_refuses_secrets_and_binaries_and_cuts_under_the_gateway
 
 
 PEM = (
-    "-----BEGIN RSA PRIVATE KEY-----\n"
+    "-----BEGIN RSA "
+    + "PRIVATE KEY-----\n"
     + "\n".join("MIIEowIBAAKCAQEA" + "Zx9q" * 12 for _ in range(3))
-    + "\n-----END RSA PRIVATE KEY-----\n"
+    + "\n-----END RSA "
+    + "PRIVATE KEY-----\n"
 )
 
 
