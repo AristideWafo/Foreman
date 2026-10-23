@@ -247,6 +247,7 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
             "ExecutionStepEvent",
             "ExecutionLogEvent",
             "ExecutionDiagnosticEvent",
+            "ToolCallEvent",
             "TurnStatusEvent",
             "ErrorEvent",
         )
