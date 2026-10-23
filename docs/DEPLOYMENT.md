@@ -328,9 +328,10 @@ le contenu du compose, ce qui est un choix de sécurité à prendre explicitemen
 
 PR #300 à #305 (ticket #299). Détail fonctionnel : `docs/integrations/gitlab.md`.
 
-**Ordre de fusion** : cascade #300 (base `prod`), puis #301 et #302, puis #303, #304, #305, chacune après la
-fusion de sa base. **Tant que la PR #305 (écritures réelles, PR5) n'est pas fusionnée, les écritures réelles ne
-fonctionnent pas** : seules les lectures sont réelles.
+**Ordre de fusion** : cascade #300 (base `prod`), puis #301 et #305 **ensemble** (sans repli vers le faux, GitLab
+réel complet d'un coup), puis #302, #303, #304, chacune après la fusion de sa base. **Tant que la PR #305
+(écritures réelles) n'est pas fusionnée, les écritures réelles ne fonctionnent pas.** Déployer avec le jeton read
+**et** le jeton write déjà présents : sans jeton, les outils GitLab échouent (`PermissionMissing`).
 
 **Plans en attente** : la PR #302 change `budgets.per_turn` de `catalog/policy/matrix.yaml`, donc `policy_sha256` ;
 les plans en attente d'approbation sont invalidés au déploiement. Prévenir les admins.
