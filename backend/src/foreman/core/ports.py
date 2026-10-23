@@ -21,6 +21,16 @@ class CapacityExceeded(Exception):
 class ToolCall:
     name: str
     arguments: Mapping[str, object] = field(default_factory=dict)
+    id: str = ""  # identifiant de l'appel, rapporté par `ToolResult.call_id` (boucle d'outils)
+
+
+@dataclass(frozen=True, slots=True)
+class ToolResult:
+    """Résultat d'un appel de lecture, déjà masqué : donnée non fiable pour le modèle."""
+
+    call_id: str
+    text: str
+    is_error: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +46,10 @@ class ConversationMessage:
 
     role: Literal["user", "assistant"]
     text: str
+    # Boucle d'outils (en mémoire seulement, jamais dans le journal). Un message de résultats porte
+    # aussi un `text` canonique : le rejeu choisit sa réponse sur le hash du dernier `text`.
+    tool_calls: tuple[ToolCall, ...] = ()
+    tool_results: tuple[ToolResult, ...] = ()
 
 
 class Provider(Protocol):

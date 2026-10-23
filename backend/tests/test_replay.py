@@ -14,7 +14,7 @@ from foreman.core.turn import ProposePlanArguments, TurnRequest, TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
 from foreman.infra.replay_provider import RecordingInvalid, RecordingNotFound, ReplayProvider
-from support import make_planner, user
+from support import NoReads, make_planner, user
 
 
 def sha(text: str) -> str:
@@ -105,7 +105,7 @@ async def test_a_missing_recording_is_a_typed_error_that_never_reaches_the_event
         write_recording(tmp_path, exchange(f"last_user_sha256: {sha('connu')}", "ok"))
     )
     log = InMemoryEventLog()
-    service = TurnService(provider, log, make_planner(), InMemoryProjectStore())
+    service = TurnService(provider, log, make_planner(), InMemoryProjectStore(), NoReads())
     project_id = uuid4()
     request = TurnRequest(user_id=DEV_USER_ID, project_id=project_id, message="inconnu-secret-xyz")
     await service.run(request, service.begin(project_id))

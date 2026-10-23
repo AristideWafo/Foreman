@@ -1,0 +1,16 @@
+# Réponses enregistrées du modèle pour le scénario S13 : lecture GitLab dans le chat (valeurs
+# fictives). Choix sur le sha256 EXACT du dernier message, jamais sur une regex, sans entrée default.
+# Le 2e hash est celui du message de résultats d'outil (JSON canonique, hôte aliasé `host-1`).
+version: 1
+exchanges:
+  # sha256("Quels sont les groupes GitLab de la plateforme ?")
+  - when: {last_user_sha256: d940026282139acab1172dba5ee71810ee11118c7567435305dca2c8026e4d41}
+    reply:
+      text: "Je regarde les groupes GitLab."
+      tool_calls:
+        - name: gitlab.list_groups
+          arguments: {parent_group_id: 1000}
+  # sha256 du résultat de gitlab.list_groups (groupe « Legacy » du faux)
+  - when: {last_user_sha256: cf18b56402f501acc0816ab69d6cbc13b8ddb6238af55867aaffab3d9eb8bf10}
+    reply:
+      text: "La plateforme compte un groupe GitLab : Legacy (foreman-demo/legacy)."

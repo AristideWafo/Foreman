@@ -56,7 +56,7 @@ def redeploy(state: App, catalog: Catalog, clock: Callable[[], datetime]) -> App
         state,
         catalog=catalog,
         gateway=gateway,
-        turns=TurnService(provider, state.events, planner, state.projects),
+        turns=TurnService(provider, state.events, planner, state.projects, gateway),
         approvals=ApprovalService(catalog, state.stores, state.events, state.members, clock),
         engine=ExecutionEngine(
             catalog=catalog, stores=state.stores, gateway=gateway, events=state.events

@@ -20,7 +20,7 @@ from foreman.infra.llm_recording import RecordingRefused, build_recording, load_
 from foreman.infra.llm_settings import SecretLlmSettings
 from foreman.infra.secrets import InMemorySecretStore, Keyring
 from foreman.integrations.anthropic.provider import AnthropicProvider
-from support import make_planner
+from support import NoReads, make_planner
 
 REAL_DIR = Path(__file__).parents[2] / "catalog" / "recordings" / "real"
 API_KEY = "sk-ant-api03-cle-de-test-0123456789abcdef"
@@ -52,7 +52,9 @@ async def test_s1_passes_through_the_real_provider_on_a_recorded_response() -> N
     provider = AnthropicProvider(await settings_for(recording["model"]), http_client=http)
     prices = {recording["model"]: ModelPrice(input_usd=Decimal(2), output_usd=Decimal(10))}
     log, project_id = InMemoryEventLog(), uuid4()
-    service = TurnService(provider, log, make_planner(), InMemoryProjectStore(), prices=prices)
+    service = TurnService(
+        provider, log, make_planner(), InMemoryProjectStore(), NoReads(), prices=prices
+    )
 
     await service.run(
         TurnRequest(DEV_USER_ID, project_id, "Crée Safe Eat"), service.begin(project_id)

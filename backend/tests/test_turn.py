@@ -12,7 +12,7 @@ from foreman.core.turn import TurnInProgress, TurnRequest, TurnService
 from foreman.infra.file_catalog import catalog_dir_from_env
 from foreman.infra.in_memory import InMemoryEventLog, InMemoryProjectStore
 from foreman.infra.replay_provider import ReplayProvider
-from support import make_planner
+from support import NoReads, make_planner
 
 USER_TEXT_MARKER = "mot-de-passe-de-l-utilisateur"
 ERROR_MARKER = "secret-interne postgres://user:pass@db"
@@ -62,7 +62,7 @@ class GatedProvider:
 async def play(provider: Provider, message: str = "salut") -> list[dict[str, Any]]:
     log = InMemoryEventLog()
     project_id = uuid4()
-    service = TurnService(provider, log, make_planner(), InMemoryProjectStore())
+    service = TurnService(provider, log, make_planner(), InMemoryProjectStore(), NoReads())
     request = TurnRequest(user_id=DEV_USER_ID, project_id=project_id, message=message)
     await service.run(request, service.begin(project_id))
     return [e.model_dump(mode="json") for e in await log.read_after(project_id, 0)]
@@ -144,7 +144,7 @@ async def test_invalid_plan_arguments_produce_no_card() -> None:
 
 async def test_only_one_turn_at_a_time_per_project_and_the_guard_is_released() -> None:
     provider, log = GatedProvider(), InMemoryEventLog()
-    service = TurnService(provider, log, make_planner(), InMemoryProjectStore())
+    service = TurnService(provider, log, make_planner(), InMemoryProjectStore(), NoReads())
     project_id, other_id = uuid4(), uuid4()
 
     first = service.begin(project_id)
@@ -169,7 +169,12 @@ async def test_silent_provider_times_out_and_frees_the_project() -> None:
     log = InMemoryEventLog()
     project_id = uuid4()
     service = TurnService(
-        GatedProvider(), log, make_planner(), InMemoryProjectStore(), provider_timeout_s=0.05
+        GatedProvider(),
+        log,
+        make_planner(),
+        InMemoryProjectStore(),
+        NoReads(),
+        provider_timeout_s=0.05,
     )
     turn = service.run(
         TurnRequest(user_id=DEV_USER_ID, project_id=project_id, message="salut"),

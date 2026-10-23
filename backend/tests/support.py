@@ -1,5 +1,7 @@
 """Aides communes aux tests : un planificateur réel sur le catalogue du dépôt et la mémoire."""
 
+from pydantic import JsonValue
+
 from foreman.core.identity import Member, Principal
 from foreman.core.planning import Planner
 from foreman.core.ports import ConversationMessage
@@ -29,3 +31,10 @@ ADMIN_PRINCIPAL = Principal(user_id=DEV_USER_ID, name="dev", role="team_admin")
 def dev_members() -> InMemoryMemberStore:
     """Droits du mode `none` : `dev` est développeur (la gateway relit ce rôle)."""
     return InMemoryMemberStore([Member("dev", "developer", DEV_USER_ID)])
+
+
+class NoReads:
+    """Gateway des tests qui n'attendent aucune lecture : en demander une est un échec."""
+
+    async def read(self, call: object) -> dict[str, JsonValue]:
+        raise AssertionError("lecture inattendue")
