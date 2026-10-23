@@ -231,3 +231,17 @@ test("foldExecutions : l'exécution est repliée dans la carte de son plan", () 
   expect(folded).toHaveLength(1);
   expect(folded[0]).toMatchObject({ key: "a", execution: { logs: { 1: ["ok"] } } });
 });
+
+test("tool_call : la lecture apparaît dans la trace du tour, en échec si elle a échoué", () => {
+  const base = { v: 1 as const, at: "2026-01-01T00:00:00Z", project_id: "p", turn_id: "t" };
+  const events: ProjectEvent[] = [
+    { ...base, seq: 1, type: "turn_status", data: { status: "running" } },
+    { ...base, seq: 2, type: "tool_call", data: { tool: "gitlab.list_groups", outcome: "ok" } },
+    { ...base, seq: 3, type: "tool_call", data: { tool: "gitlab.read_file", outcome: "error" } },
+  ];
+  const [trace] = events.reduce(applyEvent, initialTimeline).items;
+  expect(trace).toMatchObject({
+    tools: ["gitlab.list_groups", "gitlab.read_file"],
+    failed: ["gitlab.read_file"],
+  });
+});

@@ -891,7 +891,7 @@ export interface components {
              */
             error: "not_found" | "invalid_request" | "method_not_allowed" | "turn_in_progress" | "capacity_exceeded" | "internal_error" | "not_implemented" | "plan_hash_mismatch" | "plan_not_approvable" | "execution_in_progress" | "question_closed" | "unauthenticated" | "forbidden" | "policy_denied" | "too_many_requests" | "last_admin" | "last_team_admin" | "invalid_invitation" | "conflict";
         };
-        Event: components["schemas"]["MessageEvent"] | components["schemas"]["CardEvent"] | components["schemas"]["ExecutionStepEvent"] | components["schemas"]["ExecutionLogEvent"] | components["schemas"]["ExecutionDiagnosticEvent"] | components["schemas"]["TurnStatusEvent"] | components["schemas"]["ErrorEvent"];
+        Event: components["schemas"]["MessageEvent"] | components["schemas"]["CardEvent"] | components["schemas"]["ExecutionStepEvent"] | components["schemas"]["ExecutionLogEvent"] | components["schemas"]["ExecutionDiagnosticEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["TurnStatusEvent"] | components["schemas"]["ErrorEvent"];
         /**
          * ExecutionCardData
          * @description Carte d'exécution : réémise entière (remplacement par `card_id`) à chaque changement.
@@ -1760,6 +1760,55 @@ export interface components {
             permissions: components["schemas"]["PermissionView"][];
             /** Scopes */
             scopes: string[];
+        };
+        /**
+         * ToolCallData
+         * @description Une lecture a eu lieu : le nom de l'outil et l'issue, jamais paramètres ni contenu lu.
+         */
+        ToolCallData: {
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "ok" | "error";
+            /** Tool */
+            tool: string;
+        };
+        /** ToolCallEvent */
+        ToolCallEvent: {
+            /**
+             * At
+             * Format: date-time
+             * @description Horodatage avec fuseau (UTC)
+             */
+            at: string;
+            data: components["schemas"]["ToolCallData"];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /**
+             * Seq
+             * @description Strictement croissant, contigu à partir de 1, par projet
+             */
+            seq: number;
+            /**
+             * Turn Id
+             * Format: uuid
+             */
+            turn_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_call";
+            /**
+             * V
+             * @default 1
+             * @constant
+             */
+            v: 1;
         };
         /**
          * ToolDiagnostic

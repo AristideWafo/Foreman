@@ -12,7 +12,22 @@ import {
 
 type TraceStatus = "running" | "done" | "error";
 
-const TOOL_LABELS: Record<string, string> = { propose_plan: "Plan proposé" };
+const TOOL_LABELS: Record<string, string> = {
+  propose_plan: "Plan proposé",
+  "gitlab.list_groups": "Lecture des groupes",
+  "gitlab.list_projects": "Lecture des projets",
+  "gitlab.get_project": "Lecture d'un projet",
+  "gitlab.list_branches": "Lecture des branches",
+  "gitlab.list_pipelines": "Lecture des pipelines",
+  "gitlab.list_issues": "Lecture des tickets",
+  "gitlab.list_merge_requests": "Lecture des demandes de fusion",
+  "gitlab.read_file": "Lecture d'un fichier",
+};
+
+/** Un outil `gitlab.*` hors dictionnaire reste une lecture, sans nom technique affiché. */
+function toolLabel(tool: string): string {
+  return TOOL_LABELS[tool] ?? (tool.startsWith("gitlab.") ? "Lecture" : tool);
+}
 
 const STEP_DELAY_MS = 150;
 /** Même avec des données simulées, la réflexion reste « en cours » ce temps-là avant de se terminer. */
@@ -31,7 +46,15 @@ function title(status: TraceStatus, steps: number): string {
 }
 
 /** Activité d'un tour : ouverte pendant la réflexion, repliée une fois terminée ; les étapes apparaissent une à une. */
-export function TurnTrace({ status: actual, tools }: { status: TraceStatus; tools: string[] }) {
+export function TurnTrace({
+  status: actual,
+  tools,
+  failed = [],
+}: {
+  status: TraceStatus;
+  tools: string[];
+  failed?: string[];
+}) {
   const [settled, setSettled] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => setSettled(true), MIN_RUNNING_MS);
@@ -52,8 +75,12 @@ export function TurnTrace({ status: actual, tools }: { status: TraceStatus; tool
     { key: "analysis", label: "Analyse de la demande", status: analysis },
     ...tools.map((tool) => ({
       key: tool,
-      label: TOOL_LABELS[tool] ?? tool,
-      status: (status === "running" ? "running" : "done") as TraceStatus,
+      label: failed.includes(tool) ? `${toolLabel(tool)} : échec` : toolLabel(tool),
+      status: (failed.includes(tool)
+        ? "error"
+        : status === "running"
+          ? "running"
+          : "done") as TraceStatus,
     })),
   ];
 
@@ -72,7 +99,7 @@ export function TurnTrace({ status: actual, tools }: { status: TraceStatus; tool
           {steps.map((step, index) => (
             <TraceLine
               key={step.key}
-              status={step.status === "running" ? "running" : undefined}
+              status={step.status === "done" ? undefined : step.status}
               className="motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in-0 motion-safe:slide-in-from-left-1 motion-safe:fill-mode-backwards"
               style={{ animationDelay: `${index * STEP_DELAY_MS}ms` }}
             >

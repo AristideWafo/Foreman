@@ -346,6 +346,13 @@ class ExecutionDiagnosticData(_Model):
     diagnostic: ToolDiagnostic
 
 
+class ToolCallData(_Model):
+    """Une lecture a eu lieu : le nom de l'outil et l'issue, jamais paramètres ni contenu lu."""
+
+    tool: Annotated[str, Field(max_length=100)]
+    outcome: Literal["ok", "error"]
+
+
 class TurnStatusData(_Model):
     status: Literal["running", "completed", "failed"]
 
@@ -394,6 +401,11 @@ class ExecutionDiagnosticEvent(_EventBase):
     data: ExecutionDiagnosticData
 
 
+class ToolCallEvent(_EventBase):
+    type: Literal["tool_call"] = "tool_call"
+    data: ToolCallData
+
+
 class TurnStatusEvent(_EventBase):
     type: Literal["turn_status"] = "turn_status"
     data: TurnStatusData
@@ -410,6 +422,7 @@ Event = Annotated[
     | ExecutionStepEvent
     | ExecutionLogEvent
     | ExecutionDiagnosticEvent
+    | ToolCallEvent
     | TurnStatusEvent
     | ErrorEvent,
     Field(discriminator="type"),
@@ -426,6 +439,7 @@ EventData = (
     | ExecutionStepData
     | ExecutionLogData
     | ExecutionDiagnosticData
+    | ToolCallData
     | TurnStatusData
     | ErrorData
 )
@@ -435,6 +449,7 @@ AnyEvent = (
     | ExecutionStepEvent
     | ExecutionLogEvent
     | ExecutionDiagnosticEvent
+    | ToolCallEvent
     | TurnStatusEvent
     | ErrorEvent
 )
@@ -466,6 +481,8 @@ def make_event(seq: int, project_id: UUID, turn_id: UUID, data: EventData) -> An
             return ExecutionDiagnosticEvent(
                 seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data
             )
+        case ToolCallData():
+            return ToolCallEvent(seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data)
         case TurnStatusData():
             return TurnStatusEvent(
                 seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data

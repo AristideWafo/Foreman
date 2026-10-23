@@ -119,7 +119,7 @@ export function TimelineEntry({
         </Message>
       );
     case "trace":
-      return <TurnTrace status={item.status} tools={item.tools} />;
+      return <TurnTrace status={item.status} tools={item.tools} failed={item.failed} />;
     case "card":
       return (
         <Card
