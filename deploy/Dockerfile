@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # --- Frontend ---------------------------------------------------------------
-FROM node:22-slim AS frontend
+FROM node:25-slim AS frontend
 WORKDIR /frontend
 RUN corepack enable
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
