@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.22.0](https://github.com/AristideWafo/Foreman/compare/v0.21.0...v0.22.0) (2026-10-30)
+
+
+### Features
+
+* **agent:** questions avec pistes de critères ([#318](https://github.com/AristideWafo/Foreman/issues/318)) ([002b518](https://github.com/AristideWafo/Foreman/commit/002b518b2287d867c9b043aa058402e53937d86d))
+* **agent:** questions avec pistes de critères ([#318](https://github.com/AristideWafo/Foreman/issues/318)) ([ac99552](https://github.com/AristideWafo/Foreman/commit/ac9955298d2c821095e447f2671a25f198fbd598))
+* **brand:** F en relief à la place du tampon (plus distinctif) ([5cab2ed](https://github.com/AristideWafo/Foreman/commit/5cab2eda6299e08438d5094395a246e2c6e75f51))
+* **brand:** logo dans l'application (barre latérale, connexion) ([9161204](https://github.com/AristideWafo/Foreman/commit/916120467b558067a07908cbc2b974438f71a9cd))
+* **brand:** logo dans l'application (barre latérale, connexion) ([d6becf4](https://github.com/AristideWafo/Foreman/commit/d6becf44b5a8a9c69dad292f874b52e5a19be726))
+* **brand:** logo F en graphe (nœuds orange), lockup et icônes sur tuile encre ([33d65d3](https://github.com/AristideWafo/Foreman/commit/33d65d30da9a74c49870f2e93eb35831158e9633))
+* **brand:** logo Foreman (F gravé dans un tampon) et icônes web ([2995e04](https://github.com/AristideWafo/Foreman/commit/2995e0478227e4c34f3fc03dc58a39e4753642e9))
+* **brand:** logo Foreman dans la barre latérale et la connexion ([0417385](https://github.com/AristideWafo/Foreman/commit/0417385cdde79efa79ac33e9daade68911c34ced))
+* **brand:** logo Foreman et icônes web ([5679ae5](https://github.com/AristideWafo/Foreman/commit/5679ae5899fe90bb07f9f8f08ad0ee89d2247938))
+* **chat:** carte « Droit manquant » et Relancer ([#319](https://github.com/AristideWafo/Foreman/issues/319)) ([8ed5ad8](https://github.com/AristideWafo/Foreman/commit/8ed5ad8e5f829e8a2ec1ce7292cc2af8ea99f689))
+* **chat:** carte « Droit manquant » et Relancer ([#319](https://github.com/AristideWafo/Foreman/issues/319)) ([510c25d](https://github.com/AristideWafo/Foreman/commit/510c25dc477d4cd6a814be9d0d8442b773e421ff))
+
+
+### Bug Fixes
+
+* **agent:** ask_user accepte un champ libre ([cddbe8c](https://github.com/AristideWafo/Foreman/commit/cddbe8c86dc7e13d61a875268f0606f9d5e3ae3f))
+* **agent:** ask_user accepte un champ libre au lieu d'échouer le tour ([38f15cb](https://github.com/AristideWafo/Foreman/commit/38f15cbd3a0d4187921e3dc02a55e60be06f4780))
+
 ## [0.21.0](https://github.com/AristideWafo/Foreman/compare/v0.20.0...v0.21.0) (2026-10-23)
 
 
