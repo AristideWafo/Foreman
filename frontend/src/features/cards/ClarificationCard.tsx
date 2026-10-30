@@ -32,13 +32,30 @@ function OpenQuestion({ projectId, question }: { projectId: string; question: Qu
         {question.prompt}
       </legend>
       {free ? (
-        <Input
-          value={choice}
-          onChange={(event) => setChoice(event.target.value)}
-          aria-labelledby={legendId}
-          maxLength={500}
-          disabled={locked}
-        />
+        <>
+          {question.suggestions?.length ? (
+            <ToggleGroup
+              variant="outline"
+              className="flex-wrap"
+              value={choice ? [choice] : []}
+              onValueChange={(next) => setChoice(next[0] ?? "")}
+              disabled={locked}
+            >
+              {question.suggestions.map((suggestion) => (
+                <ToggleGroupItem key={suggestion} value={suggestion}>
+                  {suggestion}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          ) : null}
+          <Input
+            value={choice}
+            onChange={(event) => setChoice(event.target.value)}
+            aria-labelledby={legendId}
+            maxLength={500}
+            disabled={locked}
+          />
+        </>
       ) : (
         <ToggleGroup
           variant="outline"

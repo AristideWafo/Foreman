@@ -73,6 +73,22 @@ NEW_EXAMPLES = {
             "approvable": True,
         },
     ),
+    "card (clarification avec pistes)": (
+        "card",
+        {
+            "card_id": "clarification-1",
+            "kind": "clarification",
+            "questions": [
+                {
+                    "id": "q1-1",
+                    "field": "critere",
+                    "prompt": "Quel critère ?",
+                    "suggestions": ["inactif depuis 90 jours", "sans pipeline"],
+                    "status": "open",
+                }
+            ],
+        },
+    ),
     "card (plan invalidé, Semaine 6)": (
         "card",
         {

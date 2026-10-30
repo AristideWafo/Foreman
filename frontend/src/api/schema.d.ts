@@ -756,6 +756,12 @@ export interface components {
              * @enum {string}
              */
             status: "open" | "answered" | "deferred";
+            /**
+             * Suggestions
+             * @description Pistes pour un champ libre ; absentes si vides
+             * @default []
+             */
+            suggestions: string[];
         };
         /**
          * CreateInvitationRequest
