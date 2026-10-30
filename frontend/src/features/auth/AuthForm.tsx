@@ -1,4 +1,5 @@
 import type { ComponentProps, ReactNode } from "react";
+import { BrandMark } from "@/components/BrandMark";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -24,6 +25,7 @@ export function AuthPage({
     <main className="flex min-h-svh items-center justify-center px-4 py-8">
       <Card className="w-full max-w-sm">
         <CardHeader>
+          <BrandMark className="mb-2 size-10" />
           <h1 className="text-lg font-semibold">{title}</h1>
         </CardHeader>
         <CardContent>

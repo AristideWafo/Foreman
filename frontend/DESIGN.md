@@ -312,6 +312,8 @@ pour l'instant. Les ressources apparaîtront ici. », « Ce plan ne crée aucune
 table type de ressource puis fournisseur -> logo ; repli Heroicons (`GlobeAltIcon`, `ServerIcon`, `CubeIcon`). Marques : GitLab
 (`gitlab_group`, `gitlab_project`), Docker (`server_project`, déploiement Compose). Le logo est décoratif (`alt=""`).
 
+**Logo Foreman** (`BrandMark`, `components/BrandMark.tsx`) : F en graphe, SVG dans `src/assets/logos/` (`foreman.svg` en clair, `foreman-dark.svg` en sombre, bascule `dark:`). Affiché à gauche du nom dans le panneau de la barre latérale, en icône du rail, et au-dessus du titre des écrans de connexion. Décoratif (`alt=""`), le nom reste en texte. Sources et règles d'usage : `docs/brand/`.
+
 ## Plan invalidé ou expiré (Semaine 6)
 
 Quand `PlanCardData.status` vaut `invalidated` ou `expired` (et qu'il n'y a pas d'exécution), la carte plan affiche en
