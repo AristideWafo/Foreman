@@ -41,11 +41,17 @@ class AskUserQuestion(BaseModel):
 
     field: Annotated[str, Field(min_length=1, max_length=50)]
     prompt: Annotated[str, Field(min_length=1, max_length=MAX_PROMPT_CHARS)]
+    # Pistes de réponse ; gardées seulement pour un champ libre (hors schéma ou sans options).
+    suggestions: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=MAX_OPTION_CHARS)]],
+        Field(max_length=MAX_OPTIONS),
+    ] = []
 
-    @field_validator("field", "prompt")
+    @field_validator("field", "prompt", "suggestions")
     @classmethod
-    def _no_nul(cls, value: str) -> str:
-        if "\x00" in value:  # PostgreSQL refuse \u0000 dans un JSONB
+    def _no_nul(cls, value: str | list[str]) -> str | list[str]:
+        items = [value] if isinstance(value, str) else value
+        if any("\x00" in item for item in items):  # PostgreSQL refuse \u0000 dans un JSONB
             raise ValueError("caractère nul")
         return value
 
@@ -177,7 +183,9 @@ class ClarificationRules:
         les options viennent du schéma, jamais du modèle.
         """
         round_ = 1 + max((round_of(q.id) for q in existing), default=0)
-        if round_ > MAX_ROUNDS:
+        open_rounds = {round_of(q.id) for q in existing if q.status == "open"}
+        # shortcut: budget = tours encore ouverts, pas à vie ; id sur 3 chiffres (999).
+        if round_ > 999 or len(open_rounds) >= MAX_ROUNDS:
             raise ClarificationRefused
         names = [q.field for q in arguments.questions]
         already_open = {q.field for q in existing if q.status == "open"}
@@ -193,6 +201,7 @@ class ClarificationRules:
                 field=q.field,
                 prompt=q.prompt,
                 options=list(rule.options) if (rule := self._fields.get(q.field)) else [],
+                suggestions=[] if rule and rule.options else list(dict.fromkeys(q.suggestions)),
                 status="open",
             )
             for index, q in enumerate(arguments.questions, start=1)

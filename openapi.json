@@ -547,6 +547,18 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "suggestions": {
+            "default": [],
+            "description": "Pistes pour un champ libre ; absentes si vides",
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Suggestions",
+            "type": "array"
           }
         },
         "required": [

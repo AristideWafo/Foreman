@@ -236,8 +236,19 @@ class ClarificationQuestion(_Model):
         list[Annotated[str, Field(min_length=1, max_length=100)]],
         Field(max_length=10, description="Choix proposés ; vide = réponse libre"),
     ] = []
+    suggestions: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=100)]],
+        Field(max_length=10, description="Pistes pour un champ libre ; absentes si vides"),
+    ] = []
     status: QuestionStatus
     answer: Annotated[str | None, Field(max_length=500)] = None
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_suggestions(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        out: dict[str, object] = handler(self)
+        if not out.get("suggestions"):
+            out.pop("suggestions", None)  # forme d'avant : pas de clé plutôt que []
+        return out
 
 
 class ClarificationCardData(_Model):
