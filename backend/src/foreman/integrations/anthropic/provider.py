@@ -98,7 +98,12 @@ TOOLS: Final[list[dict[str, Any]]] = [
     },
     {
         "name": "ask_user",
-        "description": "Pose des questions à l'utilisateur quand une information manque.",
+        "description": (
+            "Pose des questions à l'utilisateur quand une information manque ou qu'un critère "
+            "n'est pas clair (propose alors des choix dans la question). `field` : nom court en "
+            "minuscules et underscores ; `environment` et `stack` offrent des options, tout "
+            "autre nom est une réponse libre."
+        ),
         "strict": True,
         "input_schema": {
             "type": "object",

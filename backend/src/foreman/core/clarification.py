@@ -26,6 +26,7 @@ MAX_ROUNDS: Final = 3
 MAX_OPTIONS: Final = 10
 MAX_OPTION_CHARS: Final = 100
 _ID: Final = re.compile(r"^q(\d{1,3})-(\d{1,2})$")
+_FREE_FIELD: Final = re.compile(r"^[a-z][a-z0-9_]{0,49}$")
 
 
 class ClarificationRefused(Exception):
@@ -177,8 +178,9 @@ class ClarificationRules:
     ) -> tuple[int, list[ClarificationQuestion]]:
         """Nouvelles questions (tour, questions) ou `ClarificationRefused`. Pure, rien n'est écrit.
 
-        Refus : budget de tours épuisé, champ hors schéma, champ répété, champ déjà en question
-        ouverte. Les options viennent du schéma, jamais du modèle.
+        Refus : budget de tours épuisé, nom de champ invalide, champ répété, champ déjà en question
+        ouverte. Un champ hors schéma est une question libre (sans options, jamais bloquante) ;
+        les options viennent du schéma, jamais du modèle.
         """
         round_ = 1 + max((round_of(q.id) for q in existing), default=0)
         open_rounds = {round_of(q.id) for q in existing if q.status == "open"}
@@ -189,7 +191,7 @@ class ClarificationRules:
         already_open = {q.field for q in existing if q.status == "open"}
         if (
             len(set(names)) != len(names)
-            or any(n not in self._fields for n in names)
+            or any(n not in self._fields and not _FREE_FIELD.match(n) for n in names)
             or already_open.intersection(names)
         ):
             raise ClarificationRefused
@@ -198,10 +200,8 @@ class ClarificationRules:
                 id=f"q{round_}-{index}",
                 field=q.field,
                 prompt=q.prompt,
-                options=list(self._fields[q.field].options),
-                suggestions=[]
-                if self._fields[q.field].options
-                else list(dict.fromkeys(q.suggestions)),
+                options=list(rule.options) if (rule := self._fields.get(q.field)) else [],
+                suggestions=[] if rule and rule.options else list(dict.fromkeys(q.suggestions)),
                 status="open",
             )
             for index, q in enumerate(arguments.questions, start=1)
