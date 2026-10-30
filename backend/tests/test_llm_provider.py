@@ -186,3 +186,20 @@ async def test_reads_travel_as_masked_untrusted_tool_blocks_and_names_round_trip
     assert envelope["tool"] == "gitlab.list_groups"
     assert "glpat-" not in envelope["untrusted_data"] and "[masqué]" in envelope["untrusted_data"]
     assert not any("ignore" in m["content"] for m in messages if isinstance(m["content"], str))
+
+
+def test_the_prompt_keeps_the_security_invariants() -> None:
+    prompt = build_prompt(load_catalog(environment="staging"))
+    for needle in ("untrusted_data", "jeton", "create_group", "create_project", "utilisateur"):
+        assert needle in prompt
+    assert "approbation" in prompt.lower()
+
+
+def test_the_prompt_stays_small_and_lists_writes_only_as_plan_steps() -> None:
+    catalog = load_catalog(environment="staging")
+    prompt = build_prompt(catalog)
+    assert len(prompt) < 6000
+    assert "Tu n'appelles jamais d'outil d'écriture" in prompt
+    assert "jamais appelables" in prompt  # les écritures ne sont que décrites, sous leur titre
+    names = {t["name"] for t in read_tool_definitions(catalog)}
+    assert not any("create_" in n or "delete_" in n for n in names)
