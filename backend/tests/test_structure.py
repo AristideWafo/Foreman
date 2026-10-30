@@ -1,5 +1,6 @@
 """Garde-fous de structure : ce que import-linter ne couvre pas."""
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -26,3 +27,10 @@ def test_the_container_bounds_graceful_shutdown() -> None:
     dockerfile = (ROOT.parent / "deploy" / "Dockerfile").read_text()
     cmd = next(line for line in dockerfile.splitlines() if line.startswith("CMD "))
     assert "--timeout-graceful-shutdown" in cmd
+
+
+def test_no_mcp_outside_the_gateway() -> None:
+    """ADR 0003 : aucun serveur MCP ni `mcp_servers` ; la gateway reste le seul chemin."""
+    pattern = re.compile(r"mcp_servers|^\s*(import|from)\s+mcp\b", re.M)
+    found = [p.name for p in SRC.rglob("*.py") if pattern.search(p.read_text())]
+    assert not found, f"MCP interdit (ADR 0003) : {found}"
