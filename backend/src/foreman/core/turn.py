@@ -36,6 +36,7 @@ from foreman.core.events import (
     EventData,
     MessageAuthor,
     MessageData,
+    PermissionCardData,
     ToolCallData,
     TurnStatusData,
 )
@@ -416,11 +417,16 @@ class TurnService:
             try:
                 # Les lectures partagent l'échéance du tour (le verrou du projet est tenu).
                 async with asyncio.timeout(meter.remaining()):
-                    results = await self._read(
+                    results, missing_tool = await self._read(
                         request.user_id, project_id, turn_id, reply.tool_calls, aliases
                     )
             except TimeoutError:
                 await self._stop(project_id, turn_id, meter, "duration")
+                return
+            if missing_tool and (card := self._permission_card(turn_id, missing_tool)):
+                # Droit manquant : on s'arrête sur une carte, le modèle n'est pas rappelé.
+                await self._emit(project_id, turn_id, card)
+                await self._emit(project_id, turn_id, TurnStatusData(status="completed"))
                 return
             # En mémoire seulement : le journal d'événements ne voit ni appels ni résultats.
             history.append(
@@ -463,10 +469,12 @@ class TurnService:
         turn_id: UUID,
         calls: Sequence[ToolCall],
         aliases: Aliases,
-    ) -> tuple[ToolResult, ...]:
+    ) -> tuple[tuple[ToolResult, ...], str | None]:
         """Lectures via la gateway (seule voie) ; un refus ou un échec devient un résultat d'erreur
-        à code fermé, le tour continue. Le contenu lu est non fiable : masqué puis aliasé."""
+        à code fermé, le tour continue. Le contenu lu est non fiable : masqué puis aliasé.
+        Renvoie aussi le premier outil refusé pour `permission_missing`."""
         results: list[ToolResult] = []
+        missing_tool: str | None = None
         for i, call in enumerate(calls):
             error: str | None = None
             output: object = None
@@ -480,6 +488,8 @@ class TurnService:
                     )
                 except (CallDenied, CallFailed) as refused:
                     error = refused.code
+                    if error == "permission_missing" and missing_tool is None:
+                        missing_tool = call.name
                     logger.warning(
                         "read_refused project=%s turn=%s code=%s", project_id, turn_id, error
                     )
@@ -492,7 +502,27 @@ class TurnService:
             results.append(
                 ToolResult(call.id, aliases.apply(mask_for_model(raw)), error is not None)
             )
-        return tuple(results)
+        return tuple(results), missing_tool
+
+    def _permission_card(self, turn_id: UUID, tool: str) -> PermissionCardData | None:
+        """Carte « droit manquant » tirée du catalogue (confiance), jamais d'un texte d'adapter."""
+        catalog = self._planner.catalog
+        try:
+            connector = catalog.tools[tool].connector
+            token = catalog.connectors[connector].tools_enabled_when[tool][0]
+            declared = catalog.connectors[connector].tokens[token]
+        except (KeyError, IndexError):
+            return None
+        return PermissionCardData(
+            card_id=f"permission-{turn_id}",
+            kind="permission",
+            connector=connector,
+            tool=tool,
+            token=token,
+            label=declared.label,
+            scopes=declared.scopes,
+            boundary=declared.boundary,
+        )
 
     async def _apply(
         self, user_id: UUID, project_id: UUID, turn_id: UUID, call: ToolCall

@@ -5,6 +5,7 @@ import { ApprovalCard } from "./ApprovalCard";
 import { ClarificationCard } from "./ClarificationCard";
 import { DiagnosticCard } from "./DiagnosticCard";
 import { ExecutionCard } from "./ExecutionCard";
+import { PermissionCard } from "./PermissionCard";
 import { PlanCard } from "./PlanCard";
 
 const NO_LOGS: StepLogs = {};
@@ -44,6 +45,8 @@ export function Card({
       return <ApprovalCard card={card} projectId={projectId} />;
     case "diagnostic":
       return <DiagnosticCard card={card} projectId={projectId} />;
+    case "permission":
+      return <PermissionCard card={card} projectId={projectId} retryText={retryText} />;
     default:
       return (
         <UiCard className="border border-dashed text-sm">

@@ -656,7 +656,7 @@ export interface components {
              */
             at: string;
             /** Data */
-            data: components["schemas"]["PlanCardData"] | components["schemas"]["ExecutionCardData"] | components["schemas"]["ClarificationCardData"] | components["schemas"]["ApprovalCardData"] | components["schemas"]["DiagnosticCardData"];
+            data: components["schemas"]["PlanCardData"] | components["schemas"]["ExecutionCardData"] | components["schemas"]["ClarificationCardData"] | components["schemas"]["ApprovalCardData"] | components["schemas"]["DiagnosticCardData"] | components["schemas"]["PermissionCardData"];
             /**
              * Project Id
              * Format: uuid
@@ -1456,6 +1456,36 @@ export interface components {
              * Format: uuid
              */
             team_id: string;
+        };
+        /**
+         * PermissionCardData
+         * @description Carte « droit manquant » : une lecture du chat a été refusée faute de droit sur le jeton.
+         *
+         *     Les champs viennent du catalogue (déclaration du jeton), jamais d'un texte d'adapter.
+         */
+        PermissionCardData: {
+            /**
+             * Boundary
+             * @default null
+             */
+            boundary: string | null;
+            /** Card Id */
+            card_id: string;
+            /** Connector */
+            connector: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "permission";
+            /** Label */
+            label: string;
+            /** Scopes */
+            scopes: string[];
+            /** Token */
+            token: string;
+            /** Tool */
+            tool: string;
         };
         /** PermissionView */
         PermissionView: {

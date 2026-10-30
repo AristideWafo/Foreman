@@ -46,7 +46,8 @@ function readFirstMessage(state: unknown): string | null {
  */
 export function findRetry(items: TimelineItem[]): { key: string; text: string } | null {
   const isRun = (i: TimelineItem) =>
-    i.kind === "card" && (i.card.kind === "plan" || i.card.kind === "execution");
+    i.kind === "card" &&
+    (i.card.kind === "plan" || i.card.kind === "execution" || i.card.kind === "permission");
   const last = items.map(isRun).lastIndexOf(true);
   const item = items[last];
   if (item?.kind !== "card") return null;
@@ -55,7 +56,8 @@ export function findRetry(items: TimelineItem[]): { key: string; text: string } 
   const stale =
     item.card.kind === "plan" &&
     (item.card.status === "invalidated" || item.card.status === "expired");
-  if (!stale && !RETRYABLE_STATES.includes(state)) return null;
+  const always = item.card.kind === "permission"; // un droit manquant se relance toujours
+  if (!always && !stale && !RETRYABLE_STATES.includes(state)) return null;
   const users = items.slice(0, last).filter((i) => i.kind === "message" && i.role === "user");
   const message = users[users.length - 1];
   return message?.kind === "message" ? { key: item.key, text: message.text } : null;

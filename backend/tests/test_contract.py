@@ -55,6 +55,19 @@ EXAMPLES = {
 
 
 NEW_EXAMPLES = {
+    "card (droit manquant)": (
+        "card",
+        {
+            "card_id": "permission-1",
+            "kind": "permission",
+            "connector": "gitlab",
+            "tool": "gitlab.list_groups",
+            "token": "read",
+            "label": "Lecture seule",
+            "scopes": ["read_api"],
+            "boundary": "groupes du compte",
+        },
+    ),
     "card (plan complet, Semaine 2)": (
         "card",
         {
@@ -305,6 +318,7 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
         "clarification",
         "approval",
         "diagnostic",
+        "permission",
     }
     assert (
         "kind" in schemas["PlanCardData"]["required"]

@@ -9,8 +9,14 @@ export type ExecutionCardData = components["schemas"]["ExecutionCardData"];
 export type ClarificationCardData = components["schemas"]["ClarificationCardData"];
 export type ApprovalCardData = components["schemas"]["ApprovalCardData"];
 export type DiagnosticCardData = components["schemas"]["DiagnosticCardData"];
+export type PermissionCardData = components["schemas"]["PermissionCardData"];
 export type CardData =
-  PlanCardData | ExecutionCardData | ClarificationCardData | ApprovalCardData | DiagnosticCardData;
+  | PlanCardData
+  | ExecutionCardData
+  | ClarificationCardData
+  | ApprovalCardData
+  | DiagnosticCardData
+  | PermissionCardData;
 export type CardStep = components["schemas"]["CardStep"];
 export type StepStatus = CardStep["status"];
 export type PlanStatus = NonNullable<PlanCardData["status"]>;

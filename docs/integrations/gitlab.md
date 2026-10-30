@@ -90,6 +90,16 @@ La durée du tour, lectures comprises, est bornée par `max_seconds`. Budgets pa
 0,5 EUR. La matrice R1-R10 est inchangée : seuls les budgets bougent. Le front affiche un événement `tool_call`
 (`{tool, outcome}`, sans paramètres ni contenu) dans la trace du tour.
 
+## Pause sur droit manquant
+
+Si une lecture du chat est refusée avec le code `permission_missing` (sonde en échec, ou GitLab répond 401/403, ou jeton
+absent), le tour s'arrête : le modèle n'est pas rappelé. Le front reçoit une carte `permission` (`connector`, `tool`,
+`token`, `label`, `scopes`, `boundary`), puis `turn_status: completed`. Ces champs viennent de la déclaration du jeton
+dans le catalogue, jamais d'un texte d'adaptateur ni d'une exception. La carte nomme le droit, renvoie vers
+Administration > Intégrations (bouton « Vérifier ») et propose « Relancer » (même demande). Si la recherche dans le
+catalogue échoue, le comportement reste celui d'avant (résultat d'erreur donné au modèle). Les exécutions ne sont pas
+concernées (voir #54).
+
 ## Sécurité
 
 - Le jeton n'est jamais exposé : ni dans les logs, ni dans les prompts, ni dans les erreurs (message fixe, un `glpat-`

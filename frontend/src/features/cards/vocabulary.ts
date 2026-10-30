@@ -107,3 +107,20 @@ const CHANGE_KIND: Record<PlanChange["kind"], string> = {
   registry: "Registre",
 };
 export const changeKindLabel = (value: string | null | undefined) => label(CHANGE_KIND, value);
+
+const TOOL_LABELS: Record<string, string> = {
+  propose_plan: "Plan proposé",
+  "gitlab.list_groups": "Lecture des groupes",
+  "gitlab.list_projects": "Lecture des projets",
+  "gitlab.get_project": "Lecture d'un projet",
+  "gitlab.list_branches": "Lecture des branches",
+  "gitlab.list_pipelines": "Lecture des pipelines",
+  "gitlab.list_issues": "Lecture des tickets",
+  "gitlab.list_merge_requests": "Lecture des demandes de fusion",
+  "gitlab.read_file": "Lecture d'un fichier",
+};
+
+/** Un outil `gitlab.*` hors dictionnaire reste une lecture, sans nom technique affiché. */
+export function toolLabel(tool: string): string {
+  return TOOL_LABELS[tool] ?? (tool.startsWith("gitlab.") ? "Lecture" : tool);
+}
