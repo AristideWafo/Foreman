@@ -1,11 +1,12 @@
 # Logo Foreman
 
-Un **F en relief** : une pièce de structure posée sur le chantier. Deux orange seulement : face avant
-`#E8590C`, épaisseur `#9A3412`. Le relief part vers le haut et la droite, vers ce qui reste à construire.
+Un **F en graphe** : une tige reliée à des nœuds, c'est l'agent et ses outils. Deux couleurs :
+encre `#1F2937` (tige, nom) et orange `#E8590C` (les nœuds, l'agent). Le nom est dessiné en Geist Bold
+(licence OFL, tracés vectoriels, pas de texte vivant).
 
-- `foreman-logo.svg` : symbole (fond transparent). Icône sur tuile crème `#FFF7ED` : `frontend/public/favicon.svg`.
-- Icônes web : `frontend/public/` (`favicon.ico`, icônes 192/512, maskable, icône Apple, manifeste).
-- Taille minimale : 16 px (le relief reste lisible). Zone de protection : un demi-F autour.
-- En une couleur (impression, tampon) : aplat unique `#E8590C` ou noir, sans l'épaisseur.
-- À ne pas faire : changer le sens du relief, ajouter ombre ou dégradé, étirer.
-- Non vérifié : fond sombre dans un navigateur, recherche d'antériorité (à confier à un professionnel).
+- `foreman-symbol.svg` : symbole couleur ; `-black.svg` et `-white.svg` : une couleur.
+- `foreman-lockup.svg` : symbole + nom ; `foreman-lockup-white.svg` : sur fond sombre.
+- Icônes web : `frontend/public/` (tuile encre, F blanc, nœuds orange) : favicon, 192/512, maskable, icône Apple, manifeste.
+- Taille minimale du symbole : 16 px. Zone de protection : un nœud (26 sur 256) autour.
+- À ne pas faire : déformer, changer les couleurs hors palette, ajouter ombre ou dégradé.
+- Non vérifié : 16 px réel dans un onglet, recherche d'antériorité (une icône « branches » existe chez Git : à faire contrôler par un professionnel).
