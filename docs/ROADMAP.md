@@ -60,7 +60,7 @@ depuis le journal.
 | ~~**Semaine 6 — S12**~~ (**terminé**) | Approbation sur le hash, plan invalidé si l'état change, expiration. Carte « plan invalidé ». | S12 vert en CI |
 | **Essai jetable** | Bootstrap et wrapper Compose sur un conteneur SSH local : exécution, cas d'abus (Compose privilégié, montage hors projet, arguments hostiles), compte rendu dans `docs/spikes/`. | Compte rendu validé, conception ajustée si besoin |
 | **Fournisseurs réels** | GitLab : connecteur, sondes, lectures, `create_group`, `create_project`, `set_variable`, `delete_created`. Serveur : bootstrap, wrapper, `server.apply_playbook` (ansible-runner en flux), `inspect`, `healthcheck`. Vercel et DNS selon vos comptes. | S1 réel en staging |
-| **Scénarios d'échec** | S3 (playbook en échec), S4 (droit manquant, bouton Continuer), S5 (dérive), S6 (injection de prompt), S7 (secret masqué), S8 (rollback en échec, mode dégradé), S9 (crash du contrôleur). Cartes droit manquant et dérive. | S3 à S9 verts en CI |
+| **Scénarios d'échec** | S3 (playbook en échec), S4 (droit manquant, bouton Continuer), S5 (dérive), S6 (injection de prompt), S7 (secret masqué), S8 (rollback en échec, mode dégradé), S9 (crash du contrôleur). Cartes droit manquant et dérive. Pause sur droit manquant : faite pour les lectures du chat (carte « Droit manquant », #319), pas encore pour les exécutions (voir #54). | S3 à S9 verts en CI |
 | **Évaluation** | S1 à S12 rejoués, 20 exécutions consécutives dont 5 avec échec injecté, mesure du coût et des durées, décision de promotion au niveau 3. | Rapport d'évaluation |
 
 Un décommissionnement (UC15) et les autres cas d'usage hors liste d'étapes sont en v1.1 **(proposition)**.

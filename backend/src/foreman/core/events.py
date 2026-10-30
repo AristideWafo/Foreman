@@ -8,9 +8,9 @@ le déclare faux pour les modèles émis par le serveur : c'est de la rigueur c�
 consigne de validation côté client) ; sans cela, aucun ajout ne serait réellement additif.
 
 Sémantique de `seq` : strictement croissant, contigu à partir de 1, par projet, livré dans l'ordre.
-Une carte (`card`) remplace la précédente de même `card_id`. Quatre sortes de cartes (`kind`) :
-`plan`, `execution`, `clarification` (S3), `approval` (S4) et `diagnostic` (échec sans code connu),
-ajouts additifs.
+Une carte (`card`) remplace la précédente de même `card_id`. Sortes de cartes (`kind`) :
+`plan`, `execution`, `clarification` (S3), `approval` (S4), `diagnostic` (échec sans code connu)
+et `permission` (lecture du chat refusée pour droit manquant), ajouts additifs.
 
 Ordre et portée (Semaine 2) :
 - après l'approbation, la carte plan est RÉÉMISE (`status: dev_approved`, `approvable: false`)
@@ -296,12 +296,29 @@ class DiagnosticCardData(_Model):
     raw_log_available: bool = False
 
 
+class PermissionCardData(_Model):
+    """Carte « droit manquant » : une lecture du chat a été refusée faute de droit sur le jeton.
+
+    Les champs viennent du catalogue (déclaration du jeton), jamais d'un texte d'adapter.
+    """
+
+    card_id: Annotated[str, Field(max_length=64)]
+    kind: Literal["permission"]
+    connector: Annotated[str, Field(max_length=50)]
+    tool: Annotated[str, Field(max_length=100)]
+    token: Annotated[str, Field(max_length=50)]
+    label: Annotated[str, Field(max_length=120)]
+    scopes: Annotated[list[Annotated[str, Field(max_length=50)]], Field(max_length=20)]
+    boundary: Annotated[str | None, Field(max_length=200)] = None
+
+
 CardData = Annotated[
     PlanCardData
     | ExecutionCardData
     | ClarificationCardData
     | ApprovalCardData
-    | DiagnosticCardData,
+    | DiagnosticCardData
+    | PermissionCardData,
     Field(discriminator="kind"),
 ]
 
@@ -447,6 +464,7 @@ EventData = (
     | ClarificationCardData
     | ApprovalCardData
     | DiagnosticCardData
+    | PermissionCardData
     | ExecutionStepData
     | ExecutionLogData
     | ExecutionDiagnosticData
@@ -478,6 +496,7 @@ def make_event(seq: int, project_id: UUID, turn_id: UUID, data: EventData) -> An
             | ClarificationCardData()
             | ApprovalCardData()
             | DiagnosticCardData()
+            | PermissionCardData()
         ):
             return CardEvent(seq=seq, project_id=project_id, turn_id=turn_id, at=at, data=data)
         case ExecutionLogData():

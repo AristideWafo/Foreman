@@ -146,6 +146,8 @@ function hasExpectedShape(card: CardData): boolean {
       return Array.isArray(card.questions);
     case "diagnostic":
       return Array.isArray(card.extract);
+    case "permission":
+      return Array.isArray(card.scopes);
     default:
       return true;
   }

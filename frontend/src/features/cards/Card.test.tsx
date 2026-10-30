@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, test, vi } from "vitest";
 import type { CardData, ExecutionCardData, PlanCardData } from "../../api/events";
 import {
@@ -388,4 +389,29 @@ test("diagnostic : extrait masqué, Réessayer et Annuler ; log brut seulement p
     </QueryClientProvider>,
   );
   expect(await screen.findByRole("button", { name: "Voir le log brut" })).toBeEnabled();
+});
+
+// --- #319 : carte « droit manquant » ---------------------------------------------------------------
+
+test("droit manquant : le droit est nommé et Relancer est proposé", () => {
+  const card: CardData = {
+    card_id: "permission-t",
+    kind: "permission",
+    connector: "gitlab",
+    tool: "gitlab.list_groups",
+    token: "read",
+    label: "Lecture seule",
+    scopes: ["read_api"],
+    boundary: null,
+  };
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <Card card={card} projectId={PROJECT_ID} retryText="liste mes groupes" />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  const group = screen.getByRole("group", { name: "Droit manquant" });
+  expect(within(group).getByText("read_api")).toBeVisible();
+  expect(within(group).getByRole("button", { name: "Relancer" })).toBeEnabled();
 });

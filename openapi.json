@@ -314,6 +314,7 @@
                 "clarification": "#/components/schemas/ClarificationCardData",
                 "diagnostic": "#/components/schemas/DiagnosticCardData",
                 "execution": "#/components/schemas/ExecutionCardData",
+                "permission": "#/components/schemas/PermissionCardData",
                 "plan": "#/components/schemas/PlanCardData"
               },
               "propertyName": "kind"
@@ -333,6 +334,9 @@
               },
               {
                 "$ref": "#/components/schemas/DiagnosticCardData"
+              },
+              {
+                "$ref": "#/components/schemas/PermissionCardData"
               }
             ],
             "title": "Data"
@@ -2146,6 +2150,75 @@
           "team_id"
         ],
         "title": "MoveProjectRequest",
+        "type": "object"
+      },
+      "PermissionCardData": {
+        "additionalProperties": false,
+        "description": "Carte \u00ab droit manquant \u00bb : une lecture du chat a \u00e9t\u00e9 refus\u00e9e faute de droit sur le jeton.\n\nLes champs viennent du catalogue (d\u00e9claration du jeton), jamais d'un texte d'adapter.",
+        "properties": {
+          "boundary": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Boundary"
+          },
+          "card_id": {
+            "maxLength": 64,
+            "title": "Card Id",
+            "type": "string"
+          },
+          "connector": {
+            "maxLength": 50,
+            "title": "Connector",
+            "type": "string"
+          },
+          "kind": {
+            "const": "permission",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 120,
+            "title": "Label",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "maxLength": 50,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Scopes",
+            "type": "array"
+          },
+          "token": {
+            "maxLength": 50,
+            "title": "Token",
+            "type": "string"
+          },
+          "tool": {
+            "maxLength": 100,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id",
+          "kind",
+          "connector",
+          "tool",
+          "token",
+          "label",
+          "scopes"
+        ],
+        "title": "PermissionCardData",
         "type": "object"
       },
       "PermissionView": {

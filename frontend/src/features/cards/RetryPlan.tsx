@@ -14,11 +14,13 @@ export function RetryPlan({
   text,
   description = "L'exécution est bloquée. Vous pouvez relancer le plan : les ressources déjà créées sont réutilisées.",
   label = "Relancer le plan",
+  sentLabel = "Demande envoyée. Un nouveau plan arrive.",
 }: {
   projectId: string;
   text: string;
   description?: string;
   label?: string;
+  sentLabel?: string;
 }) {
   const retry = useMutation({ mutationFn: () => postMessage(projectId, text) });
   return (
@@ -26,7 +28,7 @@ export function RetryPlan({
       <p className="text-sm text-muted-foreground">{description}</p>
       {retry.isSuccess ? (
         <p role="status" className="text-sm">
-          Demande envoyée. Un nouveau plan arrive.
+          {sentLabel}
         </p>
       ) : (
         <Button
