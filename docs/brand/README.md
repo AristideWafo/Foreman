@@ -1,10 +1,11 @@
 # Logo Foreman
 
-Un F gravé dans un carré arrondi (« tampon ») : la validation par l'administrateur. Une seule couleur,
-orange sécurité `#E8590C` (RGB 232 89 12), le F en négatif (transparent dans `foreman-symbol-*.svg`).
+Un **F en relief** : une pièce de structure posée sur le chantier. Deux orange seulement : face avant
+`#E8590C`, épaisseur `#9A3412`. Le relief part vers le haut et la droite, vers ce qui reste à construire.
 
-- `foreman-symbol-mono-e8590c.svg` : version couleur ; `-black.svg` / `-white.svg` : monochromes.
-- Taille minimale : 16 px (le F reste lisible). Zone de protection : un demi-F (32 unités sur 256) autour.
-- Icônes web : `frontend/public/` (`favicon.ico`, `favicon.svg`, icônes 192/512 et maskable, manifeste).
-- À ne pas faire : étirer, ajouter une ombre ou un dégradé, changer la couleur hors de cette palette.
-- Non vérifié : recherche d'antériorité (marque) à faire par un professionnel.
+- `foreman-logo.svg` : symbole (fond transparent). Icône sur tuile crème `#FFF7ED` : `frontend/public/favicon.svg`.
+- Icônes web : `frontend/public/` (`favicon.ico`, icônes 192/512, maskable, icône Apple, manifeste).
+- Taille minimale : 16 px (le relief reste lisible). Zone de protection : un demi-F autour.
+- En une couleur (impression, tampon) : aplat unique `#E8590C` ou noir, sans l'épaisseur.
+- À ne pas faire : changer le sens du relief, ajouter ombre ou dégradé, étirer.
+- Non vérifié : fond sombre dans un navigateur, recherche d'antériorité (à confier à un professionnel).
