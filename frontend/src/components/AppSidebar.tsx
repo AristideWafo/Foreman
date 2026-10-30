@@ -6,13 +6,13 @@ import {
   InformationCircleIcon,
   PlusIcon,
   ShieldCheckIcon,
-  ServerStackIcon,
   UserCircleIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
 import { Fragment, type ComponentType, type SVGProps } from "react";
 import { Link } from "react-router-dom";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { BrandMark } from "@/components/BrandMark";
 import { LinkButton } from "@/components/LinkButton";
 import { MemoryModeBadge } from "@/components/MemoryModeBadge";
 import { ROLE_LABELS, UserRoleBadge, type UserRole } from "@/components/UserRoleBadge";
@@ -65,6 +65,9 @@ export const PERSONAL = "personal";
 const ALL = "all";
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>;
+
+/** Le rail attend une icône SVG : le logo (images) s'y glisse sans changer RailItem. */
+const BrandMarkIcon: Icon = () => <BrandMark className="size-5" />;
 
 // Même classes pour toutes les entrées du rail : icône centrée, donc alignée.
 const RAIL_BUTTON = "justify-center px-0";
@@ -128,7 +131,7 @@ export function AppSidebar({
       <Sidebar collapsible="none" className="w-[calc(var(--sidebar-width-icon)+1px)]! border-r">
         <SidebarHeader>
           <SidebarMenu>
-            <RailItem label="Foreman" icon={ServerStackIcon} to="/" />
+            <RailItem label="Foreman" icon={BrandMarkIcon} to="/" />
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
@@ -176,7 +179,10 @@ export function AppSidebar({
 
       <Sidebar collapsible="none" className="hidden min-w-0 flex-1 md:flex">
         <SidebarHeader className="gap-3 border-b p-4">
-          <span className="text-sm font-semibold">Foreman</span>
+          <span className="flex items-center gap-2 text-sm font-semibold">
+            <BrandMark className="size-5" />
+            Foreman
+          </span>
           <LinkButton to="/" className="w-full">
             Nouveau projet
           </LinkButton>
