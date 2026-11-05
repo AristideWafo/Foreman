@@ -305,6 +305,9 @@ def test_openapi_publishes_event_schema_and_routes(client: TestClient) -> None:
         "/api/admin/integrations",
         "/api/admin/integrations/{connector}/credentials",
         "/api/admin/integrations/{connector}/test",
+        "/api/admin/integrations/{connector}/oauth/client",
+        "/api/admin/integrations/{connector}/oauth/start",
+        "/api/admin/integrations/{connector}/oauth/callback",
         "/api/admin/integrations/anthropic/model",
         "/api/projects/{project_id}/executions/{execution_id}",
         "/api/projects/{project_id}/executions/{execution_id}/steps/{step}/raw-log",
@@ -542,3 +545,43 @@ def test_resource_step_is_optional_and_omitted_when_absent() -> None:
     new = {**data, "resources": [{**data["resources"][0], "step": 2}]}
     event = ADAPTER.validate_python(envelope("card", new))
     assert event.model_dump(mode="json")["data"]["resources"][0]["step"] == 2
+
+
+def test_oauth_contract_round_trip() -> None:
+    """Contrat OAuth (#332) : corps validés, secret masqué, routes OpenAPI."""
+    from foreman.surfaces.web.schemas import (
+        IntegrationView,
+        OAuthClientRequest,
+        OAuthStartRequest,
+    )
+
+    body = OAuthClientRequest(client_id="x" * 255, client_secret="s" * 512)  # type: ignore[arg-type]
+    assert "s" * 8 not in repr(body) and "s" * 8 not in body.model_dump_json()
+    for bad in (
+        {"client_id": "x" * 256, "client_secret": "s"},
+        {"client_id": "x", "client_secret": "s" * 513},
+        {"client_id": "x", "client_secret": "s", "extra": 1},
+    ):
+        with pytest.raises(ValidationError):
+            OAuthClientRequest.model_validate(bad)
+    with pytest.raises(ValidationError):
+        OAuthStartRequest.model_validate({"token": "admin"})
+    assert OAuthStartRequest.model_validate({"token": "write"}).token == "write"  # noqa: S105
+    view = IntegrationView(
+        connector="gitlab",
+        kind="connector",
+        status="reauth_required",
+        auth="oauth",
+        oauth={"client_configured": False, "redirect_uri": "u"},  # type: ignore[arg-type]
+        configured=False,
+        tokens=[],
+        rights=[],
+    )
+    assert IntegrationView.model_validate_json(view.model_dump_json()) == view
+    paths = create_app().openapi()["paths"]
+    for route, method in (
+        ("oauth/client", "put"),
+        ("oauth/start", "post"),
+        ("oauth/callback", "get"),
+    ):
+        assert method in paths[f"/api/admin/integrations/{{connector}}/{route}"]
