@@ -15,6 +15,9 @@ ROUTES = [
     ("DELETE", "/integrations/gitlab/credentials", None),
     ("PUT", "/integrations/anthropic/model", {"model": "claude-haiku-5-5"}),
     ("POST", "/integrations/gitlab/test", None),
+    ("PUT", "/integrations/gitlab/oauth/client", {"client_id": "id", "client_secret": "s"}),
+    ("POST", "/integrations/gitlab/oauth/start", {"token": "read"}),
+    ("GET", "/integrations/gitlab/oauth/callback?code=c&state=s", None),
 ]
 
 

@@ -62,6 +62,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/integrations/{connector}/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Oauth Callback */
+        get: operations["oauth_callback_api_admin_integrations__connector__oauth_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/integrations/{connector}/oauth/client": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Oauth Client */
+        put: operations["set_oauth_client_api_admin_integrations__connector__oauth_client_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/integrations/{connector}/oauth/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Oauth */
+        post: operations["start_oauth_api_admin_integrations__connector__oauth_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/integrations/{connector}/test": {
         parameters: {
             query?: never;
@@ -1205,6 +1256,12 @@ export interface components {
         /** IntegrationView */
         IntegrationView: {
             /**
+             * Auth
+             * @default token
+             * @enum {string}
+             */
+            auth: "token" | "oauth";
+            /**
              * Availability
              * @default available
              * @enum {string}
@@ -1223,13 +1280,14 @@ export interface components {
             /** Last Probe At */
             last_probe_at?: string | null;
             llm?: components["schemas"]["LlmView"] | null;
+            oauth?: components["schemas"]["OAuthView"] | null;
             /** Rights */
             rights: components["schemas"]["RightView"][];
             /**
              * Status
              * @enum {string}
              */
-            status: "ok" | "incomplete" | "revoked" | "unprobed";
+            status: "ok" | "incomplete" | "revoked" | "reauth_required" | "unprobed";
             /** Tokens */
             tokens: components["schemas"]["TokenView"][];
         };
@@ -1456,6 +1514,36 @@ export interface components {
              * Format: uuid
              */
             team_id: string;
+        };
+        /** OAuthClientRequest */
+        OAuthClientRequest: {
+            /** Client Id */
+            client_id: string;
+            /**
+             * Client Secret
+             * Format: password
+             */
+            client_secret: string;
+        };
+        /** OAuthStartRequest */
+        OAuthStartRequest: {
+            /**
+             * Token
+             * @enum {string}
+             */
+            token: "read" | "write";
+        };
+        /** OAuthStartResponse */
+        OAuthStartResponse: {
+            /** Authorize Url */
+            authorize_url: string;
+        };
+        /** OAuthView */
+        OAuthView: {
+            /** Client Configured */
+            client_configured: boolean;
+            /** Redirect Uri */
+            redirect_uri: string;
         };
         /**
          * PermissionCardData
@@ -2199,6 +2287,244 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Droits insuffisants ou CSRF (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Introuvable ou mode `session` inactif */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `last_admin`, `last_team_admin`, `invalid_invitation` ou `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    oauth_callback_api_admin_integrations__connector__oauth_callback_get: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+                error?: string;
+            };
+            header?: never;
+            path: {
+                connector: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Droits insuffisants ou CSRF (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Introuvable ou mode `session` inactif */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `last_admin`, `last_team_admin`, `invalid_invitation` ou `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_oauth_client_api_admin_integrations__connector__oauth_client_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connector: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthClientRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Non authentifié (`unauthenticated`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Droits insuffisants ou CSRF (`forbidden`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Introuvable ou mode `session` inactif */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `last_admin`, `last_team_admin`, `invalid_invitation` ou `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Requête invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Capacité atteinte */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_oauth_api_admin_integrations__connector__oauth_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connector: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthStartResponse"];
+                };
             };
             /** @description Non authentifié (`unauthenticated`) */
             401: {

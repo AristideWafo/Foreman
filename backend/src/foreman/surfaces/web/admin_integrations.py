@@ -46,6 +46,10 @@ from foreman.surfaces.web.schemas import (
     IntegrationView,
     LlmView,
     ModelOption,
+    OAuthClientRequest,
+    OAuthStartRequest,
+    OAuthStartResponse,
+    OAuthView,
     PermissionView,
     RightView,
     SetCredentialRequest,
@@ -167,6 +171,11 @@ def add_integration_routes(
             connector=connector,
             kind="llm" if connector == LLM else "connector",
             status="unprobed" if state is _ABSENT else state.status,
+            # shortcut: provisoire (PR-A), figé sur gitlab ; PR-C le lira de connector.yaml
+            auth="oauth" if connector == "gitlab" else "token",
+            oauth=OAuthView(client_configured=False, redirect_uri=_redirect_uri(connector))
+            if connector == "gitlab"
+            else None,
             configured=all(t.configured for t in tokens),
             availability="available" if connector == LLM else definitions()[connector].availability,
             tokens=tokens,
@@ -240,6 +249,33 @@ def add_integration_routes(
             )
         return Response(status_code=204)
 
+    # Routes OAuth : contrat seul (PR-A), la logique arrive en PR-D.
+    @router.put("/integrations/{connector}/oauth/client", status_code=204, tags=["integrations"])
+    async def set_oauth_client(connector: str, body: OAuthClientRequest, scope: Scope) -> Response:
+        org_only(scope)
+        known(connector)
+        raise ApiError(501, "not_implemented")
+
+    @router.post(
+        "/integrations/{connector}/oauth/start",
+        response_model=OAuthStartResponse,
+        tags=["integrations"],
+    )
+    async def start_oauth(
+        connector: str, body: OAuthStartRequest, scope: Scope
+    ) -> OAuthStartResponse:
+        org_only(scope)
+        known(connector)
+        raise ApiError(501, "not_implemented")
+
+    @router.get("/integrations/{connector}/oauth/callback", status_code=303, tags=["integrations"])
+    async def oauth_callback(
+        connector: str, scope: Scope, code: str = "", state: str = "", error: str = ""
+    ) -> Response:
+        org_only(scope)
+        known(connector)
+        raise ApiError(501, "not_implemented")
+
     @router.put("/integrations/anthropic/model", status_code=204, tags=["integrations"])
     async def set_model(
         body: SetModelRequest,
@@ -301,6 +337,11 @@ def add_integration_routes(
             status=status,
             rights=[RightView(token=r.token, right=r.right, verdict=r.verdict) for r in rights],
         )
+
+
+def _redirect_uri(connector: str) -> str:
+    # Provisoire (PR-A) : PR-D la construira depuis FOREMAN_PUBLIC_URL.
+    return f"/api/admin/integrations/{connector}/oauth/callback"
 
 
 def _denied(code: str) -> ApiError:

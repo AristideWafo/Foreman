@@ -348,10 +348,34 @@ class LlmView(BaseModel):
     model: str | None = None  # modèle choisi
 
 
+class OAuthView(BaseModel):
+    client_configured: bool  # couple client enregistré (jamais renvoyé)
+    redirect_uri: str  # à déclarer à l'identique dans l'application OAuth du fournisseur
+
+
+class OAuthClientRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: Annotated[str, Field(min_length=1, max_length=255)]
+    client_secret: Annotated[SecretStr, Field(min_length=1, max_length=512)]
+
+
+class OAuthStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: Literal["read", "write"]
+
+
+class OAuthStartResponse(BaseModel):
+    authorize_url: str
+
+
 class IntegrationView(BaseModel):
     connector: str
     kind: Literal["llm", "connector"]
-    status: Literal["ok", "incomplete", "revoked", "unprobed"]
+    status: Literal["ok", "incomplete", "revoked", "reauth_required", "unprobed"]
+    auth: Literal["token", "oauth"] = "token"
+    oauth: OAuthView | None = None  # seulement si `auth == "oauth"`
     configured: bool  # tous les jetons déclarés sont enregistrés
     availability: Literal["available", "soon"] = "available"  # « soon » : ni saisie ni test
     tokens: list[TokenView]
