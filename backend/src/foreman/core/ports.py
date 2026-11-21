@@ -50,6 +50,9 @@ class ConversationMessage:
     # aussi un `text` canonique : le rejeu choisit sa réponse sur le hash du dernier `text`.
     tool_calls: tuple[ToolCall, ...] = ()
     tool_results: tuple[ToolResult, ...] = ()
+    # Bilan d'une ronde de lectures calculé par le serveur (donnée fiable), envoyé avec les
+    # résultats ; hors `text`, donc sans effet sur le hash du rejeu.
+    summary: str | None = None
 
 
 class Provider(Protocol):

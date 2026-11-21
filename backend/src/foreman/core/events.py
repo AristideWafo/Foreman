@@ -374,11 +374,50 @@ class ExecutionDiagnosticData(_Model):
     diagnostic: ToolDiagnostic
 
 
+# Codes de la gateway (`DenialCode`, `FailureCode`, recopiés : `gateway.errors` importe ce module)
+# et `limit_reached` du tour. Un test vérifie que la liste couvre ceux de la gateway.
+ReadErrorCode = Literal[
+    "unknown_context",
+    "unknown_tool",
+    "invalid_params",
+    "policy_denied",
+    "approval_required",
+    "plan_not_approved",
+    "plan_hash_mismatch",
+    "call_differs_from_step",
+    "environment_mismatch",
+    "scope_violation",
+    "budget_exceeded",
+    "stale_lease",
+    "step_not_ready",
+    "call_in_progress",
+    "permission_missing",
+    "timeout",
+    "foreign_resource",
+    "adapter_error",
+    "adapter_defect",
+    "invalid_output",
+    "storage_unavailable",
+    "internal_error",
+    "limit_reached",
+]
+
+
 class ToolCallData(_Model):
     """Une lecture a eu lieu : le nom de l'outil et l'issue, jamais paramètres ni contenu lu."""
 
     tool: Annotated[str, Field(max_length=100)]
     outcome: Literal["ok", "error"]
+    code: Annotated[
+        ReadErrorCode | None, Field(description="Cause fermée d'une lecture en erreur")
+    ] = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_code(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        out: dict[str, object] = handler(self)
+        if out.get("code") is None:
+            out.pop("code", None)  # lecture réussie : forme d'avant, sans clé
+        return out
 
 
 class TurnStatusData(_Model):
@@ -391,12 +430,20 @@ ERROR_MESSAGES = {
     "invalid_plan": "Le plan proposé par l'agent est invalide.",
     "invalid_ask_user": "L'agent a posé une question invalide. Reformulez votre demande.",
     "budget_exceeded": "Le budget de ce tour est atteint : l'agent s'est arrêté.",
+    "llm_not_configured": (
+        "Aucun modèle configuré : un administrateur doit renseigner la clé et le modèle LLM."
+    ),
 }
 
 
 class ErrorData(_Model):
     code: Literal[
-        "internal_error", "unknown_tool", "invalid_plan", "invalid_ask_user", "budget_exceeded"
+        "internal_error",
+        "unknown_tool",
+        "invalid_plan",
+        "invalid_ask_user",
+        "budget_exceeded",
+        "llm_not_configured",
     ]
     message: Annotated[str, Field(description="Texte fixe dérivé de `code`, jamais une exception")]
 

@@ -725,7 +725,8 @@
               "unknown_tool",
               "invalid_plan",
               "invalid_ask_user",
-              "budget_exceeded"
+              "budget_exceeded",
+              "llm_not_configured"
             ],
             "title": "Code",
             "type": "string"
@@ -2959,6 +2960,44 @@
         "additionalProperties": false,
         "description": "Une lecture a eu lieu : le nom de l'outil et l'issue, jamais param\u00e8tres ni contenu lu.",
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "unknown_context",
+                  "unknown_tool",
+                  "invalid_params",
+                  "policy_denied",
+                  "approval_required",
+                  "plan_not_approved",
+                  "plan_hash_mismatch",
+                  "call_differs_from_step",
+                  "environment_mismatch",
+                  "scope_violation",
+                  "budget_exceeded",
+                  "stale_lease",
+                  "step_not_ready",
+                  "call_in_progress",
+                  "permission_missing",
+                  "timeout",
+                  "foreign_resource",
+                  "adapter_error",
+                  "adapter_defect",
+                  "invalid_output",
+                  "storage_unavailable",
+                  "internal_error",
+                  "limit_reached"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Cause ferm\u00e9e d'une lecture en erreur",
+            "title": "Code"
+          },
           "outcome": {
             "enum": [
               "ok",

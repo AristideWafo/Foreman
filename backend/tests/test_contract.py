@@ -164,7 +164,10 @@ NEW_EXAMPLES = {
             },
         },
     ),
-    "tool_call": ("tool_call", {"tool": "gitlab.list_groups", "outcome": "ok"}),
+    "tool_call": (
+        "tool_call",
+        {"tool": "gitlab.list_groups", "outcome": "error", "code": "limit_reached"},
+    ),
     "error (plan invalide)": (
         "error",
         {"code": "invalid_plan", "message": ERROR_MESSAGES["invalid_plan"]},
