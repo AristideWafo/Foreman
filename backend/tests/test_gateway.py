@@ -40,7 +40,14 @@ from foreman.core.policy.matrix import (
     evaluate,
     requirements,
 )
-from foreman.core.ports import AdapterResult, ForeignResource, MemberStore, ToolAdapter
+from foreman.core.ports import (
+    AdapterResult,
+    ForeignResource,
+    MemberStore,
+    ModelReply,
+    ToolAdapter,
+    ToolCall,
+)
 from foreman.core.references import resolve_params
 from foreman.core.store import (
     DEV_USER_ID,
@@ -54,12 +61,18 @@ from foreman.core.store import (
     ResourceRecord,
     Stores,
 )
+from foreman.core.turn import MAX_READS_PER_ROUND, TurnRequest, TurnService
 from foreman.infra.file_catalog import load_catalog
-from foreman.infra.in_memory import InMemoryProjectStore, MemoryState, in_memory_stores
+from foreman.infra.in_memory import (
+    InMemoryEventLog,
+    InMemoryProjectStore,
+    MemoryState,
+    in_memory_stores,
+)
 from foreman.integrations.dns.simulated import SimulatedDns
 from foreman.integrations.gitlab.simulated import SimulatedGitLab
 from foreman.integrations.server.simulated import SimulatedServer
-from support import dev_members
+from support import dev_members, make_planner
 
 CATALOG_ROOT = Path(__file__).resolve().parents[2] / "catalog"
 FUTURE = datetime(2100, 1, 1, tzinfo=UTC)
@@ -1576,3 +1589,37 @@ def test_catalog_loads_the_eight_gitlab_read_tools_with_description() -> None:
     for name in READ_TOOLS:
         tool = tools[f"gitlab.{name}"]
         assert tool.tool_class == "read" and tool.description
+
+
+class ManyReadsProvider:
+    """Une ronde de `count` lectures `list_groups`, puis une réponse en texte."""
+
+    def __init__(self, count: int) -> None:
+        self.count = count
+        self.rounds = 0
+
+    async def complete(self, messages: object) -> ModelReply:
+        self.rounds += 1
+        if self.rounds > 1:
+            return ModelReply(text="Inventaire terminé.")
+        calls = tuple(ToolCall("gitlab.list_groups", {}, f"c{i}") for i in range(self.count))
+        return ModelReply(text="", tool_calls=calls)
+
+
+@pytest.mark.asyncio
+async def test_an_inventory_round_is_read_whole_and_reads_over_the_limit_are_audited() -> None:
+    """Régression (éval live) : 18 lectures d'une ronde plafonnaient à 3, refus non audités."""
+    world = make_world()
+    project = (await world.projects.create("p")).id
+    provider = ManyReadsProvider(MAX_READS_PER_ROUND + 1)
+    service = TurnService(
+        provider, InMemoryEventLog(), make_planner(), world.projects, world.gateway
+    )
+    assert MAX_READS_PER_ROUND >= 18
+    await service.run(TurnRequest(DEV_USER_ID, project, "inventaire"), service.begin(project))
+
+    rows = await world.stores.audit.list_for_project(project)
+    assert [r.decision for r in rows].count("executed") == MAX_READS_PER_ROUND
+    denied = [(r.tool, r.result_redacted) for r in rows if r.decision == "denied"]
+    assert denied == [("gitlab.list_groups", {"code": "limit_reached"})]
+    assert world.gitlab.calls == MAX_READS_PER_ROUND

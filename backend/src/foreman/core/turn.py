@@ -58,11 +58,15 @@ from foreman.core.turn_budget import MAX_TOOL_ROUNDS, TurnLimit, TurnMeter
 
 logger = logging.getLogger(__name__)
 
-FailureCode = Literal["internal_error", "unknown_tool", "invalid_plan", "budget_exceeded"]
+FailureCode = Literal[
+    "internal_error", "unknown_tool", "invalid_plan", "invalid_ask_user", "budget_exceeded"
+]
 
 PROPOSE_PLAN = "propose_plan"
 DEFAULT_PROVIDER_TIMEOUT_S = 60.0
-MAX_READS_PER_ROUND = 3
+# Un inventaire lit un groupe par appel (18 groupes vus en éval live) ; annoncé au modèle dans le
+# prompt système. Le coût reste borné par les budgets du tour (`TurnMeter`).
+MAX_READS_PER_ROUND = 20
 MAX_HISTORY_MESSAGES = 20
 MAX_HISTORY_BYTES = 16 * 1024
 
@@ -196,6 +200,23 @@ def model_view(events: Sequence[AnyEvent]) -> tuple[list[ConversationMessage], A
             text = json.dumps({"tool_result": result}, ensure_ascii=False)
             history.append(ConversationMessage("user", text))
     return bounded_history(history), aliases
+
+
+def _deferred_note(
+    questions: Sequence[ClarificationQuestion], aliases: Aliases
+) -> ConversationMessage:
+    """Contexte serveur : les questions laissées sans réponse par le message libre qui suit."""
+    note = {
+        "questions_sans_reponse": [
+            {"field": q.field, "prompt": q.prompt, "options": q.options} for q in questions
+        ],
+        "consigne": (
+            "Le message suivant n'a pas répondu par la carte. S'il répond à ces questions, "
+            "utilise sa réponse ; sinon repose-les avec ask_user ou réponds en texte."
+        ),
+    }
+    text = json.dumps({"contexte_serveur": note}, ensure_ascii=False)
+    return ConversationMessage("user", aliases.apply(mask_for_model(text)))
 
 
 def model_history(events: Sequence[AnyEvent]) -> list[ConversationMessage]:
@@ -360,6 +381,9 @@ class TurnService:
             updated = with_status(questions, answer.question_id, "answered", answer.value)
             await self._projects.set_open_questions(project_id, updated)
             await self._emit(project_id, turn_id, card_of(round_of(answer.question_id), updated))
+            superseded: list[ClarificationQuestion] = []
+        else:
+            superseded = await self._defer_open_questions(project_id, turn_id)
         limits = self._planner.catalog.policy.budgets.per_turn
         meter = TurnMeter(limits, self._prices, self._clock)
         history: list[ConversationMessage] | None = None
@@ -374,6 +398,9 @@ class TurnService:
                 async with asyncio.timeout(min(self._provider_timeout_s, remaining)):
                     if history is None:
                         history, aliases = await self._history(project_id)
+                        if superseded:
+                            # Avant le dernier message : le modèle (et le replay) répondent à lui.
+                            history.insert(len(history) - 1, _deferred_note(superseded, aliases))
                     raw = await self._provider.complete(history)
                     raw = replace(
                         raw,
@@ -444,13 +471,31 @@ class TurnService:
                     "user", canonical_json(payload).decode("utf-8"), tool_results=results
                 )
             )
-        await self._emit(project_id, turn_id, MessageData(role="assistant", text=reply.text))
+        if reply.text.strip():  # pas de bulle vide : un échec s'explique par son événement `error`
+            await self._emit(project_id, turn_id, MessageData(role="assistant", text=reply.text))
         for call in reply.tool_calls:
             failure = await self._apply(request.user_id, project_id, turn_id, call)
             if failure is not None:
                 await self._fail(project_id, turn_id, failure)
                 return
         await self._emit(project_id, turn_id, TurnStatusData(status="completed"))
+
+    async def _defer_open_questions(
+        self, project_id: UUID, turn_id: UUID
+    ) -> list[ClarificationQuestion]:
+        """Un message libre passe outre les questions ouvertes : elles sont reportées (sinon une
+        question requise bloquerait tout plan) et rendues au modèle, qui reste seul juge."""
+        questions = await self._projects.get_open_questions(project_id)
+        pending = [q for q in questions if q.status == "open"]
+        if not pending:
+            return []
+        updated = list(questions)
+        for question in pending:
+            updated = with_status(updated, question.id, "deferred")
+        await self._projects.set_open_questions(project_id, updated)
+        for round_ in sorted({round_of(q.id) for q in pending}):
+            await self._emit(project_id, turn_id, card_of(round_, updated))
+        return pending
 
     def _only_reads(self, calls: Sequence[ToolCall]) -> bool:
         tools, connectors = self._planner.catalog.tools, self._planner.catalog.connectors
@@ -478,14 +523,18 @@ class TurnService:
         for i, call in enumerate(calls):
             error: str | None = None
             output: object = None
+            read_call = ReadCall(
+                project_id, user_id, call.name, cast(Mapping[str, JsonValue], call.arguments)
+            )
             if i >= MAX_READS_PER_ROUND:
                 error = "limit_reached"
+                await self._gateway.refuse_read(read_call, "limit_reached")
+                logger.warning(
+                    "read_refused project=%s turn=%s code=%s", project_id, turn_id, error
+                )
             else:
                 try:
-                    params = cast(Mapping[str, JsonValue], call.arguments)
-                    output = await self._gateway.read(
-                        ReadCall(project_id, user_id, call.name, params)
-                    )
+                    output = await self._gateway.read(read_call)
                 except (CallDenied, CallFailed) as refused:
                     error = refused.code
                     if error == "permission_missing" and missing_tool is None:
@@ -564,7 +613,7 @@ class TurnService:
             round_, new = self._rules.ask(arguments, existing)
         except (ValidationError, ClarificationRefused):
             logger.warning("invalid_ask_user project=%s turn=%s", project_id, turn_id)
-            return "invalid_plan"
+            return "invalid_ask_user"
         await self._projects.set_open_questions(project_id, [*existing, *new])
         await self._emit(project_id, turn_id, card_of(round_, new))
         return None

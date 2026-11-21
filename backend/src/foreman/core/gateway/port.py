@@ -119,3 +119,8 @@ class Gateway(Protocol):
         lecture n'est pas rendue (`CallFailed`).
         """
         ...
+
+    async def refuse_read(self, call: ReadCall, code: Literal["limit_reached"]) -> None:
+        """Audite une lecture que le tour refuse sans l'exécuter (ligne `denied`, sans contenu).
+        Ne lève jamais : un audit non écrit est seulement journalisé."""
+        ...

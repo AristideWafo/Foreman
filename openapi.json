@@ -724,6 +724,7 @@
               "internal_error",
               "unknown_tool",
               "invalid_plan",
+              "invalid_ask_user",
               "budget_exceeded"
             ],
             "title": "Code",
