@@ -389,12 +389,15 @@ ERROR_MESSAGES = {
     "internal_error": "Une erreur est survenue. Réessayez.",
     "unknown_tool": "L'agent a demandé une action qui n'existe pas.",
     "invalid_plan": "Le plan proposé par l'agent est invalide.",
+    "invalid_ask_user": "L'agent a posé une question invalide. Reformulez votre demande.",
     "budget_exceeded": "Le budget de ce tour est atteint : l'agent s'est arrêté.",
 }
 
 
 class ErrorData(_Model):
-    code: Literal["internal_error", "unknown_tool", "invalid_plan", "budget_exceeded"]
+    code: Literal[
+        "internal_error", "unknown_tool", "invalid_plan", "invalid_ask_user", "budget_exceeded"
+    ]
     message: Annotated[str, Field(description="Texte fixe dérivé de `code`, jamais une exception")]
 
     @model_validator(mode="after")

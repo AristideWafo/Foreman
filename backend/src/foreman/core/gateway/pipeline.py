@@ -330,6 +330,14 @@ class ToolGateway:
             raise CallDenied(denial)
         raise CallFailed(failure)
 
+    async def refuse_read(self, call: ReadCall, code: Literal["limit_reached"]) -> None:
+        tool = self._catalog.tools.get(call.tool)
+        entry = self._read_entry(call, tool, "denied", None, self._clock(), {"code": code})
+        try:
+            await self._stores.audit.append(entry)
+        except Exception as exc:
+            log.warning("gateway : audit non écrit (%s, %s)", code, type(exc).__name__)
+
     async def _authorize_read(self, call: ReadCall, tool: ToolDefinition | None) -> str:
         if tool is None:
             raise _Refusal("unknown_tool")

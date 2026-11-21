@@ -13,6 +13,8 @@ from foreman.core.catalog import Catalog, ToolDefinition
 from foreman.core.llm import LLM_KEY_ID, LLM_MODEL_ID, LlmSettings
 from foreman.core.ports import ConversationMessage, ModelReply, Provider
 from foreman.core.secrets import SecretStore
+from foreman.core.turn import MAX_READS_PER_ROUND
+from foreman.core.turn_budget import MAX_TOOL_ROUNDS
 from foreman.infra.llm_settings import SecretLlmSettings
 from foreman.integrations.anthropic.provider import (
     SYSTEM_PROMPT,
@@ -54,7 +56,12 @@ def build_prompt(catalog: Catalog) -> str:
         names = sorted(props) if isinstance(props, dict) else []
         req = set(required) if isinstance(required, list) else set()
         lines.append(f"- {t.name}({', '.join(n + '*' if n in req else n for n in names)})")
-    return SYSTEM_PROMPT + "\n\n" + WRITE_TOOLS_HEADING + "\n" + "\n".join(lines)
+    limits = (
+        f"Limites : au plus {MAX_READS_PER_ROUND} appels de lecture par réponse et "
+        f"{MAX_TOOL_ROUNDS} réponses de lecture par tour ; une lecture au-delà est refusée "
+        "(limit_reached) et n'a rien lu. Dis-le plutôt que de deviner ce qu'elle aurait renvoyé."
+    )
+    return SYSTEM_PROMPT + "\n" + limits + "\n\n" + WRITE_TOOLS_HEADING + "\n" + "\n".join(lines)
 
 
 class ConfiguredProvider:
