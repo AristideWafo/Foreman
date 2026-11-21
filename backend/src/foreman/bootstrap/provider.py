@@ -9,6 +9,7 @@ import os
 from collections.abc import Sequence
 from typing import Any
 
+from foreman.bootstrap.provider_switch import SwitchedProvider, strands_provider
 from foreman.core.catalog import Catalog, ToolDefinition
 from foreman.core.llm import LLM_KEY_ID, LLM_MODEL_ID, LlmSettings
 from foreman.core.ports import ConversationMessage, ModelReply, Provider
@@ -82,9 +83,11 @@ def choose_provider(
     """`force_replay` : profil EVAL. La variable `CI` force aussi le rejeu."""
     if force_replay or os.environ.get("CI"):
         return replay
-    real = AnthropicProvider(
-        settings or SecretLlmSettings(secrets),
-        read_tools=read_tool_definitions(catalog),
-        prompt=build_prompt(catalog),
-    )
-    return ConfiguredProvider(replay, real, secrets)
+    read_tools, prompt = read_tool_definitions(catalog), build_prompt(catalog)
+    llm = settings or SecretLlmSettings(secrets)
+    real = AnthropicProvider(llm, read_tools=read_tools, prompt=prompt)
+    # Bascule `llm.provider` (ADR 0004) : `anthropic` reste le défaut tant que Strands n'est pas
+    # validé avec une vraie clé.
+    switch = SecretLlmSettings(secrets)
+    strands = strands_provider(llm, read_tools, prompt)
+    return ConfiguredProvider(replay, SwitchedProvider(switch, real, strands), secrets)

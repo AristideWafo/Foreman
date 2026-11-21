@@ -4,7 +4,13 @@ import sys
 from datetime import UTC, datetime
 
 from foreman.bootstrap.configure import App, Profile, configure, invitation_link
-from foreman.bootstrap.llm import RecordRefused, record_llm_response, set_llm_key, set_llm_model
+from foreman.bootstrap.llm import (
+    RecordRefused,
+    record_llm_response,
+    set_llm_key,
+    set_llm_model,
+    set_llm_provider,
+)
 from foreman.bootstrap.secrets import rotate_master_key
 from foreman.core.accounts import AccountError
 from foreman.core.auth import create_admin_invitation
@@ -37,8 +43,13 @@ def _admin(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(prog="foreman admin")
     parser.add_argument("action", choices=["create"])
     parser.add_argument("--email", required=True)
+    parser.add_argument("--provider", help="set-provider : anthropic (défaut) ou strands")
     args = parser.parse_args(argv)
     try:
+        if args.action == "set-provider":
+            asyncio.run(_llm_set("set-provider", args.provider or ""))
+            sys.stdout.write("fournisseur enregistré\n")
+            return
         link = asyncio.run(_admin_create(args.email))
     except AccountError:
         sys.exit("création impossible : compte déjà actif ou invitation refusée")
@@ -60,8 +71,13 @@ def _secrets(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(prog="foreman secrets")
     parser.add_argument("action", choices=["rotate"])
     parser.add_argument("--prune", action="store_true", help="retire les anciennes clés du fichier")
+    parser.add_argument("--provider", help="set-provider : anthropic (défaut) ou strands")
     args = parser.parse_args(argv)
     try:
+        if args.action == "set-provider":
+            asyncio.run(_llm_set("set-provider", args.provider or ""))
+            sys.stdout.write("fournisseur enregistré\n")
+            return
         count = asyncio.run(_secrets_rotate(args.prune))
     except (RuntimeError, SecretError, StoreError):
         sys.exit("rotation impossible : voir les journaux et docs/DEPLOYMENT.md")
@@ -81,19 +97,25 @@ async def _llm_set(action: str, value: str) -> None:
     app = configure(Profile.ADMIN)
     await app.lifecycle.start()
     try:
-        await (set_llm_key if action == "set-key" else set_llm_model)(app, value)
+        setter = {"set-key": set_llm_key, "set-model": set_llm_model}.get(action, set_llm_provider)
+        await setter(app, value)
     finally:
         await app.lifecycle.stop()
 
 
 def _llm(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(prog="foreman llm")
-    parser.add_argument("action", choices=["record", "set-key", "set-model"])
+    parser.add_argument("action", choices=["record", "set-key", "set-model", "set-provider"])
     parser.add_argument("--name", help="record : nom du fichier (a-z, 0-9, tirets)")
     parser.add_argument("--message", help="record : message utilisateur à envoyer")
     parser.add_argument("--model", help="set-model : identifiant dans la liste déclarée")
+    parser.add_argument("--provider", help="set-provider : anthropic (défaut) ou strands")
     args = parser.parse_args(argv)
     try:
+        if args.action == "set-provider":
+            asyncio.run(_llm_set("set-provider", args.provider or ""))
+            sys.stdout.write("fournisseur enregistré\n")
+            return
         if args.action == "set-key":
             # La clé vient de l'entrée standard : jamais d'argument (historique du shell, ps).
             asyncio.run(_llm_set("set-key", sys.stdin.read()))
