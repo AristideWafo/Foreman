@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install check check-full check-imports test eval-diagnostic fmt api-types check-api-types s01-fixture s02-fixture s10-fixture s11-fixture s12-fixture
+.PHONY: help install check check-full check-imports test eval-diagnostic eval-gate fmt api-types check-api-types s01-fixture s02-fixture s10-fixture s11-fixture s12-fixture
 
 BACKEND := cd backend && uv run
 
@@ -31,6 +31,9 @@ check-imports: ## Contrats de couches
 
 eval-diagnostic: ## Indicateur de diagnostic S3-S9 (rejoué, informatif)
 	$(BACKEND) python tests/diagnostic_metric.py
+
+eval-gate: ## Porte de qualité foreman-eval sur un rapport JSON (REPORT=chemin, voir docs/quality-gate.md)
+	$(BACKEND) python tests/quality_gate.py $(abspath $(REPORT))
 
 test: ## Tests
 	$(BACKEND) pytest
