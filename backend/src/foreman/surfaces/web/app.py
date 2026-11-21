@@ -49,11 +49,16 @@ class SpaStaticFiles(StaticFiles):
     """Fichiers statiques avec repli sur `index.html` pour les liens profonds de la SPA.
 
     Pas de repli pour `/api/...` (404 JSON opaque) ni pour un fichier absent (nom avec extension).
+    Un chemin dont un segment commence par un point (`/.git/config`, `/.ssh/id_rsa`) est un 404,
+    même si le fichier existe, sauf sous `/.well-known/`.
     """
 
     async def get_response(self, path: str, scope: MutableMapping[str, Any]) -> Response:
         # `/api/...` n'est jamais servi par la SPA, quelle que soit la méthode (sinon 405 sur POST).
         if path == "api" or path.startswith("api/"):
+            raise StarletteHTTPException(status_code=404)
+        segments = [s for s in path.replace("\\", "/").split("/") if s not in ("", ".")]
+        if segments[:1] != [".well-known"] and any(s.startswith(".") for s in segments):
             raise StarletteHTTPException(status_code=404)
         try:
             return await super().get_response(path, scope)
