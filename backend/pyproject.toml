@@ -17,6 +17,7 @@ dependencies = [
   "cryptography>=44",
   "anthropic==1.17.0",
   "httpx2>=2.16",
+  "strands-agents[anthropic]==1.65.0",
 ]
 
 [dependency-groups]
@@ -101,6 +102,7 @@ modules = [
   "foreman.integrations.server",
   "foreman.integrations.dns",
   "foreman.integrations.anthropic",
+  "foreman.integrations.strands",
 ]
 
 [[tool.importlinter.contracts]]

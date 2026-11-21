@@ -34,3 +34,10 @@ def test_no_mcp_outside_the_gateway() -> None:
     pattern = re.compile(r"mcp_servers|^\s*(import|from)\s+mcp\b", re.M)
     found = [p.name for p in SRC.rglob("*.py") if pattern.search(p.read_text())]
     assert not found, f"MCP interdit (ADR 0003) : {found}"
+
+
+def test_strands_is_only_a_model_layer() -> None:
+    """ADR 0004 : ni boucle d'agent ni outils Strands ; seuls les modèles (`strands.models`)."""
+    pattern = re.compile(r"^\s*(import\s+strands\b(?!\.models)|from\s+strands(?!\.models)\b)", re.M)
+    found = [p.name for p in SRC.rglob("*.py") if pattern.search(p.read_text())]
+    assert not found, f"seul strands.models est permis (ADR 0004) : {found}"

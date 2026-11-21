@@ -27,6 +27,22 @@ Règles : pairs sans import mutuel (`tools` ↔ `integrations`, `surfaces` ↔ c
 4. Budgets : appels, temps, coût et tokens de contexte (logs injectés).
 5. Événements diffusés en SSE ; actions journalisées dans l'audit.
 
+## Fournisseur de modèle (`Provider`)
+
+`bootstrap/provider.py` choisit l'adaptateur : rejeu forcé en CI et en profil EVAL (aucun réseau), rejeu
+tant qu'aucune clé ni modèle n'est saisi, sinon le fournisseur réel désigné par le réglage `llm.provider`,
+relu à chaque appel (ADR 0004) :
+
+| Valeur | Adaptateur | État |
+| --- | --- | --- |
+| `anthropic` (défaut, absent ou inconnu) | `integrations/anthropic` (SDK `anthropic`) | défaut et repli |
+| `strands` | `integrations/strands` (Strands Agents, couche modèle seulement) | **non validé en réel** (aucune clé sur le serveur) |
+
+Bascule : `foreman llm set-provider --provider strands` (retour : `--provider anthropic`), sans
+redémarrage. Le modèle se choisit avec `foreman llm set-model --model claude-opus-5-5` (liste de
+`integrations/anthropic/models.yaml`). Strands n'exécute aucun outil : les appels d'outils reviennent au
+`TurnService`, qui passe par la gateway.
+
 ## Tool Gateway (`core/gateway`, `core/policy`)
 
 Le moteur n'atteint un adaptateur que par le port `Gateway.call(GatewayCall)` ; `bootstrap/adapters.py`

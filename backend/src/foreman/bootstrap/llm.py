@@ -19,7 +19,11 @@ from foreman.core.llm import (
     LLM_KEY_KIND,
     LLM_MODEL_ID,
     LLM_MODEL_KIND,
+    LLM_PROVIDER_ID,
+    LLM_PROVIDER_KIND,
+    LLM_PROVIDERS,
     LlmNotConfigured,
+    ProviderFailed,
 )
 from foreman.core.ports import ConversationMessage
 from foreman.infra.file_catalog import catalog_dir_from_env
@@ -27,7 +31,7 @@ from foreman.infra.llm_recording import RecordingRefused, build_recording, write
 from foreman.infra.llm_settings import SecretLlmSettings
 from foreman.infra.replay_provider import sha256_of
 from foreman.integrations.anthropic.models import ModelEntry, load_connector, model_prices, probe
-from foreman.integrations.anthropic.provider import AnthropicProvider, ProviderFailed
+from foreman.integrations.anthropic.provider import AnthropicProvider
 
 MESSAGES_PATH = "/v1/messages"
 
@@ -64,6 +68,13 @@ async def set_llm_model(app: App, model: str) -> None:
     if model not in model_prices():
         raise RecordRefused("modèle hors de la liste déclarée")
     await app.secrets.put(LLM_MODEL_ID, LLM_MODEL_KIND, SecretStr(model), created_by="cli")
+
+
+async def set_llm_provider(app: App, provider: str) -> None:
+    """Choisit le fournisseur réel (`anthropic` ou `strands`, ADR 0004) ; sinon refus."""
+    if provider not in LLM_PROVIDERS:
+        raise RecordRefused("fournisseur inconnu")
+    await app.secrets.put(LLM_PROVIDER_ID, LLM_PROVIDER_KIND, SecretStr(provider), created_by="cli")
 
 
 async def record_llm_response(

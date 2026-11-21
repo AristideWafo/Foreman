@@ -20,7 +20,7 @@ from typing import Any, Final
 import anthropic
 import httpx2
 
-from foreman.core.llm import LlmNotConfigured, LlmSettings
+from foreman.core.llm import LlmNotConfigured, LlmSettings, ProviderFailed
 from foreman.core.ports import ConversationMessage, ModelReply, ToolCall
 from foreman.core.pricing import Usage
 
@@ -132,13 +132,6 @@ TOOLS: Final[list[dict[str, Any]]] = [
         },
     },
 ]
-
-
-class ProviderFailed(Exception):
-    """L'appel au modèle a échoué. Message fixe : aucun détail du SDK."""
-
-    def __init__(self) -> None:
-        super().__init__("appel au modèle en échec")
 
 
 def _json_object(raw: object) -> object:

@@ -6,7 +6,16 @@ une migration ; le déplacer dans une table de réglages quand la page d'adminis
 
 from pydantic import SecretStr
 
-from foreman.core.llm import LLM_KEY_ID, LLM_KEY_KIND, LLM_MODEL_ID, LLM_MODEL_KIND
+from foreman.core.llm import (
+    DEFAULT_LLM_PROVIDER,
+    LLM_KEY_ID,
+    LLM_KEY_KIND,
+    LLM_MODEL_ID,
+    LLM_MODEL_KIND,
+    LLM_PROVIDER_ID,
+    LLM_PROVIDER_KIND,
+    LLM_PROVIDERS,
+)
 from foreman.core.secrets import SecretStore
 
 
@@ -20,3 +29,9 @@ class SecretLlmSettings:
     async def model(self) -> str | None:
         value = await self._secrets.get(LLM_MODEL_ID, LLM_MODEL_KIND)
         return None if value is None else value.get_secret_value()
+
+    async def provider(self) -> str:
+        """Fournisseur réel choisi ; `anthropic` si absent ou inconnu."""
+        value = await self._secrets.get(LLM_PROVIDER_ID, LLM_PROVIDER_KIND)
+        name = None if value is None else value.get_secret_value()
+        return name if name in LLM_PROVIDERS else DEFAULT_LLM_PROVIDER

@@ -9,9 +9,8 @@ import httpx2
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from foreman.core.llm import LlmNotConfigured, LlmSettings
+from foreman.core.llm import LlmNotConfigured, LlmSettings, ProviderFailed
 from foreman.core.pricing import ModelPrice
-from foreman.integrations.anthropic.provider import ProviderFailed
 
 CONNECTOR_FILE = Path(__file__).with_name("models.yaml")
 
