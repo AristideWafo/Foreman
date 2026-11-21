@@ -256,6 +256,16 @@ def test_missing_static_file_is_a_404_not_the_spa(spa: TestClient) -> None:
     assert spa.get("/assets/absent.js").status_code == 404
 
 
+def test_dot_segments_are_404_except_well_known(spa: TestClient, tmp_path: Path) -> None:
+    """Régression (éval live) : `/.ssh/id_rsa` rendait la SPA en 200 et trompait les scanners."""
+    (tmp_path / ".env").write_text("SECRET=1")  # même présent sur disque, jamais servi
+    for path in ("/.ssh/id_rsa", "/.git/config", "/.env", "/projects/.hidden/x"):
+        assert spa.get(path).status_code == 404, path
+    assert spa.get("/.well-known/change-password").status_code == 200  # règle habituelle
+    assert spa.get("/login").text == "<h1>spa</h1>"
+    assert spa.get("/app.js").status_code == 200
+
+
 def test_no_spa_fallback_without_a_static_dir(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("FOREMAN_STATIC_DIR", raising=False)
     assert TestClient(create_app()).get("/projects/abc").status_code == 404
