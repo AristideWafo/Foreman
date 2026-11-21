@@ -226,6 +226,24 @@ def _deferred_note(
     return ConversationMessage("user", aliases.apply(mask_for_model(text)))
 
 
+def _read_summary(results: Sequence[ToolResult]) -> str:
+    """Comptes d'une ronde, calculés ici : le modèle n'a pas à les recompter (ni à les inventer).
+    Les lectures au-delà de `MAX_READS_PER_ROUND` sont les seules non interrogées."""
+    skipped = max(0, len(results) - MAX_READS_PER_ROUND)
+    failed = sum(r.is_error for r in results) - skipped
+    counts = {
+        "demandees": len(results),
+        "lues": len(results) - failed - skipped,
+        "en_erreur": failed,
+        "non_interrogees": skipped,
+    }
+    note = (
+        "Comptes exacts calculés par Foreman ; n'annonce aucune donnée qu'aucune lecture "
+        "n'a renvoyée."
+    )
+    return json.dumps({"bilan_lectures": counts, "consigne": note}, ensure_ascii=False)
+
+
 def _read_error_code(code: str) -> ReadErrorCode:
     """Code de la gateway, ou `internal_error` s'il sort de la liste fermée."""
     return cast(ReadErrorCode, code) if code in get_args(ReadErrorCode) else "internal_error"
@@ -484,7 +502,10 @@ class TurnService:
             ]
             history.append(
                 ConversationMessage(
-                    "user", canonical_json(payload).decode("utf-8"), tool_results=results
+                    "user",
+                    canonical_json(payload).decode("utf-8"),
+                    tool_results=results,
+                    summary=_read_summary(results),
                 )
             )
         if reply.text.strip():  # pas de bulle vide : un échec s'explique par son événement `error`
