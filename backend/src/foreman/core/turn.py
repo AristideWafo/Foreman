@@ -10,7 +10,7 @@ import logging
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Annotated, Final, Literal, cast
+from typing import Annotated, Final, Literal, cast, get_args
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
@@ -37,12 +37,14 @@ from foreman.core.events import (
     MessageAuthor,
     MessageData,
     PermissionCardData,
+    ReadErrorCode,
     ToolCallData,
     TurnStatusData,
 )
 from foreman.core.gateway.errors import CallDenied, CallFailed
 from foreman.core.gateway.port import Gateway, ReadCall
 from foreman.core.gateway.redact import PRE_MASK_CHARS, mask_text
+from foreman.core.llm import LlmNotConfigured
 from foreman.core.planning import Draft, DraftStep, InvalidPlan, Planner, canonical_json
 from foreman.core.ports import (
     ConversationMessage,
@@ -59,7 +61,12 @@ from foreman.core.turn_budget import MAX_TOOL_ROUNDS, TurnLimit, TurnMeter
 logger = logging.getLogger(__name__)
 
 FailureCode = Literal[
-    "internal_error", "unknown_tool", "invalid_plan", "invalid_ask_user", "budget_exceeded"
+    "internal_error",
+    "unknown_tool",
+    "invalid_plan",
+    "invalid_ask_user",
+    "budget_exceeded",
+    "llm_not_configured",
 ]
 
 PROPOSE_PLAN = "propose_plan"
@@ -217,6 +224,11 @@ def _deferred_note(
     }
     text = json.dumps({"contexte_serveur": note}, ensure_ascii=False)
     return ConversationMessage("user", aliases.apply(mask_for_model(text)))
+
+
+def _read_error_code(code: str) -> ReadErrorCode:
+    """Code de la gateway, ou `internal_error` s'il sort de la liste fermée."""
+    return cast(ReadErrorCode, code) if code in get_args(ReadErrorCode) else "internal_error"
 
 
 def model_history(events: Sequence[AnyEvent]) -> list[ConversationMessage]:
@@ -418,6 +430,10 @@ class TurnService:
                 logger.exception("provider_failed project=%s turn=%s", project_id, turn_id)
                 await self._fail(project_id, turn_id, "internal_error")
                 return
+            except LlmNotConfigured:
+                logger.warning("llm_not_configured project=%s turn=%s", project_id, turn_id)
+                await self._fail(project_id, turn_id, "llm_not_configured")
+                return
             except Exception:
                 logger.exception("provider_failed project=%s turn=%s", project_id, turn_id)
                 await self._fail(project_id, turn_id, "internal_error")
@@ -521,7 +537,7 @@ class TurnService:
         results: list[ToolResult] = []
         missing_tool: str | None = None
         for i, call in enumerate(calls):
-            error: str | None = None
+            error: ReadErrorCode | None = None
             output: object = None
             read_call = ReadCall(
                 project_id, user_id, call.name, cast(Mapping[str, JsonValue], call.arguments)
@@ -536,7 +552,7 @@ class TurnService:
                 try:
                     output = await self._gateway.read(read_call)
                 except (CallDenied, CallFailed) as refused:
-                    error = refused.code
+                    error = _read_error_code(refused.code)
                     if error == "permission_missing" and missing_tool is None:
                         missing_tool = call.name
                     logger.warning(
@@ -545,7 +561,7 @@ class TurnService:
             await self._emit(
                 project_id,
                 turn_id,
-                ToolCallData(tool=call.name, outcome="error" if error else "ok"),
+                ToolCallData(tool=call.name, outcome="error" if error else "ok", code=error),
             )
             raw = canonical_json({"error": error} if error else output).decode("utf-8")
             results.append(

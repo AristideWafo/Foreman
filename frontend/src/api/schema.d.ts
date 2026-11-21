@@ -843,7 +843,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "internal_error" | "unknown_tool" | "invalid_plan" | "invalid_ask_user" | "budget_exceeded";
+            code: "internal_error" | "unknown_tool" | "invalid_plan" | "invalid_ask_user" | "budget_exceeded" | "llm_not_configured";
             /**
              * Message
              * @description Texte fixe dérivé de `code`, jamais une exception
@@ -1802,6 +1802,12 @@ export interface components {
          * @description Une lecture a eu lieu : le nom de l'outil et l'issue, jamais paramètres ni contenu lu.
          */
         ToolCallData: {
+            /**
+             * Code
+             * @description Cause fermée d'une lecture en erreur
+             * @default null
+             */
+            code: ("unknown_context" | "unknown_tool" | "invalid_params" | "policy_denied" | "approval_required" | "plan_not_approved" | "plan_hash_mismatch" | "call_differs_from_step" | "environment_mismatch" | "scope_violation" | "budget_exceeded" | "stale_lease" | "step_not_ready" | "call_in_progress" | "permission_missing" | "timeout" | "foreign_resource" | "adapter_error" | "adapter_defect" | "invalid_output" | "storage_unavailable" | "internal_error" | "limit_reached") | null;
             /**
              * Outcome
              * @enum {string}

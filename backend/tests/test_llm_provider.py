@@ -11,12 +11,8 @@ import httpx2
 import pytest
 from pydantic import SecretStr
 
-from foreman.bootstrap.provider import (
-    ConfiguredProvider,
-    build_prompt,
-    choose_provider,
-    read_tool_definitions,
-)
+from foreman.bootstrap.provider import build_prompt, choose_provider, read_tool_definitions
+from foreman.core.events import ERROR_MESSAGES
 from foreman.core.llm import LLM_KEY_ID, LLM_KEY_KIND, LLM_MODEL_ID, LLM_MODEL_KIND
 from foreman.core.ports import ConversationMessage, ModelReply
 from foreman.core.store import DEV_USER_ID
@@ -101,12 +97,26 @@ async def test_ci_and_eval_force_the_replay_and_the_real_model_needs_a_configure
             replay, store, force_replay=True, catalog=load_catalog(environment="staging")
         ).complete(message)
     ).text == "replay"
-    # Sans clé configurée : rejeu. Avec clé : le vrai provider seul, l'entrée `default` du rejeu
-    # n'est jamais consultée.
+    assert (len(replay.seen), len(real.seen)) == (2, 0)
+
+
+async def test_without_a_configured_model_the_turn_fails_visibly_instead_of_replaying(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Régression (éval live) : sans clé en base, hors CI/EVAL, le rejeu servait le même plan
+    « Safe Eat » à toute demande, sans avertissement."""
+    monkeypatch.delenv("CI", raising=False)
+    replay = SpyProvider("replay")
     empty = InMemorySecretStore(Keyring.of(os.urandom(32)))
-    assert (await ConfiguredProvider(replay, real, empty).complete(message)).text == "replay"
-    assert (await ConfiguredProvider(replay, real, store).complete(message)).text == "real"
-    assert (len(replay.seen), len(real.seen)) == (3, 1)  # le rejeu n'a pas servi avec la clé
+    catalog = load_catalog(environment="staging")
+    provider = choose_provider(replay, empty, force_replay=False, catalog=catalog)
+    events = await run_turn(provider, "Crée Safe Eat")
+    assert [e["type"] for e in events[2:]] == ["error", "turn_status"]
+    assert events[2]["data"] == {
+        "code": "llm_not_configured",
+        "message": ERROR_MESSAGES["llm_not_configured"],
+    }
+    assert replay.seen == []
 
 
 def test_the_declared_model_list_has_prices() -> None:

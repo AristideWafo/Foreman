@@ -1,17 +1,16 @@
-"""Choix de l'adaptateur de modèle : vrai LLM si configuré, sinon rejeu.
+"""Choix de l'adaptateur de modèle : rejeu en CI et en EVAL, vrai LLM partout ailleurs.
 
 Le rejeu est FORCÉ en CI (variable `CI`) et pour le profil EVAL : aucun appel réseau ni payant.
-Quand le vrai provider est actif, le rejeu (et son entrée `default`) n'est jamais consulté, et une
-erreur du vrai provider n'y retombe pas : pas de repli silencieux.
+Ailleurs, le rejeu n'est jamais consulté : sans clé ni modèle en base, le vrai provider lève
+`LlmNotConfigured` et le tour échoue avec `llm_not_configured` (pas de repli silencieux).
 """
 
 import os
-from collections.abc import Sequence
 from typing import Any
 
 from foreman.core.catalog import Catalog, ToolDefinition
-from foreman.core.llm import LLM_KEY_ID, LLM_MODEL_ID, LlmSettings
-from foreman.core.ports import ConversationMessage, ModelReply, Provider
+from foreman.core.llm import LlmSettings
+from foreman.core.ports import Provider
 from foreman.core.secrets import SecretStore
 from foreman.core.turn import MAX_READS_PER_ROUND
 from foreman.core.turn_budget import MAX_TOOL_ROUNDS
@@ -64,20 +63,6 @@ def build_prompt(catalog: Catalog) -> str:
     return SYSTEM_PROMPT + "\n" + limits + "\n\n" + WRITE_TOOLS_HEADING + "\n" + "\n".join(lines)
 
 
-class ConfiguredProvider:
-    """Relit à CHAQUE appel si un LLM est configuré (la page d'admin peut le changer en vol)."""
-
-    def __init__(self, replay: Provider, real: Provider, secrets: SecretStore) -> None:
-        self._replay = replay
-        self._real = real
-        self._secrets = secrets
-
-    async def complete(self, messages: Sequence[ConversationMessage]) -> ModelReply:
-        if await self._secrets.exists(LLM_KEY_ID) and await self._secrets.exists(LLM_MODEL_ID):
-            return await self._real.complete(messages)
-        return await self._replay.complete(messages)
-
-
 def choose_provider(
     replay: Provider,
     secrets: SecretStore,
@@ -89,9 +74,9 @@ def choose_provider(
     """`force_replay` : profil EVAL. La variable `CI` force aussi le rejeu."""
     if force_replay or os.environ.get("CI"):
         return replay
-    real = AnthropicProvider(
+    # Relit clé et modèle à CHAQUE appel (la page d'admin peut les changer en vol).
+    return AnthropicProvider(
         settings or SecretLlmSettings(secrets),
         read_tools=read_tool_definitions(catalog),
         prompt=build_prompt(catalog),
     )
-    return ConfiguredProvider(replay, real, secrets)
