@@ -236,8 +236,18 @@ test("tool_call : la lecture apparaît dans la trace du tour, en échec si elle 
   const base = { v: 1 as const, at: "2026-01-01T00:00:00Z", project_id: "p", turn_id: "t" };
   const events: ProjectEvent[] = [
     { ...base, seq: 1, type: "turn_status", data: { status: "running" } },
-    { ...base, seq: 2, type: "tool_call", data: { tool: "gitlab.list_groups", outcome: "ok" } },
-    { ...base, seq: 3, type: "tool_call", data: { tool: "gitlab.read_file", outcome: "error" } },
+    {
+      ...base,
+      seq: 2,
+      type: "tool_call",
+      data: { tool: "gitlab.list_groups", outcome: "ok", code: null },
+    },
+    {
+      ...base,
+      seq: 3,
+      type: "tool_call",
+      data: { tool: "gitlab.read_file", outcome: "error", code: "limit_reached" },
+    },
   ];
   const [trace] = events.reduce(applyEvent, initialTimeline).items;
   expect(trace).toMatchObject({
